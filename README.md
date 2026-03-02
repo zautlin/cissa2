@@ -6,7 +6,7 @@ The repo contains the Python implementation of the CISSA methodology to
 value companies. It also contains a portfolio optimization tool that uses
 the CISSA methodology to optimize a portfolio of companies.
 
-The legacy repository for this work is located in: `https://github.com/rozettatechnology/basos-ds`
+The legacy repository for this work is located in: `https://github.com/rozettatechnology/basos-ds`. This new repository will contain code for the CISSA MVP.
 
 ## Installation
 
