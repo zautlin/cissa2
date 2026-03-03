@@ -45,8 +45,11 @@ def get_db_url() -> str:
     - POSTGRES_PASSWORD (default: "changeme")
     - POSTGRES_DB (default: "rozetta")
     
+    Includes options to set search_path to 'cissa' schema so all queries
+    automatically use the cissa schema without needing schema prefixes.
+    
     Returns:
-        str: PostgreSQL connection URL
+        str: PostgreSQL connection URL with schema options
     """
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")
@@ -54,7 +57,9 @@ def get_db_url() -> str:
     password = os.getenv("POSTGRES_PASSWORD", "changeme")
     database = os.getenv("POSTGRES_DB", "rozetta")
     
-    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
+    # Add search_path option to default to cissa schema
+    # This means all queries will use cissa schema without needing to qualify table names
+    return f"postgresql://{user}:{password}@{host}:{port}/{database}?options=-c%20search_path=cissa"
 
 
 def create_db_engine(echo: bool = False):

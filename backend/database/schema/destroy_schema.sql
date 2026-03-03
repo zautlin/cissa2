@@ -11,12 +11,10 @@
 --  4. parameters
 --  5. imputation_audit_trail
 --  6. fundamentals
---  7. raw_data_validation_log
---  8. raw_data
---  9. dataset_versions
--- 10. fiscal_year_mapping
--- 11. metrics_catalog
--- 12. companies
+--  7. raw_data
+--  8. dataset_versions
+--  9. fiscal_year_mapping
+-- 10. companies
 --
 -- FUNCTIONS/TRIGGERS THAT WILL BE DROPPED:
 --  - update_dataset_versions_timestamp()
@@ -54,11 +52,9 @@ DROP TABLE IF EXISTS parameter_sets CASCADE;
 DROP TABLE IF EXISTS parameters CASCADE;
 DROP TABLE IF EXISTS imputation_audit_trail CASCADE;
 DROP TABLE IF EXISTS fundamentals CASCADE;
-DROP TABLE IF EXISTS raw_data_validation_log CASCADE;
 DROP TABLE IF EXISTS raw_data CASCADE;
 DROP TABLE IF EXISTS dataset_versions CASCADE;
 DROP TABLE IF EXISTS fiscal_year_mapping CASCADE;
-DROP TABLE IF EXISTS metrics_catalog CASCADE;
 DROP TABLE IF EXISTS companies CASCADE;
 
 -- ============================================================================
@@ -83,7 +79,7 @@ DROP FUNCTION IF EXISTS update_optimization_outputs_timestamp() CASCADE;
 -- VERIFICATION
 -- ============================================================================
 
-SELECT 'Schema destruction complete. All 12 tables, triggers, and functions have been dropped.' AS status;
+SELECT 'Schema destruction complete. All 10 tables, triggers, and functions have been dropped.' AS status;
 
 -- ============================================================================
 -- END OF DESTRUCTION SCRIPT

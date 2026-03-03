@@ -14,6 +14,28 @@ This document provides step-by-step instructions to manually test the complete f
 
 ---
 
+## Important: Schema Setup
+
+**All pipeline tables are created in a separate `cissa` schema** (not the `public` schema).
+
+**Why?**
+- ✅ Keeps pipeline tables separate from other database objects
+- ✅ Easy to identify and manage only our 12 tables
+- ✅ No conflicts with other applications
+- ✅ Easy to backup/migrate just the pipeline
+
+**Automatic Schema Handling:**
+- The `schema.sql` script automatically creates the `cissa` schema
+- The `config.py` file automatically sets `search_path=cissa` for all connections
+- **You don't need to do anything extra** - queries will automatically use the `cissa` schema
+
+**To check which schema you're using in psql:**
+```bash
+SHOW search_path;  -- Should show "cissa, public"
+```
+
+---
+
 ## Quick Reference: Python Interpreter & PostgreSQL
 
 ### Python Interpreter
@@ -99,13 +121,14 @@ Then proceed to Step 1.2.
 
 ### Step 1.4: Verify Schema Deployment
 
-Check that all 12 tables were created:
+Check that all 12 tables were created in the `cissa` schema:
 
 ```bash
+export PGPASSWORD='5VbL7dK4jM8sN6cE2fG'
 psql -h localhost -U postgres -d rozetta -c "
 SELECT COUNT(*) as table_count 
 FROM information_schema.tables 
-WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"
+WHERE table_schema = 'cissa' AND table_type = 'BASE TABLE';"
 ```
 
 **Expected Output**:
@@ -116,28 +139,39 @@ WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"
 (1 row)
 ```
 
+**Verify public schema unchanged:**
+```bash
+psql -h localhost -U postgres -d rozetta -c "
+SELECT COUNT(*) as public_table_count 
+FROM information_schema.tables 
+WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"
+```
+
+**Expected Output**: Should show the same number as before (should NOT have increased by 12)
+
 ---
 
 ### Step 1.5: Verify Indexes and Triggers
 
-Check indexes:
+Check indexes in cissa schema:
 
 ```bash
+export PGPASSWORD='5VbL7dK4jM8sN6cE2fG'
 psql -h localhost -U postgres -d rozetta -c "
 SELECT COUNT(DISTINCT indexname) as index_count 
 FROM pg_indexes 
-WHERE schemaname = 'public';"
+WHERE schemaname = 'cissa';"
 ```
 
 **Expected Output**: ~30 indexes
 
-Check triggers:
+Check triggers in cissa schema:
 
 ```bash
 psql -h localhost -U postgres -d rozetta -c "
 SELECT COUNT(*) as trigger_count 
 FROM information_schema.triggers 
-WHERE trigger_schema = 'public';"
+WHERE trigger_schema = 'cissa';"
 ```
 
 **Expected Output**: 4 triggers
@@ -179,6 +213,7 @@ Loading reference data...
 ### Step 2.2: Verify Reference Data Loaded
 
 ```bash
+export PGPASSWORD='5VbL7dK4jM8sN6cE2fG'
 psql -h localhost -U postgres -d rozetta << 'EOF'
 SELECT COUNT(*) as companies FROM companies;
 SELECT COUNT(*) as metrics FROM metrics_catalog;
