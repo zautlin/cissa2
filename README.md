@@ -10,15 +10,46 @@ The legacy repository for this work is located in: `https://github.com/rozettate
 
 ## Installation
 
-Requires Python 3.14
+Requires Python 3.14 and [Anaconda/Miniconda](https://docs.conda.io/projects/miniconda/en/latest/).
 
+### Setup Steps
+
+1. **Install Miniconda** (if not already installed):
+   ```bash
+   # Download and install Miniconda
+   cd /tmp
+   wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+   bash Miniconda3-latest-Linux-x86_64.sh -b -p ~/miniconda3
+   source ~/miniconda3/bin/activate
+   ```
+
+2. **Clone the repository**:
+   ```bash
+   git clone https://github.com/rozettatechnology/cissa
+   cd cissa
+   ```
+
+3. **Create and activate the virtual environment**:
+   ```bash
+   source ~/miniconda3/bin/activate
+   conda create -n cissa_env python=3.14 -y
+   conda activate cissa_env
+   ```
+
+4. **Install required packages**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Using the Environment
+
+To activate the environment in future sessions:
 ```bash
-# Download this repository
-git clone https://github.com/rozettatechnology/cissa
+source ~/miniconda3/bin/activate
+conda activate cissa_env
+```
 
-# Create/activate a virtual environment
-conda create -n <virtual_env_name> python=3.14
-conda activate <virtual_env_name>
-
-# Instal required packages
-pip install -r requirements.txt
+To deactivate:
+```bash
+conda deactivate
+```
