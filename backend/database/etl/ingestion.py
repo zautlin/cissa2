@@ -5,6 +5,7 @@ Handles CSV loading, numeric validation, and insertion into raw_data table.
 """
 
 from typing import Dict, Any
+import json
 import pandas as pd
 from sqlalchemy.engine import Engine
 from sqlalchemy import text
@@ -101,13 +102,13 @@ class Ingester:
                     ingestion_completed_at = now(),
                     total_raw_rows = :total_rows,
                     validation_rejected_rows = :rejected_rows,
-                    validation_reject_summary = :summary::jsonb
+                    validation_reject_summary = CAST(:summary AS jsonb)
                 WHERE dataset_id = :dataset_id
             """), {
                 "dataset_id": dataset_id,
                 "total_rows": result['total_rows'],
                 "rejected_rows": result['rejected_rows'],
-                "summary": result['validation_summary'],
+                "summary": json.dumps(result['validation_summary']),
             })
         
         return result
@@ -280,6 +281,10 @@ class Ingester:
                     INSERT INTO raw_data 
                     (dataset_id, ticker, metric_name, period, period_type, raw_string_value, numeric_value, currency, validation_status, rejection_reason)
                     VALUES (:dataset_id, :ticker, :metric_name, :period, :period_type, :raw_string_value, :numeric_value, :currency, :validation_status, :rejection_reason)
+                    ON CONFLICT (dataset_id, ticker, metric_name, period) DO UPDATE SET
+                        raw_string_value = EXCLUDED.raw_string_value,
+                        numeric_value = EXCLUDED.numeric_value,
+                        validation_status = EXCLUDED.validation_status
                 """), raw_data_rows)
         
         # Optional: log rejected rows

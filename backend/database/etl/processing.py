@@ -103,7 +103,7 @@ class DataQualityProcessor:
                     UPDATE dataset_versions
                     SET status = 'PROCESSED',
                         processing_completed_at = now(),
-                        quality_metadata = :quality_metadata::jsonb
+                        quality_metadata = CAST(:quality_metadata AS jsonb)
                     WHERE dataset_id = :dataset_id
                 """), {
                     "dataset_id": dataset_id,
