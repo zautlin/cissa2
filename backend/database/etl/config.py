@@ -13,19 +13,22 @@ from sqlalchemy.pool import NullPool
 # Load environment variables from .env file (if available)
 try:
     from dotenv import load_dotenv
-    # Try to find .env in ../datahex-local/ relative to this file
+    # Navigate from this file to find ../datahex-local/.env
     # Structure: /home/ubuntu/cissa/backend/database/etl/config.py
-    #           -> /home/ubuntu/datahex-local/.env
-    env_path = Path(__file__).parent.parent.parent.parent / "datahex-local" / ".env"
+    #            /home/ubuntu/datahex-local/.env
+    # So: up to cissa (parent.parent.parent.parent), then up to ubuntu (parent), then into datahex-local
+    config_dir = Path(__file__).parent  # etl/
+    cissa_root = config_dir.parent.parent.parent  # backend/database/etl -> cissa
+    ubuntu_root = cissa_root.parent  # cissa -> ubuntu
+    env_path = ubuntu_root / "datahex-local" / ".env"
+    
     if env_path.exists():
         load_dotenv(env_path)
-        print(f"Loaded environment from {env_path}")
     else:
         # Fallback: try loading from current directory or parent
         fallback_path = Path.cwd() / ".env"
         if fallback_path.exists():
             load_dotenv(fallback_path)
-            print(f"Loaded environment from {fallback_path}")
 except ImportError:
     # python-dotenv not installed, use system environment variables
     pass
