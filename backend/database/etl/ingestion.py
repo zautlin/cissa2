@@ -52,27 +52,27 @@ class Ingester:
     
     def _calculate_dataset_name(self, base_csv: str, data_df: pd.DataFrame) -> Tuple[str, str, int, int]:
         """
-        Calculate dataset_name from data: <geography>_<start_year>_<end_year>_<num_companies>
+        Calculate dataset_name from data: <country>_<start_year>_<end_year>_<num_companies>
         
         Args:
-            base_csv: Path to Base.csv (contains geography)
+            base_csv: Path to Base.csv (contains country)
             data_df: DataFrame of financial data
             
         Returns:
-            Tuple: (dataset_name, geography, start_year, end_year)
+            Tuple: (dataset_name, country, start_year, end_year)
         """
-        # Load Base.csv to get geography (default Australia)
+        # Load Base.csv to get country (default Australia)
         base_df = pd.read_csv(base_csv)
-        geography = base_df['Data FX'].iloc[0] if 'Data FX' in base_df.columns else 'Australia'
-        # Map currency to geography
-        if geography == 'AUD':
-            geography = 'Australia'
-        elif geography == 'USD':
-            geography = 'United States'
-        elif geography == 'GBP':
-            geography = 'United Kingdom'
+        country = base_df['Data FX'].iloc[0] if 'Data FX' in base_df.columns else 'Australia'
+        # Map currency to country
+        if country == 'AUD':
+            country = 'Australia'
+        elif country == 'USD':
+            country = 'United States'
+        elif country == 'GBP':
+            country = 'United Kingdom'
         else:
-            geography = 'Australia'  # Default fallback
+            country = 'Australia'  # Default fallback
         
         # Extract fiscal years from data
         fiscal_years = set()
@@ -95,8 +95,8 @@ class Ingester:
         # Count unique companies
         num_companies = base_df['Ticker'].nunique()
         
-        dataset_name = f"{geography[:2].upper()}_{start_year}_{end_year}_{num_companies}"
-        return dataset_name, geography, start_year, end_year
+        dataset_name = f"{country[:2].upper()}_{start_year}_{end_year}_{num_companies}"
+        return dataset_name, country, start_year, end_year
     
     def load_reference_tables(
         self,
@@ -155,7 +155,7 @@ class Ingester:
         # Calculate file hash and dataset name
         source_file_hash = self._calculate_file_hash(csv_path)
         data_df = pd.read_csv(csv_path)
-        dataset_name, geography, start_year, end_year = self._calculate_dataset_name(base_csv_path, data_df)
+        dataset_name, country, start_year, end_year = self._calculate_dataset_name(base_csv_path, data_df)
         
         # Check if dataset already ingested (same name + hash)
         existing_version = self._check_existing_dataset(dataset_name, source_file_hash)
@@ -262,14 +262,14 @@ class Ingester:
         # Map columns from Base.csv
         company_rows = []
         for _, row in df.iterrows():
-            # Extract geography from Data FX column
+            # Extract country from Data FX column
             currency = str(row.get('Data FX', 'AUD')).strip()
             if currency == 'USD':
-                geography = 'United States'
+                country = 'United States'
             elif currency == 'GBP':
-                geography = 'United Kingdom'
+                country = 'United Kingdom'
             else:
-                geography = 'Australia'
+                country = 'Australia'
             
             # Parse FY Report Month - can be a date string (e.g., "2019-06-30 00:00:00") or int
             fy_report_month = None
@@ -299,7 +299,7 @@ class Ingester:
                 'bics_level_3': str(row.get('BICS 3', '')).strip() if 'BICS 3' in df.columns else None,
                 'bics_level_4': str(row.get('BICS 4', '')).strip() if 'BICS 4' in df.columns else None,
                 'currency': currency,
-                'geography': geography,
+                'country': country,
                 'fy_report_month': fy_report_month,
                 'begin_year': int(row.get('Begin Year', 2002)) if 'Begin Year' in df.columns else None,
             })
@@ -308,8 +308,8 @@ class Ingester:
         with self.engine.begin() as conn:
             for row in company_rows:
                 conn.execute(text("""
-                    INSERT INTO companies (ticker, name, sector, bics_level_1, bics_level_2, bics_level_3, bics_level_4, currency, geography, fy_report_month, begin_year)
-                    VALUES (:ticker, :name, :sector, :bics_level_1, :bics_level_2, :bics_level_3, :bics_level_4, :currency, :geography, :fy_report_month, :begin_year)
+                    INSERT INTO companies (ticker, name, sector, bics_level_1, bics_level_2, bics_level_3, bics_level_4, currency, country, fy_report_month, begin_year)
+                    VALUES (:ticker, :name, :sector, :bics_level_1, :bics_level_2, :bics_level_3, :bics_level_4, :currency, :country, :fy_report_month, :begin_year)
                     ON CONFLICT (ticker) DO UPDATE SET
                         name = EXCLUDED.name,
                         sector = EXCLUDED.sector,
@@ -318,7 +318,7 @@ class Ingester:
                         bics_level_3 = EXCLUDED.bics_level_3,
                         bics_level_4 = EXCLUDED.bics_level_4,
                         currency = EXCLUDED.currency,
-                        geography = EXCLUDED.geography,
+                        country = EXCLUDED.country,
                         fy_report_month = EXCLUDED.fy_report_month,
                         begin_year = EXCLUDED.begin_year
                 """), row)

@@ -62,6 +62,10 @@ class DataQualityProcessor:
             
             # Step 2: Convert to wide format for imputation
             print("  [2/4] Converting to wide format...")
+            # Extract period_type (same for all rows of a ticker/fiscal_year)
+            period_type_map = aligned_df.groupby(['ticker', 'fiscal_year'])['period_type'].first().reset_index()
+            period_type_map = period_type_map.set_index(['ticker', 'fiscal_year'])['period_type'].to_dict()
+            
             wide_df = aligned_df.pivot_table(
                 index=['ticker', 'fiscal_year'],
                 columns='metric_name',
@@ -82,7 +86,7 @@ class DataQualityProcessor:
             
             # Step 4: Write fundamentals table
             print("  [4/4] Writing fundamentals table...")
-            n_rows = self._write_fundamentals(dataset_id, wide_clean, source_wide)
+            n_rows = self._write_fundamentals(dataset_id, wide_clean, source_wide, period_type_map)
             print(f"    ✓ Wrote {n_rows} fundamentals rows")
             
             # Calculate quality metadata
@@ -122,12 +126,14 @@ class DataQualityProcessor:
         dataset_id: str,
         wide_clean: pd.DataFrame,
         source_wide: pd.DataFrame,
+        period_type_map: dict,
     ) -> int:
         """
         Write cleaned data to fundamentals table.
         
         The fundamentals schema has:
         - numeric_value: the cleaned, imputed value
+        - period_type: tracks whether data is FISCAL or MONTHLY
         - imputed: boolean flag (true if source != 'RAW')
         - metadata: JSONB storing imputation_source and confidence_level
         
@@ -135,6 +141,7 @@ class DataQualityProcessor:
             dataset_id: UUID of dataset
             wide_clean: Wide DataFrame with cleaned values
             source_wide: Wide DataFrame with imputation sources
+            period_type_map: Dict mapping (ticker, fiscal_year) → period_type
             
         Returns:
             Number of rows written
@@ -145,6 +152,7 @@ class DataQualityProcessor:
         for _, row in wide_clean.iterrows():
             ticker = row['ticker']
             fiscal_year = int(row['fiscal_year'])
+            period_type = period_type_map.get((ticker, fiscal_year), 'FISCAL')
             
             for metric in metrics:
                 val = row[metric]
@@ -179,6 +187,7 @@ class DataQualityProcessor:
                     'fiscal_year': fiscal_year,
                     'numeric_value': float(val),
                     'currency': 'AUD',  # Default to AUD for ASX data
+                    'period_type': period_type,
                     'imputed': src != 'RAW',  # True if source is anything other than RAW
                     'metadata': json.dumps(metadata),
                 })
@@ -189,8 +198,8 @@ class DataQualityProcessor:
                 # Use proper SQL with metadata as JSONB
                 stmt = """
                     INSERT INTO fundamentals 
-                    (dataset_id, ticker, metric_name, fiscal_year, numeric_value, currency, imputed, metadata)
-                    VALUES (%(dataset_id)s, %(ticker)s, %(metric_name)s, %(fiscal_year)s, %(numeric_value)s, %(currency)s, %(imputed)s, %(metadata)s::jsonb)
+                    (dataset_id, ticker, metric_name, fiscal_year, numeric_value, currency, period_type, imputed, metadata)
+                    VALUES (%(dataset_id)s, %(ticker)s, %(metric_name)s, %(fiscal_year)s, %(numeric_value)s, %(currency)s, %(period_type)s, %(imputed)s, %(metadata)s::jsonb)
                 """
                 # executemany for bulk insert
                 conn.exec_driver_sql(stmt, rows)

@@ -192,7 +192,7 @@ class SchemaManager:
         print("Initializing baseline parameters...")
         
         baseline_parameters = [
-            ("country_geography", "Country Geography", "TEXT", "Australia"),
+            ("country", "Country", "TEXT", "Australia"),
             ("currency_notation", "Currency Notation", "TEXT", "A$m"),
             ("cost_of_equity_approach", "Cost of Equity Approach", "TEXT", "Floating"),
             ("include_franking_credits_tsr", "Include Franking Credits (TSR)", "BOOLEAN", "false"),

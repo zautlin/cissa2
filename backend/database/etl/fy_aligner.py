@@ -47,12 +47,13 @@ class FYAligner:
         - fiscal_year
         - metric_name
         - value
+        - period_type
         - source = 'aligned'
         
         Logic:
-        For each row in raw_data (ticker, metric_name, period, numeric_value):
+        For each row in raw_data (ticker, metric_name, period, numeric_value, period_type):
           1. Extract fiscal_year from period string (e.g., 'FY 2003' → 2003)
-          2. If extraction successful, emit row with (ticker, fiscal_year, metric_name, value)
+          2. If extraction successful, emit row with (ticker, fiscal_year, metric_name, value, period_type)
           3. If extraction fails, skip row (no fiscal_year to align to)
         
         Args:
@@ -60,12 +61,12 @@ class FYAligner:
             metrics: Optional list of metric names to filter on
             
         Returns:
-            DataFrame with columns: ticker, fiscal_year, metric_name, value, source
+            DataFrame with columns: ticker, fiscal_year, metric_name, value, period_type, source
         """
         # Load raw data for this dataset
         raw = self._load_raw_data(dataset_id, metrics)
         if raw.empty:
-            return pd.DataFrame(columns=['ticker', 'fiscal_year', 'metric_name', 'value', 'source'])
+            return pd.DataFrame(columns=['ticker', 'fiscal_year', 'metric_name', 'value', 'period_type', 'source'])
         
         # Extract fiscal_year from period strings
         records = []
@@ -79,11 +80,12 @@ class FYAligner:
                     'fiscal_year': fiscal_year,
                     'metric_name': row['metric_name'],
                     'value': float(row['numeric_value']) if row['numeric_value'] is not None and pd.notna(row['numeric_value']) else None,
+                    'period_type': row['period_type'],
                     'source': 'aligned',
                 })
         
         if not records:
-            return pd.DataFrame(columns=['ticker', 'fiscal_year', 'metric_name', 'value', 'source'])
+            return pd.DataFrame(columns=['ticker', 'fiscal_year', 'metric_name', 'value', 'period_type', 'source'])
         
         return pd.DataFrame(records)
     
@@ -119,12 +121,12 @@ class FYAligner:
         """
         Load raw data points for a given dataset.
         
-        Returns DataFrame with columns: ticker, period, metric_name, numeric_value
+        Returns DataFrame with columns: ticker, period, metric_name, numeric_value, period_type
         """
         if metrics:
             placeholders = ', '.join(f"'{m}'" for m in metrics)
             sql = f"""
-                SELECT ticker, period, metric_name, numeric_value
+                SELECT ticker, period, metric_name, numeric_value, period_type
                 FROM raw_data
                 WHERE dataset_id = :dataset_id
                   AND metric_name IN ({placeholders})
@@ -132,7 +134,7 @@ class FYAligner:
             """
         else:
             sql = """
-                SELECT ticker, period, metric_name, numeric_value
+                SELECT ticker, period, metric_name, numeric_value, period_type
                 FROM raw_data
                 WHERE dataset_id = :dataset_id
                   AND numeric_value IS NOT NULL
@@ -145,4 +147,4 @@ class FYAligner:
         if not rows:
             return pd.DataFrame()
         
-        return pd.DataFrame(rows, columns=['ticker', 'period', 'metric_name', 'numeric_value'])
+        return pd.DataFrame(rows, columns=['ticker', 'period', 'metric_name', 'numeric_value', 'period_type'])

@@ -33,15 +33,15 @@ CREATE TABLE companies (
   bics_level_3 TEXT,
   bics_level_4 TEXT,
   currency TEXT NOT NULL DEFAULT 'AUD',
-  geography TEXT NOT NULL DEFAULT 'Australia',
+  country TEXT NOT NULL DEFAULT 'Australia',
   fy_report_month DATE,
   begin_year INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_companies_ticker ON companies (ticker);
 CREATE INDEX idx_companies_sector ON companies (sector);
-CREATE INDEX idx_companies_geography ON companies (geography);
-COMMENT ON TABLE companies IS 'Master list of companies from Base.csv. One-to-many base for all financial data. Includes geography (Australia/US/UK), fiscal year end month, and first year of data availability.';
+CREATE INDEX idx_companies_country ON companies (country);
+COMMENT ON TABLE companies IS 'Master list of companies from Base.csv. One-to-many base for all financial data. Includes country (Australia/US/UK), fiscal year end month, and first year of data availability.';
 
 -- Fiscal Year Mapping: FY dates from FY Dates.csv
 -- Maps (ticker, fiscal_year) → fy_period_date for alignment
@@ -138,6 +138,9 @@ CREATE TABLE fundamentals (
   -- Cleaned, aligned, imputed value
   numeric_value NUMERIC NOT NULL,
   currency TEXT,
+  
+  -- Period type: tracks whether data is FISCAL or MONTHLY
+  period_type TEXT NOT NULL CHECK (period_type IN ('FISCAL', 'MONTHLY')) DEFAULT 'FISCAL',
   
   -- Quality tracking
   imputed BOOLEAN NOT NULL DEFAULT false,
@@ -340,7 +343,7 @@ COMMENT ON TABLE optimization_outputs IS 'Results from optimization algorithms. 
 -- Insert 13 baseline parameters (if not already present)
 INSERT INTO parameters (parameter_name, display_name, value_type, default_value)
 VALUES
-  ('country_geography', 'Country Geography', 'TEXT', 'Australia'),
+  ('country', 'Country', 'TEXT', 'Australia'),
   ('currency_notation', 'Currency Notation', 'TEXT', 'A$m'),
   ('cost_of_equity_approach', 'Cost of Equity Approach', 'TEXT', 'Floating'),
   ('include_franking_credits_tsr', 'Include Franking Credits (TSR)', 'BOOLEAN', 'false'),

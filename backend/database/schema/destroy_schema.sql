@@ -24,23 +24,11 @@
 --  - All associated triggers
 --
 -- ============================================================================
--- TO CONFIRM YOU UNDERSTAND THE CONSEQUENCES:
--- Uncomment the next line by removing the "--" at the start:
+-- CONFIRMATION HANDLED VIA schema_manager.py
 -- ============================================================================
-
--- CONFIRM_DESTRUCTION: I understand all data will be permanently lost
-
--- Only proceed if the above line is uncommented. Otherwise this script will not execute.
-
--- Check if confirmation is present
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM (VALUES ('-- CONFIRM_DESTRUCTION: I understand all data will be permanently lost')) AS t(line)
-  ) THEN
-    RAISE EXCEPTION 'Destruction not confirmed. Uncomment the CONFIRM_DESTRUCTION line to proceed.';
-  END IF;
-END $$;
+-- The Python schema_manager.py handles user confirmation interactively.
+-- When --confirm flag is used, the user has already been warned.
+-- This SQL script proceeds directly to destruction.
 
 -- ============================================================================
 -- DROP TABLES IN DEPENDENCY ORDER (Reverse of creation)
