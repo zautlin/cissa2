@@ -134,12 +134,16 @@ CREATE TABLE fundamentals (
   ticker TEXT NOT NULL,
   metric_name TEXT NOT NULL,
   fiscal_year INTEGER NOT NULL,
+  fiscal_month INTEGER,
+  fiscal_day INTEGER,
   
   -- Cleaned, aligned, imputed value
   numeric_value NUMERIC NOT NULL,
   currency TEXT,
   
   -- Period type: tracks whether data is FISCAL or MONTHLY
+  -- FISCAL: fiscal_year populated, fiscal_month/fiscal_day are NULL
+  -- MONTHLY: all three populated from calendar date
   period_type TEXT NOT NULL CHECK (period_type IN ('FISCAL', 'MONTHLY')) DEFAULT 'FISCAL',
   
   -- Quality tracking
@@ -150,23 +154,27 @@ CREATE TABLE fundamentals (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Uniqueness: one row per (dataset, ticker, metric, fiscal_year)
+-- Uniqueness: one row per (dataset, ticker, metric, fiscal_year, fiscal_month, fiscal_day)
+-- Uses COALESCE to treat NULL as 0 so FISCAL records (with NULL month/day) don't conflict
 CREATE UNIQUE INDEX idx_fundamentals_unique 
-ON fundamentals (dataset_id, ticker, metric_name, fiscal_year);
+ON fundamentals (dataset_id, ticker, metric_name, fiscal_year, COALESCE(fiscal_month, 0), COALESCE(fiscal_day, 0));
 
 -- Access patterns
 CREATE INDEX idx_fundamentals_dataset ON fundamentals (dataset_id);
 CREATE INDEX idx_fundamentals_ticker ON fundamentals (ticker);
 CREATE INDEX idx_fundamentals_metric ON fundamentals (metric_name);
 CREATE INDEX idx_fundamentals_fiscal_year ON fundamentals (fiscal_year);
+CREATE INDEX idx_fundamentals_period_type ON fundamentals (period_type);
 
 -- Composite indexes for common queries
 CREATE INDEX idx_fundamentals_dataset_ticker_fy 
 ON fundamentals (dataset_id, ticker, fiscal_year);
 CREATE INDEX idx_fundamentals_ticker_metric_fy 
 ON fundamentals (ticker, metric_name, fiscal_year);
+CREATE INDEX idx_fundamentals_ticker_period_type 
+ON fundamentals (ticker, period_type);
 
-COMMENT ON TABLE fundamentals IS 'Final cleaned, FY-aligned, imputed fact table. Single source of truth for all downstream analysis. One row per (dataset, ticker, metric, fiscal_year). metadata tracks imputation_step and confidence_level.';
+COMMENT ON TABLE fundamentals IS 'Final cleaned, FY-aligned, imputed fact table. Single source of truth for all downstream analysis. One row per (dataset, ticker, metric, fiscal_year, fiscal_month, fiscal_day). Stores both FISCAL (month/day NULL) and MONTHLY (all components populated) records. metadata tracks imputation_step and confidence_level.';
 
 -- Imputation Audit Trail: Detailed audit of imputation decisions
 -- One row per imputed (ticker, fiscal_year, metric); raw data rows have no entry
