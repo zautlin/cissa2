@@ -63,16 +63,27 @@ class ImputationCascade:
         sector_map: Dict[str, str],
     ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict]:
         """
-        Apply 7-step imputation cascade to wide DataFrame.
+        Apply 7-step imputation cascade to wide DataFrame with temporal ordering.
+        
+        TEMPORAL ORDERING:
+        Before imputation, data is sorted to ensure correct chronological order within each ticker.
+        This is critical for forward_fill, backward_fill, and interpolation to work correctly,
+        especially across year boundaries (e.g., Dec 2021 → Jan 2022 for MONTHLY data).
+        
+        FISCAL data: Sorted by (ticker, fiscal_year) → fills across years
+        MONTHLY data: Sorted by (ticker, fiscal_year, fiscal_month, fiscal_day) → fills across months/years
         
         Args:
-            wide_df: DataFrame with shape (ticker, fiscal_year) × metrics
+            wide_df: DataFrame with columns: ticker, fiscal_year, [fiscal_month, fiscal_day], metrics
+                     Index structure depends on data type:
+                     - FISCAL: columns (ticker, fiscal_year) + metrics
+                     - MONTHLY: columns (ticker, fiscal_year, fiscal_month, fiscal_day) + metrics
             sector_map: Dictionary {ticker: sector}
             
         Returns:
             Tuple of:
-            - wide_clean: Cleaned values DataFrame
-            - source_wide: Source labels (same shape as wide_clean)
+            - wide_clean: Cleaned values DataFrame (sorted by temporal order)
+            - source_wide: Source labels (same shape as wide_clean, same temporal order)
             - log: Imputation statistics {metric: {source: count}}
         """
         metrics = [c for c in wide_df.columns if c not in ('ticker', 'fiscal_year')]
@@ -86,6 +97,22 @@ class ImputationCascade:
         
         # Add sector column for group operations (dropped before return)
         wide_clean['_sector'] = wide_clean['ticker'].map(sector_map).fillna('Unknown')
+        
+        # === SORT BY TEMPORAL ORDER ===
+        # Ensure chronological ordering within each ticker for correct ffill/bfill/interpolate
+        # This is critical for filling gaps across year boundaries (e.g., Dec 2021 → Jan 2022)
+        if 'fiscal_month' in wide_clean.columns:
+            # MONTHLY data: Sort by (ticker, fiscal_year, fiscal_month, fiscal_day)
+            # This ensures: ticker1-2021-01-31 → ticker1-2021-02-28 → ... → ticker1-2023-12-31 → ticker2-2021-01-31 ...
+            sort_cols = ['ticker', 'fiscal_year', 'fiscal_month', 'fiscal_day']
+        else:
+            # FISCAL data: Sort by (ticker, fiscal_year)
+            # This ensures: ticker1-2002 → ticker1-2003 → ... → ticker1-2023 → ticker2-2002 ...
+            sort_cols = ['ticker', 'fiscal_year']
+        
+        wide_clean = wide_clean.sort_values(by=sort_cols).reset_index(drop=True)
+        source_wide = source_wide.sort_values(by=sort_cols).reset_index(drop=True)
+        # === END SORT ===
         
         # Process each metric
         for metric in metrics:
