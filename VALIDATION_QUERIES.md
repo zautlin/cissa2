@@ -2,6 +2,41 @@
 
 Run these queries after you complete the data re-ingestion to verify the FISCAL/MONTHLY data flow is working correctly.
 
+## 0. Stage 1B: Ingestion Reconciliation
+
+Verify the full data flow through ingestion with complete reconciliation:
+
+```sql
+-- Query ingestion metadata to see reconciliation details
+SELECT 
+    dataset_name,
+    version_number,
+    (metadata->'stage_1_ingestion'->>'total_csv_rows')::int as csv_rows,
+    (metadata->'stage_1_ingestion'->>'total_rows_processed')::int as processed_rows,
+    (metadata->'stage_1_ingestion'->>'rows_with_unparseable_values')::int as rejected_rows,
+    (metadata->'stage_1_ingestion'->>'duplicate_combinations_found')::int as duplicates,
+    (metadata->'stage_1_ingestion'->>'unique_rows_in_raw_data')::int as unique_in_db
+FROM cissa.dataset_versions
+ORDER BY created_at DESC
+LIMIT 1;
+```
+
+**Expected Results & Reconciliation:**
+- csv_rows: 275,343
+- processed_rows: 275,343 (all have valid ticker/period/metric)
+- rejected_rows: 485 (unparseable numeric values)
+- duplicates: ~1,000 (duplicate ticker-metric-period combinations)
+- unique_in_db: 273,858
+
+**Verification Formula:**
+```
+unique_in_db = processed_rows - rejected_rows - duplicates
+273,858 = 275,343 - 485 - 1,000
+✓ Should equal 273,858 (matches raw_data count)
+```
+
+---
+
 ## 1. Period Type Distribution
 
 Verify that both FISCAL and MONTHLY data made it through the pipeline:
@@ -191,3 +226,36 @@ SELECT
     0 as period_types
 FROM cissa.optimization_outputs;
 ```
+
+---
+
+## Appendix: Understanding the 275,343 CSV Rows
+
+**Where did all 275,343 CSV rows go?**
+
+The ingestion process performs multiple validation stages to ensure data quality. Here's the complete breakdown:
+
+### Stage 1: CSV Loading
+- **Start:** 275,343 rows in financial_metrics_fact_table.csv
+
+### Stage 2: Key Validation (ticker, period, metric)
+- All 275,343 rows have valid ticker, period, and metric
+- **Rows with valid keys:** 275,343
+
+### Stage 3: Numeric Validation
+- Some rows have non-numeric or invalid values
+- **Rejected rows:** 485 (e.g., "nan", currency codes, country names, index names)
+- **Rows with valid numeric values:** 274,858
+
+### Stage 4: Duplicate Handling
+- Within the 274,858 valid rows, some have identical (dataset_id, ticker, metric_name, period) combinations
+- These duplicates trigger ON CONFLICT UPDATE (replace existing value)
+- **Duplicate combinations:** ~1,000
+- **Unique (ticker, metric, period) combinations:** 273,858
+
+### Final Result
+- **Rows in raw_data:** 273,858 (unique combinations)
+- **Reconciliation:** 275,343 (CSV) - 485 (rejected) - 1,000 (duplicates) = 273,858 ✓
+
+### Why the duplicates?
+The source data (financial_metrics_fact_table.csv) contains some metrics reported multiple times for the same (ticker, period, metric) tuple, likely due to data consolidation from multiple sources. The ON CONFLICT UPDATE strategy keeps the last valid observation for each unique combination.

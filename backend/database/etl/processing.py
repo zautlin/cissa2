@@ -76,18 +76,18 @@ class DataQualityProcessor:
             fiscal_clean, fiscal_source, fiscal_imputation_log = None, None, {}
             if not fiscal_df.empty:
                 print("    - Processing FISCAL data...")
-                fiscal_period_type_map = self._build_period_type_map(fiscal_df)
-                fiscal_wide_df = self._convert_to_wide(fiscal_df)
-                print(f"      ✓ FISCAL wide format: {fiscal_wide_df.shape[0]} rows × {fiscal_wide_df.shape[1]-4} metrics")
+                fiscal_period_type_map = self._build_period_type_map(fiscal_df, 'FISCAL')
+                fiscal_wide_df = self._convert_to_wide(fiscal_df, 'FISCAL')
+                print(f"      ✓ FISCAL wide format: {fiscal_wide_df.shape[0]} rows × {fiscal_wide_df.shape[1]-2} metrics (2-part index)")
                 fiscal_clean, fiscal_source, fiscal_imputation_log = self.imputation.impute(fiscal_wide_df, sector_map)
             
             # Process MONTHLY data
             monthly_clean, monthly_source, monthly_imputation_log = None, None, {}
             if not monthly_df.empty:
                 print("    - Processing MONTHLY data...")
-                monthly_period_type_map = self._build_period_type_map(monthly_df)
-                monthly_wide_df = self._convert_to_wide(monthly_df)
-                print(f"      ✓ MONTHLY wide format: {monthly_wide_df.shape[0]} rows × {monthly_wide_df.shape[1]-4} metrics")
+                monthly_period_type_map = self._build_period_type_map(monthly_df, 'MONTHLY')
+                monthly_wide_df = self._convert_to_wide(monthly_df, 'MONTHLY')
+                print(f"      ✓ MONTHLY wide format: {monthly_wide_df.shape[0]} rows × {monthly_wide_df.shape[1]-4} metrics (4-part index)")
                 monthly_clean, monthly_source, monthly_imputation_log = self.imputation.impute(monthly_wide_df, sector_map)
             
             # Step 4: Print imputation statistics
@@ -101,9 +101,9 @@ class DataQualityProcessor:
             print("  [5/5] Writing fundamentals table...")
             n_rows = 0
             if fiscal_clean is not None and not fiscal_clean.empty:
-                n_rows += self._write_fundamentals(dataset_id, fiscal_clean, fiscal_source, fiscal_period_type_map)
+                n_rows += self._write_fundamentals(dataset_id, fiscal_clean, fiscal_source, fiscal_period_type_map, 'FISCAL')
             if monthly_clean is not None and not monthly_clean.empty:
-                n_rows += self._write_fundamentals(dataset_id, monthly_clean, monthly_source, monthly_period_type_map)
+                n_rows += self._write_fundamentals(dataset_id, monthly_clean, monthly_source, monthly_period_type_map, 'MONTHLY')
             print(f"    ✓ Wrote {n_rows} fundamentals rows")
             
             # Calculate quality metadata
@@ -136,32 +136,70 @@ class DataQualityProcessor:
             print(f"[DataQualityProcessor] ✗ Error: {e}")
             raise
     
-    def _build_period_type_map(self, df: pd.DataFrame) -> dict:
+    def _build_period_type_map(self, df: pd.DataFrame, period_type: str) -> dict:
         """
-        Build map from (ticker, fiscal_year, fiscal_month, fiscal_day) → period_type.
+        Build map from index tuple → period_type string.
+        
+        The index structure depends on period_type:
+        - FISCAL (2-part): Maps (ticker, fiscal_year) → 'FISCAL'
+        - MONTHLY (4-part): Maps (ticker, fiscal_year, fiscal_month, fiscal_day) → 'MONTHLY'
+        
+        This map is used during _write_fundamentals to reconstruct the period_type
+        for each row based on its position after imputation.
         
         Args:
             df: Aligned DataFrame with period_type column
+            period_type: 'FISCAL' or 'MONTHLY' to determine index structure
             
         Returns:
-            Dict mapping (ticker, fiscal_year, fiscal_month, fiscal_day) → period_type
+            Dict mapping index tuple → period_type string
         """
-        period_map = df.groupby(['ticker', 'fiscal_year', 'fiscal_month', 'fiscal_day'])['period_type'].first().reset_index()
-        period_map = period_map.set_index(['ticker', 'fiscal_year', 'fiscal_month', 'fiscal_day'])['period_type'].to_dict()
+        if period_type == 'FISCAL':
+            # FISCAL: 2-part index key
+            period_map = df.groupby(['ticker', 'fiscal_year'])['period_type'].first().reset_index()
+            period_map = period_map.set_index(['ticker', 'fiscal_year'])['period_type'].to_dict()
+        else:  # period_type == 'MONTHLY'
+            # MONTHLY: 4-part index key
+            period_map = df.groupby(['ticker', 'fiscal_year', 'fiscal_month', 'fiscal_day'])['period_type'].first().reset_index()
+            period_map = period_map.set_index(['ticker', 'fiscal_year', 'fiscal_month', 'fiscal_day'])['period_type'].to_dict()
+        
         return period_map
     
-    def _convert_to_wide(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _convert_to_wide(self, df: pd.DataFrame, period_type: str) -> pd.DataFrame:
         """
-        Convert aligned DataFrame to wide format with 4-part index.
+        Convert aligned DataFrame to wide format with appropriate index structure.
+        
+        INDEX STRATEGY:
+        - FISCAL (period_type='FISCAL'): Uses (ticker, fiscal_year) as 2-part index
+          * All FISCAL records have fiscal_month=NULL, fiscal_day=NULL
+          * Pivoting on 4-part index would treat each NULL as a separate value
+          * Result: 0 rows (pivot can't aggregate on multiple NULL values)
+          * Solution: Use 2-part index to get 1 row per company per fiscal year
+          * Output: ~500 companies × 22 years = ~11,000 rows
+        
+        - MONTHLY (period_type='MONTHLY'): Uses (ticker, fiscal_year, fiscal_month, fiscal_day) as 4-part index
+          * All date components populated for monthly data
+          * Each month-day is a unique observation
+          * Pivoting creates 1 row per unique (ticker, year, month, day) combination
+          * Output: ~500 companies × many months = ~133,000 rows
         
         Args:
             df: Aligned DataFrame with columns: ticker, fiscal_year, fiscal_month, fiscal_day, metric_name, value
+            period_type: 'FISCAL' or 'MONTHLY' to determine index structure
             
         Returns:
-            Wide DataFrame with index (ticker, fiscal_year, fiscal_month, fiscal_day) and metric columns
+            Wide DataFrame with appropriate index and metric columns
         """
+        # Choose index based on period type
+        if period_type == 'FISCAL':
+            # FISCAL: 2-part index (month/day always NULL)
+            index = ['ticker', 'fiscal_year']
+        else:  # period_type == 'MONTHLY'
+            # MONTHLY: 4-part index (all date components populated)
+            index = ['ticker', 'fiscal_year', 'fiscal_month', 'fiscal_day']
+        
         wide_df = df.pivot_table(
-            index=['ticker', 'fiscal_year', 'fiscal_month', 'fiscal_day'],
+            index=index,
             columns='metric_name',
             values='value',
             aggfunc='first',
@@ -175,25 +213,29 @@ class DataQualityProcessor:
         wide_clean: pd.DataFrame,
         source_wide: pd.DataFrame,
         period_type_map: dict,
+        period_type: str,
     ) -> int:
         """
-        Write cleaned data to fundamentals table with fiscal_year, fiscal_month, fiscal_day.
+        Write cleaned data to fundamentals table with appropriate index handling.
         
-        The fundamentals schema has:
-        - fiscal_year, fiscal_month, fiscal_day: date components
-        - numeric_value: the cleaned, imputed value
-        - period_type: tracks whether data is FISCAL or MONTHLY
-        - imputed: boolean flag (true if source != 'RAW')
-        - metadata: JSONB storing imputation_source and confidence_level
+        INDEX HANDLING:
+        - FISCAL (period_type='FISCAL'): wide_clean has 2-part index (ticker, fiscal_year)
+          * fiscal_month and fiscal_day are NOT columns (they are NULL in final output)
+          * period_type_map keys are (ticker, fiscal_year) tuples
+        
+        - MONTHLY (period_type='MONTHLY'): wide_clean has 4-part index (ticker, fiscal_year, fiscal_month, fiscal_day)
+          * fiscal_month and fiscal_day ARE present as columns
+          * period_type_map keys are (ticker, fiscal_year, fiscal_month, fiscal_day) tuples
         
         Args:
             dataset_id: UUID of dataset
-            wide_clean: Wide DataFrame with cleaned values, index: (ticker, fiscal_year, fiscal_month, fiscal_day)
-            source_wide: Wide DataFrame with imputation sources, index: (ticker, fiscal_year, fiscal_month, fiscal_day)
-            period_type_map: Dict mapping (ticker, fiscal_year, fiscal_month, fiscal_day) → period_type
+            wide_clean: Wide DataFrame with cleaned values
+            source_wide: Wide DataFrame with imputation sources
+            period_type_map: Dict mapping index tuple → period_type
+            period_type: 'FISCAL' or 'MONTHLY' to determine index structure
             
         Returns:
-            Number of rows written
+            Number of rows written to fundamentals table
         """
         metrics = [c for c in wide_clean.columns if c not in ('ticker', 'fiscal_year', 'fiscal_month', 'fiscal_day')]
         
@@ -201,21 +243,32 @@ class DataQualityProcessor:
         for _, row in wide_clean.iterrows():
             ticker = str(row['ticker'])
             fiscal_year = int(row['fiscal_year'])
-            fiscal_month = row['fiscal_month']
-            fiscal_day = row['fiscal_day']
             
-            # Convert NaN to None for nullable columns
-            if pd.isna(fiscal_month):
+            # Handle fiscal_month and fiscal_day based on period_type
+            if period_type == 'FISCAL':
+                # FISCAL: month/day are NOT in the wide DataFrame
                 fiscal_month = None
-            else:
-                fiscal_month = int(fiscal_month)
-            
-            if pd.isna(fiscal_day):
                 fiscal_day = None
-            else:
-                fiscal_day = int(fiscal_day)
+                index_key = (ticker, fiscal_year)
+            else:  # period_type == 'MONTHLY'
+                # MONTHLY: month/day ARE in the wide DataFrame
+                fiscal_month = row['fiscal_month']
+                fiscal_day = row['fiscal_day']
+                
+                # Convert NaN to None for nullable columns
+                if pd.isna(fiscal_month):
+                    fiscal_month = None
+                else:
+                    fiscal_month = int(fiscal_month)
+                
+                if pd.isna(fiscal_day):
+                    fiscal_day = None
+                else:
+                    fiscal_day = int(fiscal_day)
+                
+                index_key = (ticker, fiscal_year, fiscal_month, fiscal_day)
             
-            period_type = period_type_map.get((ticker, fiscal_year, fiscal_month, fiscal_day), 'FISCAL')
+            period_type_val = period_type_map.get(index_key, period_type)
             
             for metric in metrics:
                 val = row[metric]
@@ -252,7 +305,7 @@ class DataQualityProcessor:
                     'fiscal_day': fiscal_day,
                     'numeric_value': float(val),
                     'currency': 'AUD',  # Default to AUD for ASX data
-                    'period_type': period_type,
+                    'period_type': period_type_val,
                     'imputed': src != 'RAW',  # True if source is anything other than RAW
                     'metadata': json.dumps(metadata),
                 })

@@ -350,26 +350,40 @@ class PipelineOrchestrator:
             self.logger.success(f"Dataset ID: {result['dataset_id']}")
             self.logger.success(f"Dataset Name: {result['dataset_name']}")
             self.logger.success(f"Version: {result['version_number']}")
-            self.logger.info(f"\nIngestion Statistics:")
-            self.logger.info(f"  Total rows: {result['total_rows']:,}")
-            valid_rows = result['total_rows'] - result['rejected_rows']
-            self.logger.info(f"  Valid rows: {valid_rows:,} ({100*valid_rows/result['total_rows']:.1f}%)")
-            self.logger.info(f"  Rejected rows: {result['rejected_rows']:,} ({100*result['rejected_rows']/result['total_rows']:.1f}%)")
+            self.logger.info(f"\nIngestion Statistics & Reconciliation:")
+            self.logger.info(f"  CSV file rows: {result['total_csv_rows']:,}")
+            self.logger.info(f"  Rows with valid ticker/period/metric: {result['total_rows_processed']:,}")
+            self.logger.info(f"  Rows with unparseable values (rejected): {result['rejected_rows']:,}")
+            self.logger.info(f"  Duplicate (ticker, metric, period) combinations: {result['duplicate_combinations']:,}")
+            self.logger.info(f"  Unique rows in raw_data: {result['unique_rows_in_db']:,}")
+            
+            # Verify reconciliation
+            expected = result['total_rows_processed'] - result['rejected_rows'] - result['duplicate_combinations']
+            actual = result['unique_rows_in_db']
+            reconcile_ok = expected == actual
+            status = "✓" if reconcile_ok else "✗"
+            self.logger.info(f"\n  Reconciliation: {status}")
+            self.logger.info(f"    Formula: processed - rejects - duplicates = unique_in_db")
+            self.logger.info(f"    Calculation: {result['total_rows_processed']:,} - {result['rejected_rows']:,} - {result['duplicate_combinations']:,} = {expected:,}")
+            self.logger.info(f"    Actual in DB: {actual:,}")
             
             if result['validation_summary']:
-                self.logger.info(f"\nRejection Reasons:")
-                for reason, count in sorted(result['validation_summary'].items(), key=lambda x: x[1], reverse=True):
+                self.logger.info(f"\n  Rejection Reasons (top 5):")
+                for reason, count in sorted(result['validation_summary'].items(), key=lambda x: x[1], reverse=True)[:5]:
                     pct = 100 * count / result['rejected_rows'] if result['rejected_rows'] > 0 else 0
-                    self.logger.info(f"  - {reason}: {count:,} ({pct:.1f}%)")
+                    self.logger.info(f"    - {reason}: {count:,} ({pct:.1f}%)")
             
             self.results['stage_1b_ingest'] = {
                 'status': 'SUCCESS',
                 'dataset_id': result['dataset_id'],
                 'dataset_name': result['dataset_name'],
                 'version_number': result['version_number'],
-                'total_rows': result['total_rows'],
-                'valid_rows': valid_rows,
+                'total_csv_rows': result['total_csv_rows'],
+                'total_rows_processed': result['total_rows_processed'],
                 'rejected_rows': result['rejected_rows'],
+                'duplicate_combinations': result['duplicate_combinations'],
+                'unique_rows_in_db': result['unique_rows_in_db'],
+                'reconciliation_ok': reconcile_ok,
                 'validation_summary': result['validation_summary'],
             }
             

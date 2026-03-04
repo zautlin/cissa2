@@ -235,13 +235,20 @@ class Ingester:
             return result.scalar()
     
     def _update_dataset_metadata(self, dataset_id: str, ingestion_result: Dict[str, Any]):
-        """Update dataset_versions.metadata with ingestion statistics."""
+        """Update dataset_versions.metadata with full ingestion reconciliation stats."""
         metadata = {
             'stage_1_ingestion': {
-                'total_rows_ingested': ingestion_result['total_rows'],
-                'rows_with_valid_numbers': ingestion_result['total_rows'] - ingestion_result['rejected_rows'],
+                'total_csv_rows': ingestion_result['total_csv_rows'],
+                'total_rows_processed': ingestion_result['total_rows_processed'],
+                'rows_with_valid_numbers': ingestion_result['total_rows_processed'] - ingestion_result['rejected_rows'] - ingestion_result['duplicate_combinations'],
                 'rows_with_unparseable_values': ingestion_result['rejected_rows'],
+                'duplicate_combinations_found': ingestion_result['duplicate_combinations'],
+                'unique_rows_in_raw_data': ingestion_result['unique_rows_in_db'],
                 'rejection_summary': ingestion_result['validation_summary'],
+                'reconciliation': {
+                    'formula': 'unique_in_db = processed - rejects - duplicates',
+                    'calculated': f"{ingestion_result['total_rows_processed']} - {ingestion_result['rejected_rows']} - {ingestion_result['duplicate_combinations']} = {ingestion_result['unique_rows_in_db']}"
+                }
             }
         }
         
@@ -391,7 +398,17 @@ class Ingester:
         return {'loaded': len(fy_mapping_rows), 'path': csv_path}
     
     def _load_raw_data(self, dataset_id: str, csv_path: str) -> Dict[str, Any]:
-        """Load financial_metrics_fact_table.csv → raw_data (all rows, no filtering)."""
+        """Load financial_metrics_fact_table.csv → raw_data with full reconciliation.
+        
+        Tracks all rows through the ingestion pipeline:
+        - total_csv_rows: All rows in CSV file
+        - total_rows_processed: Rows with valid ticker/period/metric
+        - rejected_rows: Rows with unparseable numeric values
+        - duplicate_combinations: Duplicate (ticker, metric_name, period) within valid rows
+        - unique_rows_in_db: Final rows in raw_data after deduplication
+        
+        Reconciliation: CSV rows = processed + rejects + duplicates (duplicates update existing)
+        """
         df = pd.read_csv(csv_path)
         
         total_rows = 0
@@ -399,6 +416,8 @@ class Ingester:
         validation_summary = {}
         
         raw_data_rows = []
+        seen_combinations = set()  # Track (ticker, metric_name, period) duplicates
+        duplicate_combinations = 0
         
         for _, row in df.iterrows():
             ticker = str(row.get('Ticker', '')).strip()
@@ -417,6 +436,13 @@ class Ingester:
             numeric_val, is_valid, rejection_reason = validate_numeric(raw_value)
             
             if is_valid:
+                # Track duplicates: check if we've already seen this combination
+                combination = (ticker, metric_name, period)
+                if combination in seen_combinations:
+                    duplicate_combinations += 1
+                else:
+                    seen_combinations.add(combination)
+                
                 raw_data_rows.append({
                     'dataset_id': dataset_id,
                     'ticker': ticker,
@@ -446,10 +472,22 @@ class Ingester:
                         numeric_value = EXCLUDED.numeric_value
                 """), raw_data_rows)
         
+        # Query to get actual unique rows inserted
+        unique_rows_in_db = 0
+        if raw_data_rows:
+            with self.engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT COUNT(*) FROM raw_data WHERE dataset_id = :dataset_id
+                """), {'dataset_id': dataset_id})
+                unique_rows_in_db = result.scalar()
+        
         return {
             'status': 'INGESTED',
-            'total_rows': total_rows,
+            'total_csv_rows': len(df),
+            'total_rows_processed': total_rows,
             'rejected_rows': rejected_rows,
+            'duplicate_combinations': duplicate_combinations,
+            'unique_rows_in_db': unique_rows_in_db,
             'validation_summary': validation_summary,
             'path': csv_path,
         }
