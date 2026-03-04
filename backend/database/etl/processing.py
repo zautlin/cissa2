@@ -113,20 +113,6 @@ class DataQualityProcessor:
         
         except Exception as e:
             print(f"[DataQualityProcessor] ✗ Error: {e}")
-            
-            # Update dataset_versions with error
-            with self.engine.begin() as conn:
-                conn.execute(text("""
-                    UPDATE dataset_versions
-                    SET status = 'ERROR',
-                        processing_completed_at = now(),
-                        notes = :error_msg
-                    WHERE dataset_id = :dataset_id
-                """), {
-                    "dataset_id": dataset_id,
-                    "error_msg": str(e),
-                })
-            
             raise
     
     def _write_fundamentals(
