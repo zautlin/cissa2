@@ -34,7 +34,7 @@ CREATE TABLE companies (
   bics_level_4 TEXT,
   currency TEXT NOT NULL DEFAULT 'AUD',
   geography TEXT NOT NULL DEFAULT 'Australia',
-  fy_report_month INTEGER,
+  fy_report_month DATE,
   begin_year INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

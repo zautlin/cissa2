@@ -274,23 +274,21 @@ class Ingester:
             # Parse FY Report Month - can be a date string (e.g., "2019-06-30 00:00:00") or int
             fy_report_month = None
             if 'FY Report Month' in df.columns:
-                fy_value = row.get('FY Report Month', 6)
-                if isinstance(fy_value, str):
-                    try:
-                        # Try to parse as date string and extract month
-                        from datetime import datetime
-                        dt = datetime.fromisoformat(fy_value.replace(' 00:00:00', ''))
-                        fy_report_month = dt.month
-                    except (ValueError, AttributeError):
-                        # Fall back to direct int conversion
+                fy_value = row.get('FY Report Month', None)
+                if fy_value is not None and fy_value != '':
+                    if isinstance(fy_value, str):
                         try:
-                            fy_report_month = int(fy_value)
-                        except ValueError:
-                            fy_report_month = 6
-                else:
-                    fy_report_month = int(fy_value) if fy_value else 6
+                            # Parse as date string
+                            from datetime import datetime
+                            dt = datetime.fromisoformat(fy_value.replace(' 00:00:00', ''))
+                            fy_report_month = dt.date()
+                        except (ValueError, AttributeError):
+                            fy_report_month = None
+                    else:
+                        # If it's a numeric type, return None (we only want dates)
+                        fy_report_month = None
             else:
-                fy_report_month = 6
+                fy_report_month = None
             
             company_rows.append({
                 'ticker': str(row.get('Ticker', '')).strip(),

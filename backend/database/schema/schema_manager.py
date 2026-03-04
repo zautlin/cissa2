@@ -70,6 +70,42 @@ class SchemaManager:
             traceback.print_exc()
             return False
     
+    def _execute_sql_file_transaction(self, filename: str, description: str = None) -> bool:
+        """
+        Execute SQL file as a single atomic transaction.
+        
+        This method reads the entire SQL file and executes it as one transaction,
+        which properly handles PL/pgSQL functions with dollar-quoting ($$).
+        
+        Args:
+            filename: Name of SQL file in SCHEMA_DIR
+            description: Optional description to print on success
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            sql_content = self._read_sql_file(filename)
+        except FileNotFoundError as e:
+            print(f"✗ {e}")
+            return False
+        
+        try:
+            with self.engine.begin() as conn:
+                # Execute the entire SQL file as one transaction
+                # This preserves PL/pgSQL dollar-quoting and multi-statement blocks
+                conn.execute(text(sql_content))
+            
+            if description:
+                print(f"✓ {description}")
+            return True
+        
+        except Exception as e:
+            print(f"✗ Error executing {filename}: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
     def _confirm_destruction(self, interactive: bool = True) -> bool:
         """Get user confirmation for destructive operation."""
         if not interactive:
@@ -127,18 +163,11 @@ class SchemaManager:
         return True
     
     def create(self) -> bool:
-        """Create fresh schema from schema.sql."""
+        """Create fresh schema from schema.sql using atomic transaction."""
         print("Creating schema from schema.sql...")
         
-        # Read schema file
-        try:
-            schema_sql = self._read_sql_file("schema.sql")
-        except FileNotFoundError as e:
-            print(f"✗ {e}")
-            return False
-        
-        # Execute schema creation
-        if not self._execute_sql(schema_sql, "Schema created successfully"):
+        # Execute schema creation as single transaction (preserves PL/pgSQL syntax)
+        if not self._execute_sql_file_transaction("schema.sql", "Schema created successfully"):
             return False
         
         # Verify schema
