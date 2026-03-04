@@ -1,501 +1,501 @@
 Num,Ticker,Name,FY Report Month,Data FX,Begin Year,Sector,BICS Name,BICS 1,BICS 2,BICS 3,BICS 4
-1,BHP AU Equity,BHP GROUP LTD,43646,AUD,2002,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
-2,RIO AU Equity,RIO TINTO LTD,43830,AUD,2002,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
-3,CBA AU Equity,COMMONWEALTH BANK OF AUSTRAL,43646,AUD,2002,Financials,Banks,Financials,Banking,Banking,Banks
-4,CSL AU Equity,CSL LTD,43646,AUD,2002,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
-5,NAB AU Equity,NATIONAL AUSTRALIA BANK LTD,43738,AUD,2002,Financials,Banks,Financials,Banking,Banking,Banks
-6,ANZ AU Equity,ANZ GROUP HOLDINGS LTD,43738,AUD,2002,Financials,Corporate Banking,Financials,Banking,Banking,Banks
-7,WBC AU Equity,WESTPAC BANKING CORP,43738,AUD,2002,Financials,Banks,Financials,Banking,Banking,Banks
-8,FMG AU Equity,FORTESCUE METALS GROUP LTD,43555,AUD,2002,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
-9,WDS AU Equity,WOODSIDE ENERGY GROUP LTD,43646,AUD,2002,Energy,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-10,MQG AU Equity,MACQUARIE GROUP LTD,43646,AUD,2002,Financials,Diversified Banks,Financials,Banking,Banking,Diversified Banks
-11,WES AU Equity,WESFARMERS LTD,43646,AUD,2002,Consumer Discretionary,Home Centers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Home Products Stores
-12,TEAM US Equity,ATLASSIAN CORP-CL A,43646,AUD,2016,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-13,TLS AU Equity,TELSTRA GROUP LTD,43830,AUD,2002,Communication Services,Wireless Telecommunications,Communications,Telecommunications,Telecommunications,Wireless Telecommunications
-14,WOW AU Equity,WOOLWORTHS GROUP LTD,43646,AUD,2002,Consumer Staples,Supermarkets,Consumer Staples,Retail & Wholesale - Staples,Retail - Consumer Staples,Food & Drug Stores
-15,GMG AU Equity,GOODMAN GROUP,43738,AUD,2005,Real Estate,Industrial REIT,Real Estate,Real Estate,REIT,Industrial REIT
-16,TCL AU Equity,TRANSURBAN GROUP,43646,AUD,2002,Industrials,Hway/Brdg/Tunnel Operators,Industrials,Industrial Services,Transportation & Logistics,Transport Operations & Services
-17,ALL AU Equity,ARISTOCRAT LEISURE LTD,43646,AUD,2002,Consumer Discretionary,Casinos & Gaming,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
-18,STO AU Equity,SANTOS LTD,43830,AUD,2002,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-19,QBE AU Equity,QBE INSURANCE GROUP LTD,43830,AUD,2002,Financials,P&C Insurance Premiums,Financials,Insurance,Insurance,P&C Insurance
-20,NCM AU Equity,NEWCREST MINING LTD,43646,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-21,1208 HK Equity,MMG LTD,43646,AUD,2002,Materials,Copper Mining,Materials,Materials,Metals & Mining,Base Metals
-22,COL AU Equity,COLES GROUP LTD,43646,AUD,2011,Consumer Staples,Supermarkets,Consumer Staples,Retail & Wholesale - Staples,Retail - Consumer Staples,Food & Drug Stores
-23,WTC AU Equity,WISETECH GLOBAL LTD,43646,AUD,2016,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-24,REA AU Equity,REA GROUP LTD,43646,AUD,2002,Communication Services,Real Estate & Property Web,Communications,Media,Internet Media & Services,Internet Media & Services
-25,BXB AU Equity,BRAMBLES LTD,43646,AUD,2007,Industrials,Other Commercial Support Svcs,Industrials,Industrial Services,Commercial Support Services,Other Commercial Support Svcs
-26,SUN AU Equity,SUNCORP GROUP LTD,43646,AUD,2002,Financials,P&C Insurance,Financials,Insurance,Insurance,P&C Insurance
-27,COH AU Equity,COCHLEAR LTD,43646,AUD,2002,Health Care,Medical Devices,Health Care,Health Care,Medical Equipment & Devices,Medical Devices
-28,ORG AU Equity,ORIGIN ENERGY LTD,43646,AUD,2002,Utilities,Integrated Electric Utilities,Utilities,Utilities,Electric Utilities,Integrated Electric Utilities
-29,S32 AU Equity,SOUTH32 LTD,43646,AUD,2015,Materials,Aluminum,Materials,Materials,Metals & Mining,Base Metals
-30,CPU AU Equity,COMPUTERSHARE LTD,43555,AUD,2002,Industrials,"Instl Trust, Fiduciary & Custody",Financials,Financial Services,Institutional Financial Svcs,"Instl Trust, Fiduciary & Custody"
-31,NST AU Equity,NORTHERN STAR RESOURCES LTD,43830,AUD,2004,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-32,IAG AU Equity,INSURANCE AUSTRALIA GROUP,43830,AUD,2002,Financials,P&C Insurance,Financials,Insurance,Insurance,P&C Insurance
-33,SHL AU Equity,SONIC HEALTHCARE LTD,43646,AUD,2002,Health Care,Clinical Labs,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
-34,SCG AU Equity,SCENTRE GROUP,43646,AUD,2014,Real Estate,Shopping Center REIT,Real Estate,Real Estate,REIT,Retail REIT
-35,SOL AU Equity,WASHINGTON H. SOUL PATTINSON,43646,AUD,2002,Financials,Investment Holding Companies,Financials,Financial Services,Asset Management,Investment Companies
-36,REH AU Equity,REECE LTD,43646,AUD,2002,Industrials,Home Centers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Home Products Stores
-37,MIN AU Equity,MINERAL RESOURCES LTD,43646,AUD,2007,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
-38,RHC AU Equity,RAMSAY HEALTH CARE LTD,43646,AUD,2002,Health Care,Hospitals,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Facilities
-39,PLS AU Equity,PILBARA MINERALS LTD,43830,AUD,2008,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-40,ASX AU Equity,ASX LTD,43738,AUD,2002,Financials,Security & Cmdty Exchanges,Financials,Financial Services,Institutional Financial Svcs,Security & Cmdty Exchanges
-41,APA AU Equity,APA GROUP,43646,AUD,2002,Utilities,Gas Transmission & Storage,Utilities,Utilities,Gas & Water Utilities,Gas Utilities
-42,CAR AU Equity,CARSALES.COM LTD,43646,AUD,2010,Communication Services,Adv Rev - Automotive Web,Communications,Media,Internet Media & Services,Internet Media & Services
-43,SVW AU Equity,SEVEN GROUP HOLDINGS LTD,43830,AUD,2002,Industrials,Const/Mining Mach/Equip Whslrs,Industrials,Industrial Services,Industrial Support Services,Industrial Wholesale & Rental
-44,TLC AU Equity,LOTTERY CORP LTD/THE,43646,AUD,2022,Consumer Discretionary,Casinos & Gaming,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
-45,TPG AU Equity,TPG TELECOM LTD,43646,AUD,2016,Communication Services,Wireless Telecommunications,Communications,Telecommunications,Telecommunications,Wireless Telecommunications
-46,MPL AU Equity,MEDIBANK PRIVATE LTD,43646,AUD,2015,Financials,Managed Care,Health Care,Health Care,Health Care Facilities & Svcs,Managed Care
-47,EDV AU Equity,ENDEAVOUR GROUP LTD/AUSTRALI,43646,AUD,2017,Consumer Staples,Wine & Distilled Alcohol Whslrs,Consumer Staples,Retail & Wholesale - Staples,Wholesale - Consumer Staples,Food & Beverage Wholesalers
-48,TWE AU Equity,TREASURY WINE ESTATES LTD,43646,AUD,2011,Consumer Staples,Vintners,Consumer Staples,Consumer Staple Products,Beverages,Alcoholic Beverages
-49,WOR AU Equity,WORLEY LTD,43830,AUD,2003,Industrials,Oil & Gas Infra Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
-50,BSL AU Equity,BLUESCOPE STEEL LTD,43646,AUD,2003,Materials,Steel Producers,Materials,Materials,Steel,Steel Producers
-51,QAN AU Equity,QANTAS AIRWAYS LTD,43830,AUD,2002,Industrials,Mainline Airline - Full Svc,Industrials,Industrial Services,Transportation & Logistics,Airlines
-52,SGP AU Equity,STOCKLAND,43646,AUD,2002,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
-53,PME AU Equity,PRO MEDICUS LTD,43646,AUD,2002,Health Care,Health Care Software,Technology,Software & Tech Services,Software,Application Software
-54,VCX AU Equity,VICINITY CENTRES,43555,AUD,2006,Real Estate,Retail REIT,Real Estate,Real Estate,REIT,Retail REIT
-55,ALX AU Equity,ATLAS ARTERIA,43677,AUD,2010,Industrials,Hway/Brdg/Tunnel Operators,Industrials,Industrial Services,Transportation & Logistics,Transport Operations & Services
-56,ALD AU Equity,AMPOL LTD,43646,AUD,2002,Energy,Refining & Marketing,Energy,Oil & Gas,Oil & Gas Producers,Refining & Marketing
-57,SEK AU Equity,SEEK LTD,43646,AUD,2005,Communication Services,Adv Rev - Recruit Svcs Web,Communications,Media,Internet Media & Services,Internet Media & Services
-58,AGL AU Equity,AGL ENERGY LTD,43646,AUD,2007,Utilities,Integrated Electric Utilities,Utilities,Utilities,Electric Utilities,Integrated Electric Utilities
-59,IGO AU Equity,IGO LTD,43677,AUD,2002,Materials,Nickel,Materials,Materials,Metals & Mining,Base Metals
-60,MGR AU Equity,MIRVAC GROUP,43738,AUD,2002,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
-61,DXS AU Equity,DEXUS/AU,43646,AUD,2005,Real Estate,Office REIT,Real Estate,Real Estate,REIT,Office REIT
-62,GPT AU Equity,GPT GROUP,43646,AUD,2002,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
-63,EBO NZ Equity,EBOS GROUP LTD,43646,AUD,2002,Health Care,Medical Equip Distribution,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Supply Chain
-64,ORI AU Equity,ORICA LTD,43646,AUD,2002,Materials,Explosives,Materials,Materials,Chemicals,Specialty Chemicals
-65,EVN AU Equity,EVOLUTION MINING LTD,43646,AUD,2003,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-66,YAL AU Equity,YANCOAL AUSTRALIA LTD,43646,AUD,2012,Energy,Thermal Coal,Materials,Materials,Metals & Mining,Coal Mining
-67,AZJ AU Equity,AURIZON HOLDINGS LTD,43646,AUD,2011,Industrials,Coal Freight - Rail,Industrials,Industrial Services,Transportation & Logistics,Rail Freight
-68,WHC AU Equity,WHITEHAVEN COAL LTD,43555,AUD,2007,Energy,Coal Mining,Materials,Materials,Metals & Mining,Coal Mining
-69,AKE AU Equity,ALLKEM LTD,43646,AUD,2008,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-70,NXT AU Equity,NEXTDC LTD,43646,AUD,2011,Information Technology,Data Centers,Communications,Telecommunications,Telecommunications,Wireline Telecommunications
-71,IEL AU Equity,IDP EDUCATION LTD,43646,AUD,2016,Consumer Discretionary,Educational Services,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Educational Services
-72,SDF AU Equity,STEADFAST GROUP LTD,43646,AUD,2014,Financials,Insurance Brokers & Services,Financials,Insurance,Insurance,Insurance Brokers & Services
-73,IPL AU Equity,INCITEC PIVOT LTD,43646,AUD,2003,Materials,Fertilizers,Materials,Materials,Chemicals,Agricultural Chemicals
-74,ALU AU Equity,ALTIUM LTD,43830,AUD,2002,Information Technology,Application Software,Technology,Software & Tech Services,Software,Application Software
-75,ALQ AU Equity,ALS LTD,43646,AUD,2002,Industrials,Testing Laboratories,Industrials,Industrial Services,Commercial Support Services,Other Commercial Support Svcs
-76,CWY AU Equity,CLEANAWAY WASTE MANAGEMENT L,43830,AUD,2005,Industrials,Solid Waste Collection & Treat,Industrials,Industrial Services,Commercial Support Services,Waste Management
-77,BLD AU Equity,BORAL LTD,43646,AUD,2002,Materials,Ready Mix Concrete,Materials,Materials,Construction Materials,Cement & Aggregates
-78,BEN AU Equity,BENDIGO AND ADELAIDE BANK,43830,AUD,2002,Financials,Banks,Financials,Banking,Banking,Banks
-79,JBH AU Equity,JB HI-FI LTD,43646,AUD,2004,Consumer Discretionary,Electronics & Appliances Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Electronics & Appliances Stores
-80,NHC AU Equity,NEW HOPE CORP LTD,43646,AUD,2004,Energy,Thermal Coal,Materials,Materials,Metals & Mining,Coal Mining
-81,TNE AU Equity,TECHNOLOGY ONE LTD,43830,AUD,2002,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-82,QUB AU Equity,QUBE HOLDINGS LTD,43708,AUD,2010,Industrials,Logistics Services,Industrials,Industrial Services,Transportation & Logistics,Logistics Services
-83,HVN AU Equity,HARVEY NORMAN HOLDINGS LTD,43646,AUD,2002,Consumer Discretionary,Consumer Electronics Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Electronics & Appliances Stores
-84,DMP AU Equity,DOMINO'S PIZZA ENTERPRISES L,43646,AUD,2005,Consumer Discretionary,Limited Service Restaurants,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Restaurants
-85,VEA AU Equity,VIVA ENERGY GROUP LTD,43646,AUD,2018,Energy,Petroleum Retailers,Energy,Oil & Gas,Oil & Gas Producers,Refining & Marketing
-86,LLC AU Equity,LENDLEASE GROUP,43646,AUD,2002,Real Estate,Building Construction,Industrials,Industrial Services,Engineering & Construction,Building Construction
-87,CHC AU Equity,CHARTER HALL GROUP,43646,AUD,2006,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
-88,FLT AU Equity,FLIGHT CENTRE TRAVEL GROUP L,43676,AUD,2002,Consumer Discretionary,Travel Services,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Travel Services
-89,CGF AU Equity,CHALLENGER LTD,43646,AUD,2004,Financials,Life Insurance,Financials,Insurance,Insurance,Life Insurance
-90,LTR AU Equity,LIONTOWN RESOURCES LTD,43677,AUD,2007,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-91,BKW AU Equity,BRICKWORKS LTD,43738,AUD,2002,Materials,Brick & Structural Clay Tile,Materials,Materials,Construction Materials,Building Materials
-92,CIA AU Equity,CHAMPION IRON LTD,43646,AUD,2007,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
-93,PMV AU Equity,PREMIER INVESTMENTS LTD,43830,AUD,2009,Consumer Discretionary,Specialty Apparel Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Specialty Apparel Stores
-94,MTS AU Equity,METCASH LTD,43646,AUD,2002,Consumer Staples,Wine & Distilled Alcohol Whslrs,Consumer Staples,Retail & Wholesale - Staples,Wholesale - Consumer Staples,Food & Beverage Wholesalers
-95,BPT AU Equity,BEACH ENERGY LTD,43646,AUD,2002,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-96,NHF AU Equity,NIB HOLDINGS LTD,43738,AUD,2008,Financials,Managed Care,Health Care,Health Care,Health Care Facilities & Svcs,Managed Care
-97,SMR AU Equity,STANMORE RESOURCES LTD,43830,AUD,2010,Materials,Coal Mining,Materials,Materials,Metals & Mining,Coal Mining
-98,BOQ AU Equity,BANK OF QUEENSLAND LTD,43585,AUD,2002,Financials,Banks,Financials,Banking,Banking,Banks
-99,APE AU Equity,EAGERS AUTOMOTIVE LTD,43646,AUD,2002,Consumer Discretionary,Car Dealers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
-100,ORA AU Equity,ORORA LTD,43830,AUD,2014,Materials,Paper Containers & Packaging,Materials,Materials,Containers & Packaging,Containers & Packaging
-101,NIC AU Equity,NICKEL INDUSTRIES LTD,43646,AUD,2019,Materials,Nickel,Materials,Materials,Metals & Mining,Base Metals
-102,NWL AU Equity,NETWEALTH GROUP LTD,43646,AUD,2018,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-103,ILU AU Equity,ILUKA RESOURCES LTD,43830,AUD,2002,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-104,BRG AU Equity,BREVILLE GROUP LTD,43555,AUD,2002,Consumer Discretionary,Heating & Cooling Appliances,Consumer Discretionary,Consumer Discretionary Products,Home & Office Products,Household Appliances
-105,NEC AU Equity,NINE ENTERTAINMENT CO HOLDIN,43646,AUD,2014,Communication Services,Local TV Broadcasting,Communications,Media,Publishing & Broadcasting,Local TV & Radio Broadcast
-106,SUL AU Equity,SUPER RETAIL GROUP LTD,43646,AUD,2005,Consumer Discretionary,Auto Parts & Accessories Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
-107,AUB AU Equity,AUB GROUP LTD,43677,AUD,2006,Financials,Insurance Brokers & Services,Financials,Insurance,Insurance,Insurance Brokers & Services
-108,CRN AU Equity,CORONADO GLOBAL RESOURCE-CDI,43646,AUD,2018,Materials,Metallurgical Coal,Materials,Materials,Metals & Mining,Coal Mining
-109,AMP AU Equity,AMP LTD,43646,AUD,2019,Financials,Wealth Management,Financials,Financial Services,Asset Management,Wealth Management
-110,TLX AU Equity,TELIX PHARMACEUTICALS LTD,43646,AUD,2017,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
-111,PDN AU Equity,PALADIN ENERGY LTD,43646,AUD,2002,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
-112,SFR AU Equity,SANDFIRE RESOURCES LTD,43646,AUD,2004,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-113,NSR AU Equity,NATIONAL STORAGE REIT,43646,AUD,2014,Real Estate,Self-storage REIT,Real Estate,Real Estate,REIT,Self-storage REIT
-114,CSR AU Equity,CSR LTD,43646,AUD,2002,Materials,Building Materials,Materials,Materials,Construction Materials,Building Materials
-115,ANN AU Equity,ANSELL LTD,43646,AUD,2002,Health Care,Surgical Appliances & Supplies,Health Care,Health Care,Medical Equipment & Devices,Health Care Supplies
-116,DOW AU Equity,DOWNER EDI LTD,43646,AUD,2002,Industrials,Transportation Infra Const,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
-117,DRR AU Equity,DETERRA ROYALTIES LTD,43646,AUD,2021,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-118,HUB AU Equity,HUB24 LTD,43646,AUD,2008,Financials,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-119,CTD AU Equity,CORPORATE TRAVEL MANAGEMENT,43646,AUD,2012,Consumer Discretionary,Travel Agencies,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Travel Services
-120,SGM AU Equity,SIMS LTD,43646,AUD,2002,Materials,Recycling Facilities,Industrials,Industrial Services,Commercial Support Services,Waste Management
-121,ARB AU Equity,ARB CORP LTD,43738,AUD,2002,Consumer Discretionary,Auto Parts,Consumer Discretionary,Consumer Discretionary Products,Automotive,Auto Parts
-122,VNT AU Equity,VENTIA SERVICES GROUP PTY LT,43646,AUD,2021,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
-123,WEB AU Equity,WEBJET LTD,43677,AUD,2002,Consumer Discretionary,Travel Info & Booking Web,Communications,Media,Internet Media & Services,Internet Media & Services
-124,PRU AU Equity,PERSEUS MINING LTD,43646,AUD,2005,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-125,RGN AU Equity,REGION RE LTD,43830,AUD,2013,Real Estate,Shopping Center REIT,Real Estate,Real Estate,REIT,Retail REIT
-126,AWC AU Equity,ALUMINA LTD,43646,AUD,2002,Materials,Aluminum,Materials,Materials,Metals & Mining,Base Metals
-127,HDN AU Equity,HOMECO DAILY NEEDS REIT,43646,AUD,2022,Real Estate,Retail REIT,Real Estate,Real Estate,REIT,Retail REIT
-128,CLW AU Equity,CHARTER HALL LONG WALE REIT,43830,AUD,2017,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
-129,PPT AU Equity,PERPETUAL LTD,43646,AUD,2002,Financials,Wealth Management,Financials,Financial Services,Asset Management,Wealth Management
-130,DEG AU Equity,DE GREY MINING LTD,43830,AUD,2003,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-131,DHG AU Equity,DOMAIN HOLDINGS AUSTRALIA LT,43646,AUD,2018,Communication Services,Real Estate & Property Web,Communications,Media,Internet Media & Services,Internet Media & Services
-132,BWP AU Equity,BWP TRUST,43646,AUD,2002,Real Estate,Bulk Warehouse REIT,Real Estate,Real Estate,REIT,Industrial REIT
-133,GOR AU Equity,GOLD ROAD RESOURCES LTD,43646,AUD,2007,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-134,PXA AU Equity,PEXA GROUP LTD,43646,AUD,2021,Real Estate,Real Estate Services,Real Estate,Real Estate,Real Estate Services,Real Estate Services
-135,APM AU Equity,APM HUMAN SERVICES INTERNATI,43646,AUD,2022,Industrials,General Management Consulting,Industrials,Industrial Services,Commercial Support Services,Professional Services
-136,LOV AU Equity,LOVISA HOLDINGS LTD,43646,AUD,2015,Consumer Discretionary,Jewelry,Consumer Discretionary,Consumer Discretionary Products,Apparel & Textile Products,"Apparel, Footwear & Acc Design"
-137,RMS AU Equity,RAMELIUS RESOURCES LTD,43646,AUD,2005,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-138,DDR AU Equity,DICKER DATA LTD,43646,AUD,2011,Information Technology,Computer & Software Whslrs,Consumer Discretionary,Retail & Whsle - Discretionary,Wholesale - Discretionary,Consumer Elec & Applc Whslrs
-139,BAP AU Equity,BAPCOR LTD,43646,AUD,2014,Consumer Discretionary,Auto Parts & Accessories Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
-140,IVC AU Equity,INVOCARE LTD,43646,AUD,2003,Consumer Discretionary,Funeral Homes & Services,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Funeral Services
-141,CIP AU Equity,CENTURIA INDUSTRIAL REIT,43646,AUD,2013,Real Estate,Industrial REIT,Real Estate,Real Estate,REIT,Industrial REIT
-142,CQR AU Equity,CHARTER HALL RETAIL REIT,43646,AUD,2002,Real Estate,Retail REIT,Real Estate,Real Estate,REIT,Retail REIT
-143,CMM AU Equity,CAPRICORN METALS LTD,43830,AUD,2009,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-144,TAH AU Equity,TABCORP HOLDINGS LTD,43646,AUD,2002,Consumer Discretionary,Casinos,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
-145,OGC CN Equity,OCEANAGOLD CORP,43646,AUD,2007,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-146,JLG AU Equity,JOHNS LYNG GROUP LTD,43646,AUD,2018,Industrials,Building Construction,Industrials,Industrial Services,Engineering & Construction,Building Construction
-147,BGL AU Equity,BELLEVUE GOLD LTD,43645,AUD,2006,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-148,EVT AU Equity,EVT LTD,43646,AUD,2002,Communication Services,Movie Theaters,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Entertainment Facilities
-149,NUF AU Equity,NUFARM LTD,43555,AUD,2002,Materials,Crop Chemicals,Materials,Materials,Chemicals,Agricultural Chemicals
-150,LIC AU Equity,LIFESTYLE COMMUNITIES LTD,43830,AUD,2002,Real Estate,Single Family Homebuilding,Consumer Discretionary,Consumer Discretionary Products,Home Construction,Homebuilding
-151,IPH AU Equity,IPH LTD,43646,AUD,2015,Industrials,"Patent, Notary & Paralegal Svcs",Industrials,Industrial Services,Commercial Support Services,Professional Services
-152,KLS AU Equity,KELSIAN GROUP LTD,43646,AUD,2014,Industrials,Bus Transportation,Industrials,Industrial Services,Transportation & Logistics,Transit Services
-153,EMR AU Equity,EMERALD RESOURCES NL,43830,AUD,2002,Materials,Specialty Owners & Developers,Real Estate,Real Estate,Real Estate Owners & Developers,Specialty Owners & Developers
-154,PSI AU Equity,PSC INSURANCE GROUP LTD,43646,AUD,2016,Financials,Insurance Brokers & Services,Financials,Insurance,Insurance,Insurance Brokers & Services
-155,INA AU Equity,INGENIA COMMUNITIES GROUP,43830,AUD,2004,Real Estate,Health Care REIT,Real Estate,Real Estate,REIT,Health Care REIT
-156,PNI AU Equity,PINNACLE INVESTMENT MANAGEME,43646,AUD,2007,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-157,GMD AU Equity,GENESIS MINERALS LTD,43646,AUD,2008,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-158,SGR AU Equity,STAR ENTERTAINMENT GRP LTD/T,43646,AUD,2011,Consumer Discretionary,Casinos,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
-159,GNC AU Equity,GRAINCORP LTD-A,43646,AUD,2002,Consumer Staples,Grain & Field Bean Whslrs,Consumer Staples,Retail & Wholesale - Staples,Wholesale - Consumer Staples,Agricultural Products Whslrs
-160,AZS AU Equity,AZURE MINERALS LTD,43646,AUD,2004,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-161,BOE AU Equity,BOSS ENERGY LTD,43583,AUD,2008,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
-162,MP1 AU Equity,MEGAPORT LTD,43646,AUD,2016,Information Technology,Infrastructure Software,Technology,Software & Tech Services,Software,Infrastructure Software
-163,MAQ AU Equity,MACQUARIE TECHNOLOGY GROUP L,43646,AUD,2002,Information Technology,Data Centers,Communications,Telecommunications,Telecommunications,Wireline Telecommunications
-164,GUD AU Equity,G.U.D. HOLDINGS LTD,43738,AUD,2002,Consumer Discretionary,Auto Parts,Consumer Discretionary,Consumer Discretionary Products,Automotive,Auto Parts
-165,UMG AU Equity,UNITED MALT GRP LTD,43828,AUD,2020,Consumer Staples,Malt,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
-166,GOZ AU Equity,GROWTHPOINT PROPERTIES AUSTR,43646,AUD,2008,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
-167,HMC AU Equity,HMC CAPITAL LTD,43646,AUD,2020,Real Estate,Real Estate Services,Real Estate,Real Estate,Real Estate Services,Real Estate Services
-168,CGC AU Equity,COSTA GROUP HOLDINGS LTD,43646,AUD,2016,Consumer Staples,Fruit Farming,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
-169,CDA AU Equity,CODAN LTD,43646,AUD,2004,Information Technology,Security Systems,Industrials,Industrial Products,Electrical Equipment,Comml & Res Bldg Equip & Sys
-170,KAR AU Equity,KAROON ENERGY LTD,43646,AUD,2004,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-171,WPR AU Equity,WAYPOINT REIT,43646,AUD,2016,Real Estate,Specialty REIT,Real Estate,Real Estate,REIT,Specialty REIT
-172,IFL AU Equity,INSIGNIA FINANCIAL LTD,43830,AUD,2004,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-173,ING AU Equity,INGHAMS GROUP LTD,43646,AUD,2017,Consumer Staples,Animal Production & Process,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
-174,MND AU Equity,MONADELPHOUS GROUP LTD,43830,AUD,2002,Industrials,Engineering Services,Industrials,Industrial Services,Engineering & Construction,Engineering Services
-175,NEU AU Equity,NEUREN PHARMACEUTICALS LTD,43646,AUD,2005,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
-176,DBI AU Equity,DALRYMPLE BAY INFRASTRUCTURE,43830,AUD,2020,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
-177,RRL AU Equity,REGIS RESOURCES LTD,43646,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-178,ABC AU Equity,ADBRI LTD,43646,AUD,2002,Materials,Cement,Materials,Materials,Construction Materials,Cement & Aggregates
-179,MAD AU Equity,MADER GROUP LTD,43830,AUD,2020,Industrials,Mining Services,Materials,Materials,Metals & Mining,Mining Services
-180,LFS AU Equity,LATITUDE GROUP HOLDINGS LTD,43646,AUD,2021,Financials,Life Insurance,Financials,Insurance,Insurance,Life Insurance
-181,LFG AU Equity,LIBERTY FINANCIAL GROUP,43646,AUD,2021,Financials,Consumer Finance,Financials,Financial Services,Specialty Finance,Consumer Finance
-182,MFG AU Equity,MAGELLAN FINANCIAL GROUP LTD,43646,AUD,2008,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-183,MMS AU Equity,MCMILLAN SHAKESPEARE LTD,43646,AUD,2004,Industrials,Wealth Management,Financials,Financial Services,Asset Management,Wealth Management
-184,SIQ AU Equity,SMARTGROUP CORP LTD,43738,AUD,2014,Industrials,Other Professional Services,Industrials,Industrial Services,Commercial Support Services,Professional Services
-185,MGH AU Equity,MAAS GROUP HOLDINGS LTD,43646,AUD,2017,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
-186,NWH AU Equity,NRW HOLDINGS LTD,43830,AUD,2008,Industrials,Mining Services,Materials,Materials,Metals & Mining,Mining Services
-187,NAN AU Equity,NANOSONICS LTD,43646,AUD,2007,Health Care,Cardiovascular Devices,Health Care,Health Care,Medical Equipment & Devices,Medical Devices
-188,SDR AU Equity,SITEMINDER LTD,43646,AUD,2022,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-189,ARF AU Equity,ARENA REIT,43646,AUD,2013,Real Estate,Specialty REIT,Real Estate,Real Estate,REIT,Specialty REIT
-190,HLI AU Equity,HELIA GROUP LTD,43646,AUD,2014,Financials,Mortgage Insurance,Financials,Financial Services,Specialty Finance,Mortgage Finance
-191,RED AU Equity,RED 5 LTD,43646,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-192,AD8 AU Equity,AUDINATE GROUP LTD,43646,AUD,2017,Information Technology,Application Software,Technology,Software & Tech Services,Software,Application Software
-193,CKF AU Equity,COLLINS FOODS LTD,43646,AUD,2012,Consumer Discretionary,Fast Food Rest - Owned,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Restaurants
-194,AX1 AU Equity,ACCENT GROUP LTD,43738,AUD,2005,Consumer Discretionary,Footwear Wholesalers,Consumer Discretionary,Retail & Whsle - Discretionary,Wholesale - Discretionary,Apparel & Footwear Whslrs
-195,HSN AU Equity,HANSEN TECHNOLOGIES LTD,43646,AUD,2002,Information Technology,Communications Software,Technology,Software & Tech Services,Software,Application Software
-196,DTL AU Equity,DATA#3 LTD,43646,AUD,2002,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-197,HLS AU Equity,HEALIUS LTD,43646,AUD,2002,Health Care,Clinical Labs,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
-198,PRN AU Equity,PERENTI LTD,43646,AUD,2002,Materials,Metals Support Services,Materials,Materials,Metals & Mining,Mining Services
-199,OCL AU Equity,OBJECTIVE CORPORATION LTD,43646,AUD,2002,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-200,STX AU Equity,STRIKE ENERGY LTD,43646,AUD,2005,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-201,WGX AU Equity,WESTGOLD RESOURCES LTD,43646,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-202,PWH AU Equity,PWR HOLDINGS LTD,43555,AUD,2016,Consumer Discretionary,Auto Parts,Consumer Discretionary,Consumer Discretionary Products,Automotive,Auto Parts
-203,SLR AU Equity,SILVER LAKE RESOURCES LTD,43708,AUD,2008,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-204,CTT AU Equity,CETTIRE LTD,43646,AUD,2021,Consumer Discretionary,Online Marketplace,Consumer Discretionary,Retail & Whsle - Discretionary,E-Commerce Discretionary,Online Marketplace
-205,TUA AU Equity,TUAS LTD,43646,AUD,2020,Communication Services,Wireless Telecommunications,Communications,Telecommunications,Telecommunications,Wireless Telecommunications
-206,DYL AU Equity,DEEP YELLOW LTD,43646,AUD,2002,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
-207,ABB AU Equity,AUSSIE BROADBAND LTD,43646,AUD,2017,Communication Services,Wireline Telecommunications,Communications,Telecommunications,Telecommunications,Wireline Telecommunications
-208,JDO AU Equity,JUDO CAPITAL HOLDINGS LTD,43646,AUD,2022,Financials,Consumer Finance,Financials,Financial Services,Specialty Finance,Consumer Finance
-209,IRE AU Equity,IRESS LTD,43646,AUD,2002,Information Technology,Data & Analytics,Technology,Software & Tech Services,Technology Services,Information Services
-210,ELD AU Equity,ELDERS LTD,43641,AUD,2002,Consumer Staples,Agricultural Products Whslrs,Consumer Staples,Retail & Wholesale - Staples,Wholesale - Consumer Staples,Agricultural Products Whslrs
-211,CNI AU Equity,CENTURIA CAPITAL GROUP,43646,AUD,2002,Real Estate,Real Estate Investments,Financials,Financial Services,Asset Management,Private Equity
-212,CQE AU Equity,CHARTER HALL SOCIAL INFRASTR,43646,AUD,2003,Real Estate,Specialty REIT,Real Estate,Real Estate,REIT,Specialty REIT
-213,NCK AU Equity,NICK SCALI LTD,43496,AUD,2004,Consumer Discretionary,Home Furniture Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Home Products Stores
-214,JIN AU Equity,JUMBO INTERACTIVE LTD,43646,AUD,2002,Consumer Discretionary,Mobile & Online Gambling,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
-215,SGF AU Equity,SG FLEET GROUP LTD,43646,AUD,2014,Industrials,Auto Finance,Financials,Financial Services,Specialty Finance,Consumer Finance
-216,BGA AU Equity,BEGA CHEESE LTD,43646,AUD,2012,Consumer Staples,Dry & Condensed Dairy Products,Consumer Staples,Consumer Staple Products,Food,Packaged Food
-217,IMD AU Equity,IMDEX LTD,43646,AUD,2002,Materials,Metals Support Services,Materials,Materials,Metals & Mining,Mining Services
-218,CMW AU Equity,CROMWELL PROPERTY GROUP,43646,AUD,2008,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
-219,CIN AU Equity,CARLTON INVESTMENTS LIMITED,43646,AUD,2010,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-220,CCP AU Equity,CREDIT CORP GROUP LTD,43830,AUD,2002,Financials,Other Financial Services,Financials,Financial Services,Specialty Finance,Other Financial Services
-221,PNV AU Equity,POLYNOVO LTD,43646,AUD,2002,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
-222,EHE AU Equity,ESTIA HEALTH LTD,43646,AUD,2015,Health Care,Nursing & Residential Care,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Facilities
-223,HCW AU Equity,HEALTHCO REIT,43646,AUD,2022,Real Estate,Health Care REIT,Real Estate,Real Estate,REIT,Health Care REIT
-224,SYA AU Equity,SAYONA MINING LTD,43646,AUD,2004,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-225,CXO AU Equity,CORE LITHIUM LTD,43646,AUD,2011,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-226,GEM AU Equity,G8 EDUCATION LTD,43646,AUD,2007,Consumer Discretionary,Educational Services,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Educational Services
-227,RSG AU Equity,RESOLUTE MINING LTD,43646,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-228,MAF AU Equity,MA FINANCIAL GROUP LTD,43646,AUD,2017,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-229,WAF AU Equity,WEST AFRICAN RESOURCES LTD,43646,AUD,2010,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-230,DXI AU Equity,DEXUS INDUSTRIA REIT,43646,AUD,2014,Real Estate,Industrial REIT,Real Estate,Real Estate,REIT,Industrial REIT
-231,AAC AU Equity,AUSTRALIAN AGRICULTURAL CO,43645,AUD,2002,Consumer Staples,Beef Cattle Ranch & Farming,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
-232,SLX AU Equity,SILEX SYSTEMS LTD,43646,AUD,2002,Industrials,Optical Instruments & Lens,Technology,Tech Hardware & Semiconductors,Technology Hardware,Specialty Technology Hardware
-233,WC8 AU Equity,WILDCAT RESOURCES LTD,43646,AUD,2005,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-234,REG AU Equity,REGIS HEALTHCARE LTD,43646,AUD,2015,Health Care,Nursing & Residential Care,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Facilities
-235,ERA AU Equity,ENERGY RESOURCES OF AUST,43646,AUD,2002,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
-236,CUV AU Equity,CLINUVEL PHARMACEUTICALS LTD,43646,AUD,2002,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
-237,OML AU Equity,OOH!MEDIA LTD,43646,AUD,2014,Communication Services,Advertising & Marketing,Communications,Media,Advertising & Marketing,Advertising & Marketing
-238,RIC AU Equity,RIDLEY CORP LTD,43830,AUD,2002,Consumer Staples,Animal Feed,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
-239,CHN AU Equity,CHALICE MINING LTD,43830,AUD,2006,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-240,QAL AU Equity,QUALITAS LTD,43738,AUD,2022,Real Estate,Real Estate Services,Real Estate,Real Estate,Real Estate Services,Real Estate Services
-241,RFF AU Equity,RURAL FUNDS GROUP,43646,AUD,2014,Real Estate,Specialty REIT,Real Estate,Real Estate,REIT,Specialty REIT
-242,TPW AU Equity,TEMPLE & WEBSTER GROUP LTD,43646,AUD,2016,Consumer Discretionary,Specialty Online Retailers,Consumer Discretionary,Retail & Whsle - Discretionary,E-Commerce Discretionary,Specialty Online Retailers
-243,C79 AU Equity,CHRYSOS CORP LTD,43830,AUD,2022,Industrials,Application Software,Technology,Software & Tech Services,Software,Application Software
-244,LRS AU Equity,LATIN RESOURCES LTD,43646,AUD,2011,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-245,A4N AU Equity,ALPHA HPA LTD,43646,AUD,2008,Materials,Specialty Chemicals,Materials,Materials,Chemicals,Specialty Chemicals
-246,SIG AU Equity,SIGMA HEALTHCARE LTD,43677,AUD,2004,Health Care,Pharma & Specialty Distribution,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Supply Chain
-247,EQT AU Equity,EQT HOLDINGS LTD,43830,AUD,2002,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-248,PTM AU Equity,PLATINUM ASSET MANAGEMENT,43646,AUD,2007,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-249,COF AU Equity,CENTURIA OFFICE REIT,43646,AUD,2015,Real Estate,Office REIT,Real Estate,Real Estate,REIT,Office REIT
-250,DVP AU Equity,DEVELOP GLOBAL LTD,43646,AUD,2009,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-251,TIE AU Equity,TIETTO MINERALS LTD,43646,AUD,2018,Materials,Precious Metals,Materials,Materials,Metals & Mining,Precious Metals
-252,FPR AU Equity,FLEETPARTNERS GROUP LTD,43646,AUD,2015,Financials,Comml Equip Finance & Leasing,Financials,Financial Services,Specialty Finance,Commercial Finance
-253,IDX AU Equity,INTEGRAL DIAGNOSTICS LTD,43646,AUD,2016,Health Care,Radiology & Diagnostic Imaging,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
-254,WBT AU Equity,WEEBIT NANO LTD,43646,AUD,2012,Information Technology,Semiconductor Mfg,Technology,Tech Hardware & Semiconductors,Semiconductors,Semiconductor Mfg
-255,ASB AU Equity,AUSTAL LTD,43646,AUD,2002,Industrials,Shipbuilding,Industrials,Industrial Products,Transportation Equipment,Shipbuilding
-256,LNK AU Equity,LINK ADMINISTRATION HOLDINGS,43555,AUD,2016,Industrials,Asset & Investment Servicing,Financials,Financial Services,Institutional Financial Svcs,"Instl Trust, Fiduciary & Custody"
-257,SNL AU Equity,SUPPLY NETWORK LTD,43646,AUD,2002,Consumer Discretionary,Auto Parts,Consumer Discretionary,Consumer Discretionary Products,Automotive,Auto Parts
-258,MGX AU Equity,MOUNT GIBSON IRON LTD,43673,AUD,2002,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
-259,PPC AU Equity,PEET LTD,43646,AUD,2005,Real Estate,Multi Asset Class Own & Develop,Real Estate,Real Estate,Real Estate Owners & Developers,Multi Asset Class Own & Develop
-260,PPM AU Equity,PEPPER MONEY LTD/AU,43830,AUD,2021,Financials,Mortgage Finance,Financials,Financial Services,Specialty Finance,Mortgage Finance
-261,ACL AU Equity,AUSTRALIAN CLINICAL LABS LTD,43830,AUD,2021,Health Care,Clinical Labs,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
-262,SSM AU Equity,SERVICE STREAM LTD,43646,AUD,2005,Industrials,Communication Infra Const,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
-263,IFM AU Equity,INFOMEDIA LTD,43830,AUD,2002,Information Technology,Professional Book Publishers,Communications,Media,Publishing & Broadcasting,Publishing
-264,PFP AU Equity,PROPEL FUNERAL PARTNERS LTD,43646,AUD,2018,Consumer Discretionary,Cemeteries & Crematories,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Funeral Services
-265,MTAL US Equity,METALS ACQUISITION LTD-A,43830,AUD,2021,Materials,Copper,Materials,Materials,Metals & Mining,Base Metals
-266,CBO AU Equity,COBRAM ESTATE OLIVES LTD,43646,AUD,2022,Consumer Staples,Grain & Oilseed Milling,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
-267,RPL AU Equity,REGAL PARTNERS LTD,43830,AUD,2019,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-268,MVF AU Equity,MONASH IVF GROUP LTD,43646,AUD,2014,Health Care,Specialty Facilities,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Facilities
-269,HPI AU Equity,HOTEL PROPERTY INVESTMENTS,43646,AUD,2014,Real Estate,Multi Asset Class Own & Develop,Real Estate,Real Estate,Real Estate Owners & Developers,Multi Asset Class Own & Develop
-270,ASG AU Equity,AUTOSPORTS GROUP LTD,43646,AUD,2017,Consumer Discretionary,Automotive Retailers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
-271,CXL AU Equity,CALIX LTD,43646,AUD,2019,Materials,Mineral & Precious Stone Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-272,PDI AU Equity,PREDICTIVE DISCOVERY LTD,43555,AUD,2011,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-273,AQZ AU Equity,ALLIANCE AVIATION SERVICES L,43646,AUD,2012,Industrials,Charter Airline - Full Svc,Industrials,Industrial Services,Transportation & Logistics,Airlines
-274,MRM AU Equity,MMA OFFSHORE LTD,43830,AUD,2002,Energy,Marine Shipping,Industrials,Industrial Services,Transportation & Logistics,Marine Shipping
-275,GRR AU Equity,GRANGE RESOURCES LTD,43646,AUD,2002,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
-276,MEI AU Equity,METEORIC RESOURCES NL,43646,AUD,2005,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-277,PAC AU Equity,PACIFIC CURRENT GROUP LTD,43646,AUD,2002,Financials,Wealth Management,Financials,Financial Services,Asset Management,Wealth Management
-278,SHV AU Equity,SELECT HARVESTS LTD,43646,AUD,2002,Consumer Staples,Tree Nut Farming,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
-279,GWA AU Equity,GWA GROUP LTD,43646,AUD,2002,Industrials,Plumbing Fixtures,Consumer Discretionary,Consumer Discretionary Products,Home Construction,Building Products
-280,KGN AU Equity,KOGAN.COM LTD,43646,AUD,2017,Consumer Discretionary,Online Marketplace,Consumer Discretionary,Retail & Whsle - Discretionary,E-Commerce Discretionary,Online Marketplace
-281,NXL AU Equity,NUIX LTD,43646,AUD,2021,Information Technology,Database Software,Technology,Software & Tech Services,Software,Infrastructure Software
-282,SYR AU Equity,SYRAH RESOURCES LTD,43646,AUD,2008,Materials,Mineral Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-283,TYR AU Equity,TYRO PAYMENTS LTD,43646,AUD,2020,Financials,Financial Transaction Processors,Technology,Software & Tech Services,Technology Services,Data & Transaction Processors
-284,AEF AU Equity,AUSTRALIAN ETHICAL INVT LTD,43646,AUD,2003,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-285,29M AU Equity,29METALS LTD,43830,AUD,2021,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-286,OBL AU Equity,OMNI BRIDGEWAY LTD,43646,AUD,2002,Financials,Other Financial Services,Financials,Financial Services,Specialty Finance,Other Financial Services
-287,EML AU Equity,EML PAYMENTS LTD,43646,AUD,2006,Financials,Financial Transaction Processors,Technology,Software & Tech Services,Technology Services,Data & Transaction Processors
-288,MYR AU Equity,MYER HOLDINGS LTD,43646,AUD,2010,Consumer Discretionary,High-End Department Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Department Stores
-289,RDY AU Equity,READYTECH HOLDINGS LTD,43646,AUD,2019,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-290,BLX AU Equity,BEACON LIGHTING GROUP LTD,43646,AUD,2014,Consumer Discretionary,Lighting Fixture,Industrials,Industrial Products,Electrical Equipment,Comml & Res Bldg Equip & Sys
-291,SWM AU Equity,SEVEN WEST MEDIA LTD,43646,AUD,2002,Communication Services,Radio Stations,Communications,Media,Publishing & Broadcasting,Local TV & Radio Broadcast
-292,PWR AU Equity,PETER WARREN AUTOMOTIVE HOLD,43830,AUD,2016,Consumer Discretionary,Car Dealers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
-293,HTA AU Equity,HUTCHISON TELECOMM (AUST),43646,AUD,2002,Communication Services,Wireless Telecommunications,Communications,Telecommunications,Telecommunications,Wireless Telecommunications
-294,SGLLV AU Equity,RICEGROWERS LIMITED,43830,AUD,2019,Consumer Staples,Rice,Consumer Staples,Consumer Staple Products,Food,Packaged Food
-295,ARU AU Equity,ARAFURA RARE EARTHS LTD,43646,AUD,2004,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-296,TLG AU Equity,TALGA GROUP LTD,43646,AUD,2011,Materials,Functional Additives,Materials,Materials,Chemicals,Specialty Chemicals
-297,CVL SP Equity,CIVMEC LTD,43830,AUD,2012,Industrials,Construction & Mining Machinery,Industrials,Industrial Products,Machinery,Construction & Mining Machinery
-298,BMN AU Equity,BANNERMAN ENERGY LTD,43646,AUD,2005,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
-299,OFX AU Equity,OFX GROUP LTD,43646,AUD,2014,Financials,Financial Transaction Processors,Technology,Software & Tech Services,Technology Services,Data & Transaction Processors
-300,IMM AU Equity,IMMUTEP LTD,43646,AUD,2002,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
-301,JMS AU Equity,JUPITER MINES LTD,43646,AUD,2005,Materials,Manganese,Materials,Materials,Metals & Mining,Base Metals
-302,RMC AU Equity,RESIMAC GROUP LTD,43646,AUD,2002,Financials,Mortgage Lenders,Financials,Financial Services,Specialty Finance,Mortgage Finance
-303,RNU AU Equity,RENASCOR RESOURCES LTD,43646,AUD,2011,Materials,Mineral & Precious Stone Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-304,CWP AU Equity,CEDAR WOODS PROPERTIES LTD,43830,AUD,2002,Real Estate,Residential Owners & Developers,Real Estate,Real Estate,Real Estate Owners & Developers,Residential Owners & Developers
-305,LYL AU Equity,LYCOPODIUM LTD,43646,AUD,2005,Industrials,Engineering Services,Industrials,Industrial Services,Engineering & Construction,Engineering Services
-306,ALK AU Equity,ALKANE RESOURCES LTD,43830,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-307,SPR AU Equity,SPARTAN RESOURCES LTD/AUSTRA,43646,AUD,2010,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-308,HLO AU Equity,HELLOWORLD TRAVEL LTD,43646,AUD,2002,Consumer Discretionary,Travel Agencies,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Travel Services
-309,BLY AU Equity,BOART LONGYEAR GROUP LTD-CDI,43830,AUD,2007,Materials,Metals Support Services,Materials,Materials,Metals & Mining,Mining Services
-310,AGI AU Equity,AINSWORTH GAME TECHNOLOGY LT,43646,AUD,2002,Consumer Discretionary,Casinos & Gaming,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
-311,AFG AU Equity,AUSTRALIAN FINANCE GROUP LTD,43830,AUD,2015,Financials,Mortgage Loan Brokers,Financials,Financial Services,Specialty Finance,Mortgage Finance
-312,GNG AU Equity,GR ENGINEERING SERVICES LTD,43646,AUD,2011,Materials,Engineering Services,Industrials,Industrial Services,Engineering & Construction,Engineering Services
-313,CVW AU Equity,CLEARVIEW WEALTH LTD,43646,AUD,2004,Financials,Life Insurance,Financials,Insurance,Insurance,Life Insurance
-314,KSC AU Equity,K & S CORP LTD,43646,AUD,2002,Industrials,Logistics Services,Industrials,Industrial Services,Transportation & Logistics,Logistics Services
-315,DCN AU Equity,DACIAN GOLD LTD,43646,AUD,2013,Materials,Precious Metals,Materials,Materials,Metals & Mining,Precious Metals
-316,BCI AU Equity,BCI MINERALS LTD,43646,AUD,2007,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
-317,MAH AU Equity,MACMAHON HOLDINGS LTD,43646,AUD,2002,Materials,Mining Services,Materials,Materials,Metals & Mining,Mining Services
-318,REP AU Equity,RAM ESSENTIAL SERVICES PROPE,43646,AUD,2022,Real Estate,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-319,IPG AU Equity,IPD GROUP LTD,43646,AUD,2018,Industrials,Technology Distributors,Technology,Tech Hardware & Semiconductors,Technology Hardware,Technology Distributors
-320,LPI AU Equity,LITHIUM POWER INTERNATIONAL,43646,AUD,2016,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-321,NVX AU Equity,NOVONIX LTD,43646,AUD,2016,Information Technology,Energy Storage Systems,Energy,Renewable Energy,Renewable Energy,Renewable Energy Equipment
-322,3PL AU Equity,3P LEARNING LTD,43646,AUD,2015,Consumer Discretionary,Educational Services,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Educational Services
-323,RUL AU Equity,RPMGLOBAL HOLDINGS LTD,43646,AUD,2008,Information Technology,Technology Consulting,Technology,Software & Tech Services,Technology Services,IT Services
-324,SRG AU Equity,SRG GLOBAL LTD,43830,AUD,2008,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
-325,IVZ AU Equity,INVICTUS ENERGY LTD,43830,AUD,2012,Energy,Natural Gas Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-326,MYS AU Equity,MYSTATE LTD,43646,AUD,2010,Financials,Banks,Financials,Banking,Banking,Banks
-327,MHJ AU Equity,MICHAEL HILL INTERNATIONAL L,43646,AUD,2017,Consumer Discretionary,Watch & Jewelry Design,Consumer Discretionary,Consumer Discretionary Products,Apparel & Textile Products,"Apparel, Footwear & Acc Design"
-328,BFG AU Equity,BELL FINANCIAL GROUP LTD,43646,AUD,2007,Financials,Institutional Brokerage,Financials,Financial Services,Institutional Financial Svcs,Institutional Brokerage
-329,DLI AU Equity,DELTA LITHIUM LTD,43646,AUD,2019,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-330,MYX AU Equity,MAYNE PHARMA GROUP LTD,43646,AUD,2007,Health Care,Generic Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
-331,LOT AU Equity,LOTUS RESOURCES LTD,43646,AUD,2009,Materials,Uranium,Materials,Materials,Metals & Mining,Base Metals
-332,GL1 AU Equity,GLOBAL LITHIUM RESOURCES LTD,43830,AUD,2021,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-333,AVR AU Equity,ANTERIS TECHNOLOGIES LTD,43646,AUD,2004,Health Care,Interventional Cardiology,Health Care,Health Care,Medical Equipment & Devices,Medical Devices
-334,RHI AU Equity,RED HILL MINERALS LTD,43646,AUD,2006,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
-335,DXC AU Equity,DEXUS CONVENIENCE RETAIL REI,43646,AUD,2018,Real Estate,Retail REIT,Real Estate,Real Estate,REIT,Retail REIT
-336,EHL AU Equity,EMECO HOLDINGS LTD,43646,AUD,2007,Industrials,Industrial Rental Services,Industrials,Industrial Services,Industrial Support Services,Industrial Wholesale & Rental
-337,IMU AU Equity,IMUGENE LTD,43830,AUD,2002,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
-338,LAU AU Equity,LINDSAY AUSTRALIA LTD,43646,AUD,2002,Industrials,Trucking,Industrials,Industrial Services,Transportation & Logistics,Trucking
-339,SLC AU Equity,SUPERLOOP LTD,43646,AUD,2015,Communication Services,Wireline Telecommunications,Communications,Telecommunications,Telecommunications,Wireline Telecommunications
-340,BVS AU Equity,BRAVURA SOLUTIONS LTD,43830,AUD,2017,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-341,KCN AU Equity,KINGSGATE CONSOLIDATED LTD,43646,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-342,CDP AU Equity,CARINDALE PROPERTY TRUST,43646,AUD,2002,Real Estate,Regional Mall REIT,Real Estate,Real Estate,REIT,Retail REIT
-343,TER AU Equity,TERRACOM LTD,43646,AUD,2011,Energy,Coal Mining,Materials,Materials,Metals & Mining,Coal Mining
-344,INR AU Equity,IONEER LTD,43646,AUD,2008,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-345,APZ AU Equity,ASPEN GROUP,43646,AUD,2002,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
-346,BRN AU Equity,BRAINCHIP HOLDINGS LTD,43646,AUD,2011,Information Technology,Technology Distributors,Technology,Tech Hardware & Semiconductors,Technology Hardware,Technology Distributors
-347,SRV AU Equity,SERVCORP LTD,43646,AUD,2002,Real Estate,Other Professional Services,Industrials,Industrial Services,Commercial Support Services,Professional Services
-348,MSB AU Equity,MESOBLAST LTD,43830,AUD,2005,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
-349,DUR AU Equity,DURATEC LTD,43830,AUD,2018,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
-350,NGI AU Equity,NAVIGATOR GLOBAL INVESTMENTS,43646,AUD,2006,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
-351,GDG AU Equity,GENERATION DEVELOPMENT GROUP,43830,AUD,2008,Financials,Investment Companies,Financials,Financial Services,Asset Management,Investment Companies
-352,IGL AU Equity,IVE GROUP LTD,43646,AUD,2016,Communication Services,Advertising & Marketing,Communications,Media,Advertising & Marketing,Advertising & Marketing
-353,CVC AU Equity,CVC LTD,43646,AUD,2002,Financials,Real Estate Investments,Financials,Financial Services,Asset Management,Private Equity
-354,GRX AU Equity,GREENEX METALS LTD,43646,AUD,2002,Materials,Copper,Materials,Materials,Metals & Mining,Base Metals
-355,PPS AU Equity,PRAEMIUM LTD,43830,AUD,2006,Information Technology,Internet Media & Services,Communications,Media,Internet Media & Services,Internet Media & Services
-356,GDI AU Equity,GDI PROPERTY GROUP,43646,AUD,2014,Real Estate,Office REIT,Real Estate,Real Estate,REIT,Office REIT
-357,OBM AU Equity,ORA BANDA MINING LTD,43646,AUD,2005,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-358,SOLG LN Equity,SOLGOLD PLC,43646,AUD,2006,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-359,CVN AU Equity,CARNARVON ENERGY LTD,43646,AUD,2002,Energy,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-360,ZIP AU Equity,ZIP CO LTD,43646,AUD,2010,Financials,Financial Transaction Processors,Technology,Software & Tech Services,Technology Services,Data & Transaction Processors
-361,MAU AU Equity,MAGNETIC RESOURCES NL,43646,AUD,2007,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-362,D2O AU Equity,DUXTON WATER LTD,43646,AUD,2016,Utilities,Water Utilities,Utilities,Utilities,Gas & Water Utilities,Water Utilities
-363,AKP AU Equity,AUDIO PIXELS HOLDINGS LTD,43646,AUD,2005,Consumer Discretionary,Audio Equipment,Technology,Tech Hardware & Semiconductors,Technology Hardware,Consumer Electronics
-364,CGS AU Equity,COGSTATE LTD,43646,AUD,2004,Health Care,Contract Research,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
-365,MLX AU Equity,METALS X LTD,43646,AUD,2005,Materials,Tin,Materials,Materials,Metals & Mining,Base Metals
-366,UNI AU Equity,UNIVERSAL STORE HOLDINGS LTD,43646,AUD,2017,Consumer Discretionary,Family Clothing Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Specialty Apparel Stores
-367,COE AU Equity,COOPER ENERGY LTD,43646,AUD,2002,Energy,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-368,HZN AU Equity,HORIZON OIL LTD,43646,AUD,2002,Energy,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-369,LGL AU Equity,LYNCH GROUP HOLDINGS LTD,43646,AUD,2017,Consumer Staples,Florist Supplies Wholesalers,Consumer Discretionary,Retail & Whsle - Discretionary,Wholesale - Discretionary,Other Wholesalers
-370,COG AU Equity,COG FINANCIAL SERVICES LTD,43646,AUD,2003,Financials,Investment Holding Companies,Financials,Financial Services,Asset Management,Investment Companies
-371,HLA AU Equity,HEALTHIA LTD,43646,AUD,2019,Health Care,Health Care Services,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
-372,SVM AU Equity,SOVEREIGN METALS LTD,43646,AUD,2007,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-373,SVL AU Equity,SILVER MINES LTD,43646,AUD,2007,Materials,Silver,Materials,Materials,Metals & Mining,Precious Metals
-374,WR1 AU Equity,WINSOME RESOURCES LTD,43646,AUD,2022,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-375,BCB AU Equity,BOWEN COKING COAL LTD,43646,AUD,2016,Materials,Thermal Coal,Materials,Materials,Metals & Mining,Coal Mining
-376,IPX AU Equity,IPERIONX LTD,43646,AUD,2018,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-377,A1N AU Equity,ARN MEDIA LTD,43646,AUD,2002,Communication Services,Radio Broadcasting,Communications,Media,Publishing & Broadcasting,Local TV & Radio Broadcast
-378,PGH AU Equity,PACT GROUP HOLDINGS LTD,43646,AUD,2014,Materials,Plastic Containers & Packaging,Materials,Materials,Containers & Packaging,Containers & Packaging
-379,PBH AU Equity,POINTSBET HOLDINGS LTD,43646,AUD,2019,Consumer Discretionary,Betting,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
-380,ABA AU Equity,AUSWIDE BANK LTD,43646,AUD,2002,Financials,Mortgage Lenders,Financials,Financial Services,Specialty Finance,Mortgage Finance
-381,1712 HK Equity,DRAGON MINING LTD,43646,AUD,2018,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-382,ACF AU Equity,ACROW FORMWORK AND CONSTRUCT,43646,AUD,2008,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
-383,SYM AU Equity,SYMBIO HOLDINGS LTD,43646,AUD,2006,Information Technology,Communications Software,Technology,Software & Tech Services,Software,Application Software
-384,ASM AU Equity,AUSTRALIAN STRATEGIC MATERIA,43646,AUD,2021,Materials,Rare Earth,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-385,SVR AU Equity,SOLVAR LTD,43646,AUD,2007,Financials,Consumer Finance,Financials,Financial Services,Specialty Finance,Consumer Finance
-386,IPD AU Equity,IMPEDIMED LTD,43646,AUD,2008,Health Care,Medical Equipment,Health Care,Health Care,Medical Equipment & Devices,Medical Equipment
-387,SFX AU Equity,SHEFFIELD RESOURCES LTD,43646,AUD,2011,Materials,Mineral & Precious Stone Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-388,TBN AU Equity,TAMBORAN RESOURCES LTD,43646,AUD,2022,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-389,CTM AU Equity,CENTAURUS METALS LTD,43830,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-390,BBN AU Equity,BABY BUNTING GROUP LTD,43646,AUD,2016,Consumer Discretionary,Toy & Game Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Other Spec Retail - Discr
-391,CAT AU Equity,CATAPULT GROUP INTERNATIONAL,43646,AUD,2015,Information Technology,Measurement Instruments,Industrials,Industrial Products,Electrical Equipment,Measurement Instruments
-392,DGL AU Equity,DGL GROUP LTD/AU,43830,AUD,2021,Materials,Specialty Chemicals,Materials,Materials,Chemicals,Specialty Chemicals
-393,LKE AU Equity,LAKE RESOURCES NL,43646,AUD,2002,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-394,SFC AU Equity,SCHAFFER CORP LTD,43646,AUD,2002,Consumer Discretionary,Seating & Trim,Consumer Discretionary,Consumer Discretionary Products,Automotive,Auto Parts
-395,ECF AU Equity,ELANOR COMMERCIAL PROPERTY F,43646,AUD,2020,Real Estate,Private Equity,Financials,Financial Services,Asset Management,Private Equity
-396,CRD AU Equity,CONRAD ASIA ENERGY LTD-CDI,43646,AUD,2022,Energy,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-397,AGY AU Equity,ARGOSY MINERALS LTD,43646,AUD,2002,Materials,Specialty Chemicals,Materials,Materials,Chemicals,Specialty Chemicals
-398,GLN AU Equity,GALAN LITHIUM LTD,43646,AUD,2012,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-399,MAY AU Equity,MELBANA ENERGY LTD,43646,AUD,2002,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-400,GNX AU Equity,GENEX POWER LTD,43646,AUD,2016,Utilities,Power Generation,Utilities,Utilities,Electric Utilities,Power Generation
-401,BDM AU Equity,BURGUNDY DIAMOND MINES LTD,43646,AUD,2013,Materials,Diamonds,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-402,OPT AU Equity,OPTHEA LTD,43646,AUD,2002,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
-403,GDF AU Equity,GARDA PROPERTY GROUP,43830,AUD,2016,Real Estate,Other Financial Services,Financials,Financial Services,Specialty Finance,Other Financial Services
-404,SXL AU Equity,SOUTHERN CROSS MEDIA GROUP L,43646,AUD,2006,Communication Services,Adv Rev - Local TV Broadcast,Communications,Media,Publishing & Broadcasting,Local TV & Radio Broadcast
-405,ORR AU Equity,ORECORP LTD,43646,AUD,2012,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-406,ALG AU Equity,ARDENT LEISURE GROUP LTD,43646,AUD,2002,Consumer Discretionary,Entertainment Facilities,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Entertainment Facilities
-407,ADH AU Equity,ADAIRS LTD,43646,AUD,2015,Consumer Discretionary,Home Furniture Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Home Products Stores
-408,URF AU Equity,US MASTERS RESIDENTIAL PROPE,43646,AUD,2011,Real Estate,Residential REIT,Real Estate,Real Estate,REIT,Residential REIT
-409,QGL AU Equity,QUANTUM GRAPHITE LTD,43646,AUD,2014,Materials,Mineral & Precious Stone Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-410,ASN AU Equity,ANSON RESOURCES LTD,43646,AUD,2011,Materials,Mineral Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-411,DUG AU Equity,DUG TECHNOLOGY LTD,43646,AUD,2021,Information Technology,IT Services,Technology,Software & Tech Services,Technology Services,IT Services
-412,QOR AU Equity,QORIA LTD,43646,AUD,2017,Information Technology,Infrastructure Software,Technology,Software & Tech Services,Software,Infrastructure Software
-413,SXE AU Equity,SOUTHERN CROSS ELECTRICAL,43646,AUD,2008,Industrials,Building Construction,Industrials,Industrial Services,Engineering & Construction,Building Construction
-414,PYC AU Equity,PYC THERAPEUTICS LTD,43646,AUD,2005,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
-415,HUM AU Equity,HUMM GROUP LTD,43646,AUD,2007,Financials,Credit Card Lending,Financials,Financial Services,Specialty Finance,Consumer Finance
-416,CAJ AU Equity,CAPITOL HEALTH LTD,43646,AUD,2006,Health Care,Radiology & Diagnostic Imaging,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
-417,SEE LN Equity,SEEING MACHINES LTD,43830,AUD,2006,Information Technology,Computer Hardware & Storage,Technology,Tech Hardware & Semiconductors,Technology Hardware,Computer Hardware & Storage
-418,IREN US Equity,IRIS ENERGY LTD,43646,AUD,2022,Information Technology,Renewable Energy Generation,Utilities,Utilities,Electric Utilities,Power Generation
-419,TRJ AU Equity,TRAJAN GROUP HOLDINGS LTD,43830,AUD,2021,Health Care,Medical Devices,Health Care,Health Care,Medical Equipment & Devices,Medical Devices
-420,BOT AU Equity,BOTANIX PHARMACEUTICALS LTD,43646,AUD,2002,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
-421,TRS AU Equity,REJECT SHOP LTD/THE,43646,AUD,2004,Consumer Discretionary,Mid-Tier Department Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Department Stores
-422,GNP AU Equity,GENUSPLUS GROUP LTD,43646,AUD,2021,Industrials,Industrial Maintenance Svcs,Industrials,Industrial Services,Industrial Support Services,Industrial Maintenance Svcs
-423,PBP AU Equity,PROBIOTEC LTD,43830,AUD,2007,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
-424,WOT AU Equity,WOTSO PROPERTY,43646,AUD,2012,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
-425,AGE AU Equity,ALLIGATOR ENERGY LTD,43646,AUD,2011,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
-426,ATA AU Equity,ATTURRA LTD,43646,AUD,2022,Information Technology,IT Services,Technology,Software & Tech Services,Technology Services,IT Services
-427,4DS AU Equity,4DS MEMORY LTD,43646,AUD,2011,Information Technology,Memory ICs,Technology,Tech Hardware & Semiconductors,Semiconductors,Semiconductor Devices
-428,VIT AU Equity,VITURA HEALTH LTD,43646,AUD,2020,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
-429,NTU AU Equity,NORTHERN MINERALS LTD,43646,AUD,2007,Materials,Rare Earth,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-430,PSQ AU Equity,PACIFIC SMILES GROUP LTD,43646,AUD,2015,Health Care,Outpatient Health Services,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
-431,A2B AU Equity,A2B AUSTRALIA LTD,43646,AUD,2002,Industrials,Taxi Services,Industrials,Industrial Services,Transportation & Logistics,Transit Services
-432,CYC AU Equity,CYCLOPHARM LTD,43646,AUD,2007,Health Care,Imaging Equipment,Health Care,Health Care,Medical Equipment & Devices,Medical Equipment
-433,KPG AU Equity,KELLY PARTNERS GROUP HOLDING,43646,AUD,2017,Industrials,Accounting Services,Industrials,Industrial Services,Commercial Support Services,Professional Services
-434,LIN AU Equity,LINDIAN RESOURCES LTD,43646,AUD,2002,Materials,Bauxite Mining,Materials,Materials,Metals & Mining,Base Metals
-435,AEE AU Equity,AURA ENERGY LTD,43646,AUD,2006,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
-436,LGI AU Equity,LGI LTD/AUSTRALIA,43646,AUD,2018,Utilities,Solid Waste Collection & Treat,Industrials,Industrial Services,Commercial Support Services,Waste Management
-437,BRI AU Equity,BIG RIVER INDUSTRIES LTD,43646,AUD,2017,Materials,Building Materials Dealers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Home Products Stores
-438,PLY AU Equity,PLAYSIDE STUDIOS LTD,43830,AUD,2021,Communication Services,Video Games,Communications,Media,Entertainment Content,Video Games
-439,ENN AU Equity,ELANOR INVESTOR GROUP,43646,AUD,2015,Consumer Discretionary,Hotel Owners & Developers,Real Estate,Real Estate,Real Estate Owners & Developers,Hotel Owners & Developers
-440,NXD AU Equity,NEXTED GROUP LTD,43830,AUD,2010,Consumer Discretionary,Vocational Schools,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Educational Services
-441,FRI AU Equity,FINBAR GROUP LTD,43646,AUD,2002,Real Estate,Apartment Owners & Develop,Real Estate,Real Estate,Real Estate Owners & Developers,Residential Owners & Developers
-442,SLA AU Equity,SILK LASER AUSTRALIA LTD,43646,AUD,2021,Health Care,Beauty Salons,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Personal Care Services
-443,CII AU Equity,CI RESOURCES LTD,43646,AUD,2002,Materials,Phosphate Rock,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-444,FID AU Equity,FIDUCIAN GROUP LTD,43646,AUD,2015,Financials,Fund of Funds,Financials,Financial Services,Asset Management,Private Equity
-445,NPR AU Equity,NEWMARK PROPERTY REIT,43646,AUD,2022,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
-446,WGN AU Equity,WAGNERS HOLDING CO LTD,43646,AUD,2018,Materials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
-447,4DX AU Equity,4DMEDICAL LTD,43646,AUD,2021,Health Care,Health Care Software,Technology,Software & Tech Services,Software,Application Software
-448,FDV AU Equity,FRONTIER DIGITAL VENTURES LT,43646,AUD,2016,Communication Services,Internet Media & Services,Communications,Media,Internet Media & Services,Internet Media & Services
-449,PAR AU Equity,PARADIGM BIOPHARMACEUTICALS,43646,AUD,2016,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
-450,DSE AU Equity,DROPSUITE LTD,43646,AUD,2002,Information Technology,Cloud & Virtualization Software,Technology,Software & Tech Services,Software,Infrastructure Software
-451,STK AU Equity,STRICKLAND METALS LTD,43646,AUD,2006,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-452,AUT AU Equity,AUTECO MINERALS LTD,43646,AUD,2006,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-453,M7T AU Equity,MACH7 TECHNOLOGIES LTD,43646,AUD,2006,Health Care,Health Care Software,Technology,Software & Tech Services,Software,Application Software
-454,BTH AU Equity,BIGTINCAN HOLDINGS LTD,43646,AUD,2017,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-455,TBR AU Equity,TRIBUNE RESOURCES LTD,43646,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-456,COI AU Equity,COMET RIDGE LTD,43646,AUD,2004,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-457,HE8 AU Equity,HELIOS ENERGY LTD,43646,AUD,2011,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-458,PNR AU Equity,PANTORO LTD,43646,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-459,AOF AU Equity,AUSTRALIAN UNITY OFFICE FUND,43646,AUD,2016,Real Estate,CBD Office REIT,Real Estate,Real Estate,REIT,Office REIT
-460,DRO AU Equity,DRONESHIELD LTD,43646,AUD,2016,Industrials,Electronics & Mission Systems,Industrials,Industrial Products,Aerospace & Defense,Defense
-461,LM8 AU Equity,LUNNON METALS LTD,43646,AUD,2021,Materials,Nickel,Materials,Materials,Metals & Mining,Base Metals
-462,EXP AU Equity,EXPERIENCE CO LTD,43646,AUD,2015,Consumer Discretionary,Travel Services,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Travel Services
-463,SXG AU Equity,SOUTHERN CROSS GOLD LTD,43646,AUD,2022,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-464,RCT AU Equity,REEF CASINO TRUST,43646,AUD,2002,Consumer Discretionary,Casino Hotels,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Lodging
-465,AMI AU Equity,AURELIA METALS LTD,43646,AUD,2007,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-466,FEX AU Equity,FENIX RESOURCES LTD,43646,AUD,2009,Materials,Uranium,Materials,Materials,Metals & Mining,Base Metals
-467,BSE AU Equity,BASE RESOURCES LTD,43646,AUD,2009,Materials,Mineral Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-468,FWD AU Equity,FLEETWOOD LTD,43646,AUD,2002,Consumer Discretionary,Manufactured Home (Mobile),Consumer Discretionary,Consumer Discretionary Products,Home Construction,Homebuilding
-469,GDC AU Equity,GLOBAL DATA CENTRE GROUP,43830,AUD,2020,#N/A,Private Equity,Financials,Financial Services,Asset Management,Private Equity
-470,PPE AU Equity,PEOPLEIN LTD,43646,AUD,2018,Industrials,Professional Services,Industrials,Industrial Services,Commercial Support Services,Professional Services
-471,RBL AU Equity,REDBUBBLE LTD,43646,AUD,2016,Consumer Discretionary,Specialty Food & Staples Stores,Consumer Staples,Retail & Wholesale - Staples,Retail - Consumer Staples,Food & Drug Stores
-472,CYL AU Equity,CATALYST METALS LTD,43646,AUD,2007,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
-473,ANG AU Equity,AUSTIN ENGINEERING LTD,43646,AUD,2004,Industrials,Const & Mining Mach Parts & Svcs,Industrials,Industrial Products,Machinery,Construction & Mining Machinery
-474,IOD AU Equity,IODM LTD,43646,AUD,2004,Information Technology,Specialty Software,Technology,Software & Tech Services,Software,Application Software
-475,PEN AU Equity,PENINSULA ENERGY LTD,43646,AUD,2002,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
-476,NOL AU Equity,NOBLEOAK LIFE LTD,43646,AUD,2022,Financials,Life Insurance,Financials,Insurance,Insurance,Life Insurance
-477,CAA AU Equity,CAPRAL LTD,43646,AUD,2002,Materials,Bauxite Mining,Materials,Materials,Metals & Mining,Base Metals
-478,CLV AU Equity,CLOVER CORP LTD,43646,AUD,2002,Materials,Fresh & Frozen Seafood Process,Consumer Staples,Consumer Staple Products,Food,Packaged Food
-479,COS AU Equity,COSOL LTD,43646,AUD,2020,Information Technology,IT Services,Technology,Software & Tech Services,Technology Services,IT Services
-480,WAT AU Equity,WATERCO LTD,43646,AUD,2002,Consumer Discretionary,Fitness & Recreation Centers,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Entertainment Facilities
-481,MTO AU Equity,MOTORCYCLE HOLDINGS LTD,43646,AUD,2016,Consumer Discretionary,Automotive Retailers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
-482,RAC AU Equity,RACE ONCOLOGY LTD,43646,AUD,2017,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
-483,SLH AU Equity,SILK LOGISTICS HOLDINGS LTD,43646,AUD,2022,Industrials,Logistics Services,Industrials,Industrial Services,Transportation & Logistics,Logistics Services
-484,CLG AU Equity,CLOSE THE LOOP LTD,43646,AUD,2017,Industrials,Recycling Facilities,Industrials,Industrial Services,Commercial Support Services,Waste Management
-485,CHL AU Equity,CAMPLIFY HOLDINGS LTD,43646,AUD,2021,Industrials,Passenger Car Rental & Leasing,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
-486,APX AU Equity,APPEN LTD,43646,AUD,2015,Information Technology,Technology Consulting,Technology,Software & Tech Services,Technology Services,IT Services
-487,LIS AU Equity,LI-S ENERGY LTD,43830,AUD,2022,Industrials,Electronics Batteries,Technology,Tech Hardware & Semiconductors,Technology Hardware,Electronics Components
-488,EZL AU Equity,EUROZ HARTLEYS GROUP LTD,43646,AUD,2002,Financials,Institutional Brokerage,Financials,Financial Services,Institutional Financial Svcs,Institutional Brokerage
-489,STA AU Equity,STRANDLINE RESOURCES LTD,43646,AUD,2002,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
-490,A1M AU Equity,AIC MINES LTD,43646,AUD,2002,Materials,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
-491,EGG AU Equity,ENERO GROUP LTD,43646,AUD,2004,Communication Services,Market Research & Consulting,Communications,Media,Advertising & Marketing,Advertising & Marketing
-492,ENR AU Equity,ENCOUNTER RESOURCES LTD,43646,AUD,2006,Materials,Uranium,Materials,Materials,Metals & Mining,Base Metals
-493,SHA AU Equity,SHAPE AUSTRALIA PTY LTD,43646,AUD,2018,Industrials,Commercial Building Const,Industrials,Industrial Services,Engineering & Construction,Building Construction
-494,ESS AU Equity,ESSENTIAL METALS LTD,43646,AUD,2004,Materials,"Nickel, Lead & Zinc",Materials,Materials,Metals & Mining,Base Metals
-495,SSG AU Equity,SHAVER SHOP GROUP LTD,43646,AUD,2017,Consumer Discretionary,Razor & Razor Blade,Consumer Staples,Consumer Staple Products,Household Products,Personal Care Products
-496,EGH AU Equity,EUREKA GROUP HOLDINGS LTD,43646,AUD,2005,Real Estate,Residential REIT,Real Estate,Real Estate,REIT,Residential REIT
-497,HFR AU Equity,HIGHFIELD RESOURCES LTD,43646,AUD,2012,Materials,"Potash, Soda, Borate",Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
-498,EOL AU Equity,ENERGY ONE LTD,43646,AUD,2007,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
-499,XRF AU Equity,XRF SCIENTIFIC LTD,43646,AUD,2007,Industrials,Other Machinery & Equipment,Industrials,Industrial Products,Machinery,Other Machinery & Equipment
-500,VVA AU Equity,VIVA LEISURE LTD,43830,AUD,2019,Consumer Discretionary,Fitness & Recreation Centers,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Entertainment Facilities
+1,BHP AU Equity,BHP GROUP LTD,2019-06-30 00:00:00,AUD,2002,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
+2,RIO AU Equity,RIO TINTO LTD,2019-12-31 00:00:00,AUD,2002,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
+3,CBA AU Equity,COMMONWEALTH BANK OF AUSTRAL,2019-06-30 00:00:00,AUD,2002,Financials,Banks,Financials,Banking,Banking,Banks
+4,CSL AU Equity,CSL LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
+5,NAB AU Equity,NATIONAL AUSTRALIA BANK LTD,2019-09-30 00:00:00,AUD,2002,Financials,Banks,Financials,Banking,Banking,Banks
+6,ANZ AU Equity,ANZ GROUP HOLDINGS LTD,2019-09-30 00:00:00,AUD,2002,Financials,Corporate Banking,Financials,Banking,Banking,Banks
+7,WBC AU Equity,WESTPAC BANKING CORP,2019-09-30 00:00:00,AUD,2002,Financials,Banks,Financials,Banking,Banking,Banks
+8,FMG AU Equity,FORTESCUE METALS GROUP LTD,2019-03-31 00:00:00,AUD,2002,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
+9,WDS AU Equity,WOODSIDE ENERGY GROUP LTD,2019-06-30 00:00:00,AUD,2002,Energy,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+10,MQG AU Equity,MACQUARIE GROUP LTD,2019-06-30 00:00:00,AUD,2002,Financials,Diversified Banks,Financials,Banking,Banking,Diversified Banks
+11,WES AU Equity,WESFARMERS LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Home Centers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Home Products Stores
+12,TEAM US Equity,ATLASSIAN CORP-CL A,2019-06-30 00:00:00,AUD,2016,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+13,TLS AU Equity,TELSTRA GROUP LTD,2019-12-31 00:00:00,AUD,2002,Communication Services,Wireless Telecommunications,Communications,Telecommunications,Telecommunications,Wireless Telecommunications
+14,WOW AU Equity,WOOLWORTHS GROUP LTD,2019-06-30 00:00:00,AUD,2002,Consumer Staples,Supermarkets,Consumer Staples,Retail & Wholesale - Staples,Retail - Consumer Staples,Food & Drug Stores
+15,GMG AU Equity,GOODMAN GROUP,2019-09-30 00:00:00,AUD,2005,Real Estate,Industrial REIT,Real Estate,Real Estate,REIT,Industrial REIT
+16,TCL AU Equity,TRANSURBAN GROUP,2019-06-30 00:00:00,AUD,2002,Industrials,Hway/Brdg/Tunnel Operators,Industrials,Industrial Services,Transportation & Logistics,Transport Operations & Services
+17,ALL AU Equity,ARISTOCRAT LEISURE LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Casinos & Gaming,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
+18,STO AU Equity,SANTOS LTD,2019-12-31 00:00:00,AUD,2002,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+19,QBE AU Equity,QBE INSURANCE GROUP LTD,2019-12-31 00:00:00,AUD,2002,Financials,P&C Insurance Premiums,Financials,Insurance,Insurance,P&C Insurance
+20,NCM AU Equity,NEWCREST MINING LTD,2019-06-30 00:00:00,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+21,1208 HK Equity,MMG LTD,2019-06-30 00:00:00,AUD,2002,Materials,Copper Mining,Materials,Materials,Metals & Mining,Base Metals
+22,COL AU Equity,COLES GROUP LTD,2019-06-30 00:00:00,AUD,2011,Consumer Staples,Supermarkets,Consumer Staples,Retail & Wholesale - Staples,Retail - Consumer Staples,Food & Drug Stores
+23,WTC AU Equity,WISETECH GLOBAL LTD,2019-06-30 00:00:00,AUD,2016,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+24,REA AU Equity,REA GROUP LTD,2019-06-30 00:00:00,AUD,2002,Communication Services,Real Estate & Property Web,Communications,Media,Internet Media & Services,Internet Media & Services
+25,BXB AU Equity,BRAMBLES LTD,2019-06-30 00:00:00,AUD,2007,Industrials,Other Commercial Support Svcs,Industrials,Industrial Services,Commercial Support Services,Other Commercial Support Svcs
+26,SUN AU Equity,SUNCORP GROUP LTD,2019-06-30 00:00:00,AUD,2002,Financials,P&C Insurance,Financials,Insurance,Insurance,P&C Insurance
+27,COH AU Equity,COCHLEAR LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Medical Devices,Health Care,Health Care,Medical Equipment & Devices,Medical Devices
+28,ORG AU Equity,ORIGIN ENERGY LTD,2019-06-30 00:00:00,AUD,2002,Utilities,Integrated Electric Utilities,Utilities,Utilities,Electric Utilities,Integrated Electric Utilities
+29,S32 AU Equity,SOUTH32 LTD,2019-06-30 00:00:00,AUD,2015,Materials,Aluminum,Materials,Materials,Metals & Mining,Base Metals
+30,CPU AU Equity,COMPUTERSHARE LTD,2019-03-31 00:00:00,AUD,2002,Industrials,"Instl Trust, Fiduciary & Custody",Financials,Financial Services,Institutional Financial Svcs,"Instl Trust, Fiduciary & Custody"
+31,NST AU Equity,NORTHERN STAR RESOURCES LTD,2019-12-31 00:00:00,AUD,2004,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+32,IAG AU Equity,INSURANCE AUSTRALIA GROUP,2019-12-31 00:00:00,AUD,2002,Financials,P&C Insurance,Financials,Insurance,Insurance,P&C Insurance
+33,SHL AU Equity,SONIC HEALTHCARE LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Clinical Labs,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
+34,SCG AU Equity,SCENTRE GROUP,2019-06-30 00:00:00,AUD,2014,Real Estate,Shopping Center REIT,Real Estate,Real Estate,REIT,Retail REIT
+35,SOL AU Equity,WASHINGTON H. SOUL PATTINSON,2019-06-30 00:00:00,AUD,2002,Financials,Investment Holding Companies,Financials,Financial Services,Asset Management,Investment Companies
+36,REH AU Equity,REECE LTD,2019-06-30 00:00:00,AUD,2002,Industrials,Home Centers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Home Products Stores
+37,MIN AU Equity,MINERAL RESOURCES LTD,2019-06-30 00:00:00,AUD,2007,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
+38,RHC AU Equity,RAMSAY HEALTH CARE LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Hospitals,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Facilities
+39,PLS AU Equity,PILBARA MINERALS LTD,2019-12-31 00:00:00,AUD,2008,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+40,ASX AU Equity,ASX LTD,2019-09-30 00:00:00,AUD,2002,Financials,Security & Cmdty Exchanges,Financials,Financial Services,Institutional Financial Svcs,Security & Cmdty Exchanges
+41,APA AU Equity,APA GROUP,2019-06-30 00:00:00,AUD,2002,Utilities,Gas Transmission & Storage,Utilities,Utilities,Gas & Water Utilities,Gas Utilities
+42,CAR AU Equity,CARSALES.COM LTD,2019-06-30 00:00:00,AUD,2010,Communication Services,Adv Rev - Automotive Web,Communications,Media,Internet Media & Services,Internet Media & Services
+43,SVW AU Equity,SEVEN GROUP HOLDINGS LTD,2019-12-31 00:00:00,AUD,2002,Industrials,Const/Mining Mach/Equip Whslrs,Industrials,Industrial Services,Industrial Support Services,Industrial Wholesale & Rental
+44,TLC AU Equity,LOTTERY CORP LTD/THE,2019-06-30 00:00:00,AUD,2022,Consumer Discretionary,Casinos & Gaming,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
+45,TPG AU Equity,TPG TELECOM LTD,2019-06-30 00:00:00,AUD,2016,Communication Services,Wireless Telecommunications,Communications,Telecommunications,Telecommunications,Wireless Telecommunications
+46,MPL AU Equity,MEDIBANK PRIVATE LTD,2019-06-30 00:00:00,AUD,2015,Financials,Managed Care,Health Care,Health Care,Health Care Facilities & Svcs,Managed Care
+47,EDV AU Equity,ENDEAVOUR GROUP LTD/AUSTRALI,2019-06-30 00:00:00,AUD,2017,Consumer Staples,Wine & Distilled Alcohol Whslrs,Consumer Staples,Retail & Wholesale - Staples,Wholesale - Consumer Staples,Food & Beverage Wholesalers
+48,TWE AU Equity,TREASURY WINE ESTATES LTD,2019-06-30 00:00:00,AUD,2011,Consumer Staples,Vintners,Consumer Staples,Consumer Staple Products,Beverages,Alcoholic Beverages
+49,WOR AU Equity,WORLEY LTD,2019-12-31 00:00:00,AUD,2003,Industrials,Oil & Gas Infra Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
+50,BSL AU Equity,BLUESCOPE STEEL LTD,2019-06-30 00:00:00,AUD,2003,Materials,Steel Producers,Materials,Materials,Steel,Steel Producers
+51,QAN AU Equity,QANTAS AIRWAYS LTD,2019-12-31 00:00:00,AUD,2002,Industrials,Mainline Airline - Full Svc,Industrials,Industrial Services,Transportation & Logistics,Airlines
+52,SGP AU Equity,STOCKLAND,2019-06-30 00:00:00,AUD,2002,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
+53,PME AU Equity,PRO MEDICUS LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Health Care Software,Technology,Software & Tech Services,Software,Application Software
+54,VCX AU Equity,VICINITY CENTRES,2019-03-31 00:00:00,AUD,2006,Real Estate,Retail REIT,Real Estate,Real Estate,REIT,Retail REIT
+55,ALX AU Equity,ATLAS ARTERIA,2019-07-31 00:00:00,AUD,2010,Industrials,Hway/Brdg/Tunnel Operators,Industrials,Industrial Services,Transportation & Logistics,Transport Operations & Services
+56,ALD AU Equity,AMPOL LTD,2019-06-30 00:00:00,AUD,2002,Energy,Refining & Marketing,Energy,Oil & Gas,Oil & Gas Producers,Refining & Marketing
+57,SEK AU Equity,SEEK LTD,2019-06-30 00:00:00,AUD,2005,Communication Services,Adv Rev - Recruit Svcs Web,Communications,Media,Internet Media & Services,Internet Media & Services
+58,AGL AU Equity,AGL ENERGY LTD,2019-06-30 00:00:00,AUD,2007,Utilities,Integrated Electric Utilities,Utilities,Utilities,Electric Utilities,Integrated Electric Utilities
+59,IGO AU Equity,IGO LTD,2019-07-31 00:00:00,AUD,2002,Materials,Nickel,Materials,Materials,Metals & Mining,Base Metals
+60,MGR AU Equity,MIRVAC GROUP,2019-09-30 00:00:00,AUD,2002,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
+61,DXS AU Equity,DEXUS/AU,2019-06-30 00:00:00,AUD,2005,Real Estate,Office REIT,Real Estate,Real Estate,REIT,Office REIT
+62,GPT AU Equity,GPT GROUP,2019-06-30 00:00:00,AUD,2002,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
+63,EBO NZ Equity,EBOS GROUP LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Medical Equip Distribution,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Supply Chain
+64,ORI AU Equity,ORICA LTD,2019-06-30 00:00:00,AUD,2002,Materials,Explosives,Materials,Materials,Chemicals,Specialty Chemicals
+65,EVN AU Equity,EVOLUTION MINING LTD,2019-06-30 00:00:00,AUD,2003,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+66,YAL AU Equity,YANCOAL AUSTRALIA LTD,2019-06-30 00:00:00,AUD,2012,Energy,Thermal Coal,Materials,Materials,Metals & Mining,Coal Mining
+67,AZJ AU Equity,AURIZON HOLDINGS LTD,2019-06-30 00:00:00,AUD,2011,Industrials,Coal Freight - Rail,Industrials,Industrial Services,Transportation & Logistics,Rail Freight
+68,WHC AU Equity,WHITEHAVEN COAL LTD,2019-03-31 00:00:00,AUD,2007,Energy,Coal Mining,Materials,Materials,Metals & Mining,Coal Mining
+69,AKE AU Equity,ALLKEM LTD,2019-06-30 00:00:00,AUD,2008,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+70,NXT AU Equity,NEXTDC LTD,2019-06-30 00:00:00,AUD,2011,Information Technology,Data Centers,Communications,Telecommunications,Telecommunications,Wireline Telecommunications
+71,IEL AU Equity,IDP EDUCATION LTD,2019-06-30 00:00:00,AUD,2016,Consumer Discretionary,Educational Services,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Educational Services
+72,SDF AU Equity,STEADFAST GROUP LTD,2019-06-30 00:00:00,AUD,2014,Financials,Insurance Brokers & Services,Financials,Insurance,Insurance,Insurance Brokers & Services
+73,IPL AU Equity,INCITEC PIVOT LTD,2019-06-30 00:00:00,AUD,2003,Materials,Fertilizers,Materials,Materials,Chemicals,Agricultural Chemicals
+74,ALU AU Equity,ALTIUM LTD,2019-12-31 00:00:00,AUD,2002,Information Technology,Application Software,Technology,Software & Tech Services,Software,Application Software
+75,ALQ AU Equity,ALS LTD,2019-06-30 00:00:00,AUD,2002,Industrials,Testing Laboratories,Industrials,Industrial Services,Commercial Support Services,Other Commercial Support Svcs
+76,CWY AU Equity,CLEANAWAY WASTE MANAGEMENT L,2019-12-31 00:00:00,AUD,2005,Industrials,Solid Waste Collection & Treat,Industrials,Industrial Services,Commercial Support Services,Waste Management
+77,BLD AU Equity,BORAL LTD,2019-06-30 00:00:00,AUD,2002,Materials,Ready Mix Concrete,Materials,Materials,Construction Materials,Cement & Aggregates
+78,BEN AU Equity,BENDIGO AND ADELAIDE BANK,2019-12-31 00:00:00,AUD,2002,Financials,Banks,Financials,Banking,Banking,Banks
+79,JBH AU Equity,JB HI-FI LTD,2019-06-30 00:00:00,AUD,2004,Consumer Discretionary,Electronics & Appliances Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Electronics & Appliances Stores
+80,NHC AU Equity,NEW HOPE CORP LTD,2019-06-30 00:00:00,AUD,2004,Energy,Thermal Coal,Materials,Materials,Metals & Mining,Coal Mining
+81,TNE AU Equity,TECHNOLOGY ONE LTD,2019-12-31 00:00:00,AUD,2002,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+82,QUB AU Equity,QUBE HOLDINGS LTD,2019-08-31 00:00:00,AUD,2010,Industrials,Logistics Services,Industrials,Industrial Services,Transportation & Logistics,Logistics Services
+83,HVN AU Equity,HARVEY NORMAN HOLDINGS LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Consumer Electronics Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Electronics & Appliances Stores
+84,DMP AU Equity,DOMINO'S PIZZA ENTERPRISES L,2019-06-30 00:00:00,AUD,2005,Consumer Discretionary,Limited Service Restaurants,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Restaurants
+85,VEA AU Equity,VIVA ENERGY GROUP LTD,2019-06-30 00:00:00,AUD,2018,Energy,Petroleum Retailers,Energy,Oil & Gas,Oil & Gas Producers,Refining & Marketing
+86,LLC AU Equity,LENDLEASE GROUP,2019-06-30 00:00:00,AUD,2002,Real Estate,Building Construction,Industrials,Industrial Services,Engineering & Construction,Building Construction
+87,CHC AU Equity,CHARTER HALL GROUP,2019-06-30 00:00:00,AUD,2006,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
+88,FLT AU Equity,FLIGHT CENTRE TRAVEL GROUP L,2019-07-30 00:00:00,AUD,2002,Consumer Discretionary,Travel Services,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Travel Services
+89,CGF AU Equity,CHALLENGER LTD,2019-06-30 00:00:00,AUD,2004,Financials,Life Insurance,Financials,Insurance,Insurance,Life Insurance
+90,LTR AU Equity,LIONTOWN RESOURCES LTD,2019-07-31 00:00:00,AUD,2007,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+91,BKW AU Equity,BRICKWORKS LTD,2019-09-30 00:00:00,AUD,2002,Materials,Brick & Structural Clay Tile,Materials,Materials,Construction Materials,Building Materials
+92,CIA AU Equity,CHAMPION IRON LTD,2019-06-30 00:00:00,AUD,2007,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
+93,PMV AU Equity,PREMIER INVESTMENTS LTD,2019-12-31 00:00:00,AUD,2009,Consumer Discretionary,Specialty Apparel Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Specialty Apparel Stores
+94,MTS AU Equity,METCASH LTD,2019-06-30 00:00:00,AUD,2002,Consumer Staples,Wine & Distilled Alcohol Whslrs,Consumer Staples,Retail & Wholesale - Staples,Wholesale - Consumer Staples,Food & Beverage Wholesalers
+95,BPT AU Equity,BEACH ENERGY LTD,2019-06-30 00:00:00,AUD,2002,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+96,NHF AU Equity,NIB HOLDINGS LTD,2019-09-30 00:00:00,AUD,2008,Financials,Managed Care,Health Care,Health Care,Health Care Facilities & Svcs,Managed Care
+97,SMR AU Equity,STANMORE RESOURCES LTD,2019-12-31 00:00:00,AUD,2010,Materials,Coal Mining,Materials,Materials,Metals & Mining,Coal Mining
+98,BOQ AU Equity,BANK OF QUEENSLAND LTD,2019-04-30 00:00:00,AUD,2002,Financials,Banks,Financials,Banking,Banking,Banks
+99,APE AU Equity,EAGERS AUTOMOTIVE LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Car Dealers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
+100,ORA AU Equity,ORORA LTD,2019-12-31 00:00:00,AUD,2014,Materials,Paper Containers & Packaging,Materials,Materials,Containers & Packaging,Containers & Packaging
+101,NIC AU Equity,NICKEL INDUSTRIES LTD,2019-06-30 00:00:00,AUD,2019,Materials,Nickel,Materials,Materials,Metals & Mining,Base Metals
+102,NWL AU Equity,NETWEALTH GROUP LTD,2019-06-30 00:00:00,AUD,2018,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+103,ILU AU Equity,ILUKA RESOURCES LTD,2019-12-31 00:00:00,AUD,2002,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+104,BRG AU Equity,BREVILLE GROUP LTD,2019-03-31 00:00:00,AUD,2002,Consumer Discretionary,Heating & Cooling Appliances,Consumer Discretionary,Consumer Discretionary Products,Home & Office Products,Household Appliances
+105,NEC AU Equity,NINE ENTERTAINMENT CO HOLDIN,2019-06-30 00:00:00,AUD,2014,Communication Services,Local TV Broadcasting,Communications,Media,Publishing & Broadcasting,Local TV & Radio Broadcast
+106,SUL AU Equity,SUPER RETAIL GROUP LTD,2019-06-30 00:00:00,AUD,2005,Consumer Discretionary,Auto Parts & Accessories Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
+107,AUB AU Equity,AUB GROUP LTD,2019-07-31 00:00:00,AUD,2006,Financials,Insurance Brokers & Services,Financials,Insurance,Insurance,Insurance Brokers & Services
+108,CRN AU Equity,CORONADO GLOBAL RESOURCE-CDI,2019-06-30 00:00:00,AUD,2018,Materials,Metallurgical Coal,Materials,Materials,Metals & Mining,Coal Mining
+109,AMP AU Equity,AMP LTD,2019-06-30 00:00:00,AUD,2019,Financials,Wealth Management,Financials,Financial Services,Asset Management,Wealth Management
+110,TLX AU Equity,TELIX PHARMACEUTICALS LTD,2019-06-30 00:00:00,AUD,2017,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
+111,PDN AU Equity,PALADIN ENERGY LTD,2019-06-30 00:00:00,AUD,2002,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
+112,SFR AU Equity,SANDFIRE RESOURCES LTD,2019-06-30 00:00:00,AUD,2004,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+113,NSR AU Equity,NATIONAL STORAGE REIT,2019-06-30 00:00:00,AUD,2014,Real Estate,Self-storage REIT,Real Estate,Real Estate,REIT,Self-storage REIT
+114,CSR AU Equity,CSR LTD,2019-06-30 00:00:00,AUD,2002,Materials,Building Materials,Materials,Materials,Construction Materials,Building Materials
+115,ANN AU Equity,ANSELL LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Surgical Appliances & Supplies,Health Care,Health Care,Medical Equipment & Devices,Health Care Supplies
+116,DOW AU Equity,DOWNER EDI LTD,2019-06-30 00:00:00,AUD,2002,Industrials,Transportation Infra Const,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
+117,DRR AU Equity,DETERRA ROYALTIES LTD,2019-06-30 00:00:00,AUD,2021,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+118,HUB AU Equity,HUB24 LTD,2019-06-30 00:00:00,AUD,2008,Financials,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+119,CTD AU Equity,CORPORATE TRAVEL MANAGEMENT,2019-06-30 00:00:00,AUD,2012,Consumer Discretionary,Travel Agencies,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Travel Services
+120,SGM AU Equity,SIMS LTD,2019-06-30 00:00:00,AUD,2002,Materials,Recycling Facilities,Industrials,Industrial Services,Commercial Support Services,Waste Management
+121,ARB AU Equity,ARB CORP LTD,2019-09-30 00:00:00,AUD,2002,Consumer Discretionary,Auto Parts,Consumer Discretionary,Consumer Discretionary Products,Automotive,Auto Parts
+122,VNT AU Equity,VENTIA SERVICES GROUP PTY LT,2019-06-30 00:00:00,AUD,2021,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
+123,WEB AU Equity,WEBJET LTD,2019-07-31 00:00:00,AUD,2002,Consumer Discretionary,Travel Info & Booking Web,Communications,Media,Internet Media & Services,Internet Media & Services
+124,PRU AU Equity,PERSEUS MINING LTD,2019-06-30 00:00:00,AUD,2005,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+125,RGN AU Equity,REGION RE LTD,2019-12-31 00:00:00,AUD,2013,Real Estate,Shopping Center REIT,Real Estate,Real Estate,REIT,Retail REIT
+126,AWC AU Equity,ALUMINA LTD,2019-06-30 00:00:00,AUD,2002,Materials,Aluminum,Materials,Materials,Metals & Mining,Base Metals
+127,HDN AU Equity,HOMECO DAILY NEEDS REIT,2019-06-30 00:00:00,AUD,2022,Real Estate,Retail REIT,Real Estate,Real Estate,REIT,Retail REIT
+128,CLW AU Equity,CHARTER HALL LONG WALE REIT,2019-12-31 00:00:00,AUD,2017,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
+129,PPT AU Equity,PERPETUAL LTD,2019-06-30 00:00:00,AUD,2002,Financials,Wealth Management,Financials,Financial Services,Asset Management,Wealth Management
+130,DEG AU Equity,DE GREY MINING LTD,2019-12-31 00:00:00,AUD,2003,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+131,DHG AU Equity,DOMAIN HOLDINGS AUSTRALIA LT,2019-06-30 00:00:00,AUD,2018,Communication Services,Real Estate & Property Web,Communications,Media,Internet Media & Services,Internet Media & Services
+132,BWP AU Equity,BWP TRUST,2019-06-30 00:00:00,AUD,2002,Real Estate,Bulk Warehouse REIT,Real Estate,Real Estate,REIT,Industrial REIT
+133,GOR AU Equity,GOLD ROAD RESOURCES LTD,2019-06-30 00:00:00,AUD,2007,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+134,PXA AU Equity,PEXA GROUP LTD,2019-06-30 00:00:00,AUD,2021,Real Estate,Real Estate Services,Real Estate,Real Estate,Real Estate Services,Real Estate Services
+135,APM AU Equity,APM HUMAN SERVICES INTERNATI,2019-06-30 00:00:00,AUD,2022,Industrials,General Management Consulting,Industrials,Industrial Services,Commercial Support Services,Professional Services
+136,LOV AU Equity,LOVISA HOLDINGS LTD,2019-06-30 00:00:00,AUD,2015,Consumer Discretionary,Jewelry,Consumer Discretionary,Consumer Discretionary Products,Apparel & Textile Products,"Apparel, Footwear & Acc Design"
+137,RMS AU Equity,RAMELIUS RESOURCES LTD,2019-06-30 00:00:00,AUD,2005,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+138,DDR AU Equity,DICKER DATA LTD,2019-06-30 00:00:00,AUD,2011,Information Technology,Computer & Software Whslrs,Consumer Discretionary,Retail & Whsle - Discretionary,Wholesale - Discretionary,Consumer Elec & Applc Whslrs
+139,BAP AU Equity,BAPCOR LTD,2019-06-30 00:00:00,AUD,2014,Consumer Discretionary,Auto Parts & Accessories Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
+140,IVC AU Equity,INVOCARE LTD,2019-06-30 00:00:00,AUD,2003,Consumer Discretionary,Funeral Homes & Services,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Funeral Services
+141,CIP AU Equity,CENTURIA INDUSTRIAL REIT,2019-06-30 00:00:00,AUD,2013,Real Estate,Industrial REIT,Real Estate,Real Estate,REIT,Industrial REIT
+142,CQR AU Equity,CHARTER HALL RETAIL REIT,2019-06-30 00:00:00,AUD,2002,Real Estate,Retail REIT,Real Estate,Real Estate,REIT,Retail REIT
+143,CMM AU Equity,CAPRICORN METALS LTD,2019-12-31 00:00:00,AUD,2009,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+144,TAH AU Equity,TABCORP HOLDINGS LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Casinos,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
+145,OGC CN Equity,OCEANAGOLD CORP,2019-06-30 00:00:00,AUD,2007,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+146,JLG AU Equity,JOHNS LYNG GROUP LTD,2019-06-30 00:00:00,AUD,2018,Industrials,Building Construction,Industrials,Industrial Services,Engineering & Construction,Building Construction
+147,BGL AU Equity,BELLEVUE GOLD LTD,2019-06-29 00:00:00,AUD,2006,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+148,EVT AU Equity,EVT LTD,2019-06-30 00:00:00,AUD,2002,Communication Services,Movie Theaters,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Entertainment Facilities
+149,NUF AU Equity,NUFARM LTD,2019-03-31 00:00:00,AUD,2002,Materials,Crop Chemicals,Materials,Materials,Chemicals,Agricultural Chemicals
+150,LIC AU Equity,LIFESTYLE COMMUNITIES LTD,2019-12-31 00:00:00,AUD,2002,Real Estate,Single Family Homebuilding,Consumer Discretionary,Consumer Discretionary Products,Home Construction,Homebuilding
+151,IPH AU Equity,IPH LTD,2019-06-30 00:00:00,AUD,2015,Industrials,"Patent, Notary & Paralegal Svcs",Industrials,Industrial Services,Commercial Support Services,Professional Services
+152,KLS AU Equity,KELSIAN GROUP LTD,2019-06-30 00:00:00,AUD,2014,Industrials,Bus Transportation,Industrials,Industrial Services,Transportation & Logistics,Transit Services
+153,EMR AU Equity,EMERALD RESOURCES NL,2019-12-31 00:00:00,AUD,2002,Materials,Specialty Owners & Developers,Real Estate,Real Estate,Real Estate Owners & Developers,Specialty Owners & Developers
+154,PSI AU Equity,PSC INSURANCE GROUP LTD,2019-06-30 00:00:00,AUD,2016,Financials,Insurance Brokers & Services,Financials,Insurance,Insurance,Insurance Brokers & Services
+155,INA AU Equity,INGENIA COMMUNITIES GROUP,2019-12-31 00:00:00,AUD,2004,Real Estate,Health Care REIT,Real Estate,Real Estate,REIT,Health Care REIT
+156,PNI AU Equity,PINNACLE INVESTMENT MANAGEME,2019-06-30 00:00:00,AUD,2007,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+157,GMD AU Equity,GENESIS MINERALS LTD,2019-06-30 00:00:00,AUD,2008,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+158,SGR AU Equity,STAR ENTERTAINMENT GRP LTD/T,2019-06-30 00:00:00,AUD,2011,Consumer Discretionary,Casinos,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
+159,GNC AU Equity,GRAINCORP LTD-A,2019-06-30 00:00:00,AUD,2002,Consumer Staples,Grain & Field Bean Whslrs,Consumer Staples,Retail & Wholesale - Staples,Wholesale - Consumer Staples,Agricultural Products Whslrs
+160,AZS AU Equity,AZURE MINERALS LTD,2019-06-30 00:00:00,AUD,2004,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+161,BOE AU Equity,BOSS ENERGY LTD,2019-04-28 00:00:00,AUD,2008,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
+162,MP1 AU Equity,MEGAPORT LTD,2019-06-30 00:00:00,AUD,2016,Information Technology,Infrastructure Software,Technology,Software & Tech Services,Software,Infrastructure Software
+163,MAQ AU Equity,MACQUARIE TECHNOLOGY GROUP L,2019-06-30 00:00:00,AUD,2002,Information Technology,Data Centers,Communications,Telecommunications,Telecommunications,Wireline Telecommunications
+164,GUD AU Equity,G.U.D. HOLDINGS LTD,2019-09-30 00:00:00,AUD,2002,Consumer Discretionary,Auto Parts,Consumer Discretionary,Consumer Discretionary Products,Automotive,Auto Parts
+165,UMG AU Equity,UNITED MALT GRP LTD,2019-12-29 00:00:00,AUD,2020,Consumer Staples,Malt,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
+166,GOZ AU Equity,GROWTHPOINT PROPERTIES AUSTR,2019-06-30 00:00:00,AUD,2008,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
+167,HMC AU Equity,HMC CAPITAL LTD,2019-06-30 00:00:00,AUD,2020,Real Estate,Real Estate Services,Real Estate,Real Estate,Real Estate Services,Real Estate Services
+168,CGC AU Equity,COSTA GROUP HOLDINGS LTD,2019-06-30 00:00:00,AUD,2016,Consumer Staples,Fruit Farming,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
+169,CDA AU Equity,CODAN LTD,2019-06-30 00:00:00,AUD,2004,Information Technology,Security Systems,Industrials,Industrial Products,Electrical Equipment,Comml & Res Bldg Equip & Sys
+170,KAR AU Equity,KAROON ENERGY LTD,2019-06-30 00:00:00,AUD,2004,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+171,WPR AU Equity,WAYPOINT REIT,2019-06-30 00:00:00,AUD,2016,Real Estate,Specialty REIT,Real Estate,Real Estate,REIT,Specialty REIT
+172,IFL AU Equity,INSIGNIA FINANCIAL LTD,2019-12-31 00:00:00,AUD,2004,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+173,ING AU Equity,INGHAMS GROUP LTD,2019-06-30 00:00:00,AUD,2017,Consumer Staples,Animal Production & Process,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
+174,MND AU Equity,MONADELPHOUS GROUP LTD,2019-12-31 00:00:00,AUD,2002,Industrials,Engineering Services,Industrials,Industrial Services,Engineering & Construction,Engineering Services
+175,NEU AU Equity,NEUREN PHARMACEUTICALS LTD,2019-06-30 00:00:00,AUD,2005,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
+176,DBI AU Equity,DALRYMPLE BAY INFRASTRUCTURE,2019-12-31 00:00:00,AUD,2020,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
+177,RRL AU Equity,REGIS RESOURCES LTD,2019-06-30 00:00:00,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+178,ABC AU Equity,ADBRI LTD,2019-06-30 00:00:00,AUD,2002,Materials,Cement,Materials,Materials,Construction Materials,Cement & Aggregates
+179,MAD AU Equity,MADER GROUP LTD,2019-12-31 00:00:00,AUD,2020,Industrials,Mining Services,Materials,Materials,Metals & Mining,Mining Services
+180,LFS AU Equity,LATITUDE GROUP HOLDINGS LTD,2019-06-30 00:00:00,AUD,2021,Financials,Life Insurance,Financials,Insurance,Insurance,Life Insurance
+181,LFG AU Equity,LIBERTY FINANCIAL GROUP,2019-06-30 00:00:00,AUD,2021,Financials,Consumer Finance,Financials,Financial Services,Specialty Finance,Consumer Finance
+182,MFG AU Equity,MAGELLAN FINANCIAL GROUP LTD,2019-06-30 00:00:00,AUD,2008,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+183,MMS AU Equity,MCMILLAN SHAKESPEARE LTD,2019-06-30 00:00:00,AUD,2004,Industrials,Wealth Management,Financials,Financial Services,Asset Management,Wealth Management
+184,SIQ AU Equity,SMARTGROUP CORP LTD,2019-09-30 00:00:00,AUD,2014,Industrials,Other Professional Services,Industrials,Industrial Services,Commercial Support Services,Professional Services
+185,MGH AU Equity,MAAS GROUP HOLDINGS LTD,2019-06-30 00:00:00,AUD,2017,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
+186,NWH AU Equity,NRW HOLDINGS LTD,2019-12-31 00:00:00,AUD,2008,Industrials,Mining Services,Materials,Materials,Metals & Mining,Mining Services
+187,NAN AU Equity,NANOSONICS LTD,2019-06-30 00:00:00,AUD,2007,Health Care,Cardiovascular Devices,Health Care,Health Care,Medical Equipment & Devices,Medical Devices
+188,SDR AU Equity,SITEMINDER LTD,2019-06-30 00:00:00,AUD,2022,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+189,ARF AU Equity,ARENA REIT,2019-06-30 00:00:00,AUD,2013,Real Estate,Specialty REIT,Real Estate,Real Estate,REIT,Specialty REIT
+190,HLI AU Equity,HELIA GROUP LTD,2019-06-30 00:00:00,AUD,2014,Financials,Mortgage Insurance,Financials,Financial Services,Specialty Finance,Mortgage Finance
+191,RED AU Equity,RED 5 LTD,2019-06-30 00:00:00,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+192,AD8 AU Equity,AUDINATE GROUP LTD,2019-06-30 00:00:00,AUD,2017,Information Technology,Application Software,Technology,Software & Tech Services,Software,Application Software
+193,CKF AU Equity,COLLINS FOODS LTD,2019-06-30 00:00:00,AUD,2012,Consumer Discretionary,Fast Food Rest - Owned,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Restaurants
+194,AX1 AU Equity,ACCENT GROUP LTD,2019-09-30 00:00:00,AUD,2005,Consumer Discretionary,Footwear Wholesalers,Consumer Discretionary,Retail & Whsle - Discretionary,Wholesale - Discretionary,Apparel & Footwear Whslrs
+195,HSN AU Equity,HANSEN TECHNOLOGIES LTD,2019-06-30 00:00:00,AUD,2002,Information Technology,Communications Software,Technology,Software & Tech Services,Software,Application Software
+196,DTL AU Equity,DATA#3 LTD,2019-06-30 00:00:00,AUD,2002,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+197,HLS AU Equity,HEALIUS LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Clinical Labs,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
+198,PRN AU Equity,PERENTI LTD,2019-06-30 00:00:00,AUD,2002,Materials,Metals Support Services,Materials,Materials,Metals & Mining,Mining Services
+199,OCL AU Equity,OBJECTIVE CORPORATION LTD,2019-06-30 00:00:00,AUD,2002,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+200,STX AU Equity,STRIKE ENERGY LTD,2019-06-30 00:00:00,AUD,2005,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+201,WGX AU Equity,WESTGOLD RESOURCES LTD,2019-06-30 00:00:00,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+202,PWH AU Equity,PWR HOLDINGS LTD,2019-03-31 00:00:00,AUD,2016,Consumer Discretionary,Auto Parts,Consumer Discretionary,Consumer Discretionary Products,Automotive,Auto Parts
+203,SLR AU Equity,SILVER LAKE RESOURCES LTD,2019-08-31 00:00:00,AUD,2008,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+204,CTT AU Equity,CETTIRE LTD,2019-06-30 00:00:00,AUD,2021,Consumer Discretionary,Online Marketplace,Consumer Discretionary,Retail & Whsle - Discretionary,E-Commerce Discretionary,Online Marketplace
+205,TUA AU Equity,TUAS LTD,2019-06-30 00:00:00,AUD,2020,Communication Services,Wireless Telecommunications,Communications,Telecommunications,Telecommunications,Wireless Telecommunications
+206,DYL AU Equity,DEEP YELLOW LTD,2019-06-30 00:00:00,AUD,2002,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
+207,ABB AU Equity,AUSSIE BROADBAND LTD,2019-06-30 00:00:00,AUD,2017,Communication Services,Wireline Telecommunications,Communications,Telecommunications,Telecommunications,Wireline Telecommunications
+208,JDO AU Equity,JUDO CAPITAL HOLDINGS LTD,2019-06-30 00:00:00,AUD,2022,Financials,Consumer Finance,Financials,Financial Services,Specialty Finance,Consumer Finance
+209,IRE AU Equity,IRESS LTD,2019-06-30 00:00:00,AUD,2002,Information Technology,Data & Analytics,Technology,Software & Tech Services,Technology Services,Information Services
+210,ELD AU Equity,ELDERS LTD,2019-06-25 00:00:00,AUD,2002,Consumer Staples,Agricultural Products Whslrs,Consumer Staples,Retail & Wholesale - Staples,Wholesale - Consumer Staples,Agricultural Products Whslrs
+211,CNI AU Equity,CENTURIA CAPITAL GROUP,2019-06-30 00:00:00,AUD,2002,Real Estate,Real Estate Investments,Financials,Financial Services,Asset Management,Private Equity
+212,CQE AU Equity,CHARTER HALL SOCIAL INFRASTR,2019-06-30 00:00:00,AUD,2003,Real Estate,Specialty REIT,Real Estate,Real Estate,REIT,Specialty REIT
+213,NCK AU Equity,NICK SCALI LTD,2019-01-31 00:00:00,AUD,2004,Consumer Discretionary,Home Furniture Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Home Products Stores
+214,JIN AU Equity,JUMBO INTERACTIVE LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Mobile & Online Gambling,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
+215,SGF AU Equity,SG FLEET GROUP LTD,2019-06-30 00:00:00,AUD,2014,Industrials,Auto Finance,Financials,Financial Services,Specialty Finance,Consumer Finance
+216,BGA AU Equity,BEGA CHEESE LTD,2019-06-30 00:00:00,AUD,2012,Consumer Staples,Dry & Condensed Dairy Products,Consumer Staples,Consumer Staple Products,Food,Packaged Food
+217,IMD AU Equity,IMDEX LTD,2019-06-30 00:00:00,AUD,2002,Materials,Metals Support Services,Materials,Materials,Metals & Mining,Mining Services
+218,CMW AU Equity,CROMWELL PROPERTY GROUP,2019-06-30 00:00:00,AUD,2008,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
+219,CIN AU Equity,CARLTON INVESTMENTS LIMITED,2019-06-30 00:00:00,AUD,2010,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+220,CCP AU Equity,CREDIT CORP GROUP LTD,2019-12-31 00:00:00,AUD,2002,Financials,Other Financial Services,Financials,Financial Services,Specialty Finance,Other Financial Services
+221,PNV AU Equity,POLYNOVO LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
+222,EHE AU Equity,ESTIA HEALTH LTD,2019-06-30 00:00:00,AUD,2015,Health Care,Nursing & Residential Care,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Facilities
+223,HCW AU Equity,HEALTHCO REIT,2019-06-30 00:00:00,AUD,2022,Real Estate,Health Care REIT,Real Estate,Real Estate,REIT,Health Care REIT
+224,SYA AU Equity,SAYONA MINING LTD,2019-06-30 00:00:00,AUD,2004,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+225,CXO AU Equity,CORE LITHIUM LTD,2019-06-30 00:00:00,AUD,2011,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+226,GEM AU Equity,G8 EDUCATION LTD,2019-06-30 00:00:00,AUD,2007,Consumer Discretionary,Educational Services,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Educational Services
+227,RSG AU Equity,RESOLUTE MINING LTD,2019-06-30 00:00:00,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+228,MAF AU Equity,MA FINANCIAL GROUP LTD,2019-06-30 00:00:00,AUD,2017,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+229,WAF AU Equity,WEST AFRICAN RESOURCES LTD,2019-06-30 00:00:00,AUD,2010,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+230,DXI AU Equity,DEXUS INDUSTRIA REIT,2019-06-30 00:00:00,AUD,2014,Real Estate,Industrial REIT,Real Estate,Real Estate,REIT,Industrial REIT
+231,AAC AU Equity,AUSTRALIAN AGRICULTURAL CO,2019-06-29 00:00:00,AUD,2002,Consumer Staples,Beef Cattle Ranch & Farming,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
+232,SLX AU Equity,SILEX SYSTEMS LTD,2019-06-30 00:00:00,AUD,2002,Industrials,Optical Instruments & Lens,Technology,Tech Hardware & Semiconductors,Technology Hardware,Specialty Technology Hardware
+233,WC8 AU Equity,WILDCAT RESOURCES LTD,2019-06-30 00:00:00,AUD,2005,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+234,REG AU Equity,REGIS HEALTHCARE LTD,2019-06-30 00:00:00,AUD,2015,Health Care,Nursing & Residential Care,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Facilities
+235,ERA AU Equity,ENERGY RESOURCES OF AUST,2019-06-30 00:00:00,AUD,2002,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
+236,CUV AU Equity,CLINUVEL PHARMACEUTICALS LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
+237,OML AU Equity,OOH!MEDIA LTD,2019-06-30 00:00:00,AUD,2014,Communication Services,Advertising & Marketing,Communications,Media,Advertising & Marketing,Advertising & Marketing
+238,RIC AU Equity,RIDLEY CORP LTD,2019-12-31 00:00:00,AUD,2002,Consumer Staples,Animal Feed,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
+239,CHN AU Equity,CHALICE MINING LTD,2019-12-31 00:00:00,AUD,2006,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+240,QAL AU Equity,QUALITAS LTD,2019-09-30 00:00:00,AUD,2022,Real Estate,Real Estate Services,Real Estate,Real Estate,Real Estate Services,Real Estate Services
+241,RFF AU Equity,RURAL FUNDS GROUP,2019-06-30 00:00:00,AUD,2014,Real Estate,Specialty REIT,Real Estate,Real Estate,REIT,Specialty REIT
+242,TPW AU Equity,TEMPLE & WEBSTER GROUP LTD,2019-06-30 00:00:00,AUD,2016,Consumer Discretionary,Specialty Online Retailers,Consumer Discretionary,Retail & Whsle - Discretionary,E-Commerce Discretionary,Specialty Online Retailers
+243,C79 AU Equity,CHRYSOS CORP LTD,2019-12-31 00:00:00,AUD,2022,Industrials,Application Software,Technology,Software & Tech Services,Software,Application Software
+244,LRS AU Equity,LATIN RESOURCES LTD,2019-06-30 00:00:00,AUD,2011,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+245,A4N AU Equity,ALPHA HPA LTD,2019-06-30 00:00:00,AUD,2008,Materials,Specialty Chemicals,Materials,Materials,Chemicals,Specialty Chemicals
+246,SIG AU Equity,SIGMA HEALTHCARE LTD,2019-07-31 00:00:00,AUD,2004,Health Care,Pharma & Specialty Distribution,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Supply Chain
+247,EQT AU Equity,EQT HOLDINGS LTD,2019-12-31 00:00:00,AUD,2002,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+248,PTM AU Equity,PLATINUM ASSET MANAGEMENT,2019-06-30 00:00:00,AUD,2007,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+249,COF AU Equity,CENTURIA OFFICE REIT,2019-06-30 00:00:00,AUD,2015,Real Estate,Office REIT,Real Estate,Real Estate,REIT,Office REIT
+250,DVP AU Equity,DEVELOP GLOBAL LTD,2019-06-30 00:00:00,AUD,2009,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+251,TIE AU Equity,TIETTO MINERALS LTD,2019-06-30 00:00:00,AUD,2018,Materials,Precious Metals,Materials,Materials,Metals & Mining,Precious Metals
+252,FPR AU Equity,FLEETPARTNERS GROUP LTD,2019-06-30 00:00:00,AUD,2015,Financials,Comml Equip Finance & Leasing,Financials,Financial Services,Specialty Finance,Commercial Finance
+253,IDX AU Equity,INTEGRAL DIAGNOSTICS LTD,2019-06-30 00:00:00,AUD,2016,Health Care,Radiology & Diagnostic Imaging,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
+254,WBT AU Equity,WEEBIT NANO LTD,2019-06-30 00:00:00,AUD,2012,Information Technology,Semiconductor Mfg,Technology,Tech Hardware & Semiconductors,Semiconductors,Semiconductor Mfg
+255,ASB AU Equity,AUSTAL LTD,2019-06-30 00:00:00,AUD,2002,Industrials,Shipbuilding,Industrials,Industrial Products,Transportation Equipment,Shipbuilding
+256,LNK AU Equity,LINK ADMINISTRATION HOLDINGS,2019-03-31 00:00:00,AUD,2016,Industrials,Asset & Investment Servicing,Financials,Financial Services,Institutional Financial Svcs,"Instl Trust, Fiduciary & Custody"
+257,SNL AU Equity,SUPPLY NETWORK LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Auto Parts,Consumer Discretionary,Consumer Discretionary Products,Automotive,Auto Parts
+258,MGX AU Equity,MOUNT GIBSON IRON LTD,2019-07-27 00:00:00,AUD,2002,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
+259,PPC AU Equity,PEET LTD,2019-06-30 00:00:00,AUD,2005,Real Estate,Multi Asset Class Own & Develop,Real Estate,Real Estate,Real Estate Owners & Developers,Multi Asset Class Own & Develop
+260,PPM AU Equity,PEPPER MONEY LTD/AU,2019-12-31 00:00:00,AUD,2021,Financials,Mortgage Finance,Financials,Financial Services,Specialty Finance,Mortgage Finance
+261,ACL AU Equity,AUSTRALIAN CLINICAL LABS LTD,2019-12-31 00:00:00,AUD,2021,Health Care,Clinical Labs,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
+262,SSM AU Equity,SERVICE STREAM LTD,2019-06-30 00:00:00,AUD,2005,Industrials,Communication Infra Const,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
+263,IFM AU Equity,INFOMEDIA LTD,2019-12-31 00:00:00,AUD,2002,Information Technology,Professional Book Publishers,Communications,Media,Publishing & Broadcasting,Publishing
+264,PFP AU Equity,PROPEL FUNERAL PARTNERS LTD,2019-06-30 00:00:00,AUD,2018,Consumer Discretionary,Cemeteries & Crematories,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Funeral Services
+265,MTAL US Equity,METALS ACQUISITION LTD-A,2019-12-31 00:00:00,AUD,2021,Materials,Copper,Materials,Materials,Metals & Mining,Base Metals
+266,CBO AU Equity,COBRAM ESTATE OLIVES LTD,2019-06-30 00:00:00,AUD,2022,Consumer Staples,Grain & Oilseed Milling,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
+267,RPL AU Equity,REGAL PARTNERS LTD,2019-12-31 00:00:00,AUD,2019,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+268,MVF AU Equity,MONASH IVF GROUP LTD,2019-06-30 00:00:00,AUD,2014,Health Care,Specialty Facilities,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Facilities
+269,HPI AU Equity,HOTEL PROPERTY INVESTMENTS,2019-06-30 00:00:00,AUD,2014,Real Estate,Multi Asset Class Own & Develop,Real Estate,Real Estate,Real Estate Owners & Developers,Multi Asset Class Own & Develop
+270,ASG AU Equity,AUTOSPORTS GROUP LTD,2019-06-30 00:00:00,AUD,2017,Consumer Discretionary,Automotive Retailers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
+271,CXL AU Equity,CALIX LTD,2019-06-30 00:00:00,AUD,2019,Materials,Mineral & Precious Stone Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+272,PDI AU Equity,PREDICTIVE DISCOVERY LTD,2019-03-31 00:00:00,AUD,2011,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+273,AQZ AU Equity,ALLIANCE AVIATION SERVICES L,2019-06-30 00:00:00,AUD,2012,Industrials,Charter Airline - Full Svc,Industrials,Industrial Services,Transportation & Logistics,Airlines
+274,MRM AU Equity,MMA OFFSHORE LTD,2019-12-31 00:00:00,AUD,2002,Energy,Marine Shipping,Industrials,Industrial Services,Transportation & Logistics,Marine Shipping
+275,GRR AU Equity,GRANGE RESOURCES LTD,2019-06-30 00:00:00,AUD,2002,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
+276,MEI AU Equity,METEORIC RESOURCES NL,2019-06-30 00:00:00,AUD,2005,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+277,PAC AU Equity,PACIFIC CURRENT GROUP LTD,2019-06-30 00:00:00,AUD,2002,Financials,Wealth Management,Financials,Financial Services,Asset Management,Wealth Management
+278,SHV AU Equity,SELECT HARVESTS LTD,2019-06-30 00:00:00,AUD,2002,Consumer Staples,Tree Nut Farming,Consumer Staples,Consumer Staple Products,Food,Agricultural Producers
+279,GWA AU Equity,GWA GROUP LTD,2019-06-30 00:00:00,AUD,2002,Industrials,Plumbing Fixtures,Consumer Discretionary,Consumer Discretionary Products,Home Construction,Building Products
+280,KGN AU Equity,KOGAN.COM LTD,2019-06-30 00:00:00,AUD,2017,Consumer Discretionary,Online Marketplace,Consumer Discretionary,Retail & Whsle - Discretionary,E-Commerce Discretionary,Online Marketplace
+281,NXL AU Equity,NUIX LTD,2019-06-30 00:00:00,AUD,2021,Information Technology,Database Software,Technology,Software & Tech Services,Software,Infrastructure Software
+282,SYR AU Equity,SYRAH RESOURCES LTD,2019-06-30 00:00:00,AUD,2008,Materials,Mineral Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+283,TYR AU Equity,TYRO PAYMENTS LTD,2019-06-30 00:00:00,AUD,2020,Financials,Financial Transaction Processors,Technology,Software & Tech Services,Technology Services,Data & Transaction Processors
+284,AEF AU Equity,AUSTRALIAN ETHICAL INVT LTD,2019-06-30 00:00:00,AUD,2003,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+285,29M AU Equity,29METALS LTD,2019-12-31 00:00:00,AUD,2021,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+286,OBL AU Equity,OMNI BRIDGEWAY LTD,2019-06-30 00:00:00,AUD,2002,Financials,Other Financial Services,Financials,Financial Services,Specialty Finance,Other Financial Services
+287,EML AU Equity,EML PAYMENTS LTD,2019-06-30 00:00:00,AUD,2006,Financials,Financial Transaction Processors,Technology,Software & Tech Services,Technology Services,Data & Transaction Processors
+288,MYR AU Equity,MYER HOLDINGS LTD,2019-06-30 00:00:00,AUD,2010,Consumer Discretionary,High-End Department Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Department Stores
+289,RDY AU Equity,READYTECH HOLDINGS LTD,2019-06-30 00:00:00,AUD,2019,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+290,BLX AU Equity,BEACON LIGHTING GROUP LTD,2019-06-30 00:00:00,AUD,2014,Consumer Discretionary,Lighting Fixture,Industrials,Industrial Products,Electrical Equipment,Comml & Res Bldg Equip & Sys
+291,SWM AU Equity,SEVEN WEST MEDIA LTD,2019-06-30 00:00:00,AUD,2002,Communication Services,Radio Stations,Communications,Media,Publishing & Broadcasting,Local TV & Radio Broadcast
+292,PWR AU Equity,PETER WARREN AUTOMOTIVE HOLD,2019-12-31 00:00:00,AUD,2016,Consumer Discretionary,Car Dealers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
+293,HTA AU Equity,HUTCHISON TELECOMM (AUST),2019-06-30 00:00:00,AUD,2002,Communication Services,Wireless Telecommunications,Communications,Telecommunications,Telecommunications,Wireless Telecommunications
+294,SGLLV AU Equity,RICEGROWERS LIMITED,2019-12-31 00:00:00,AUD,2019,Consumer Staples,Rice,Consumer Staples,Consumer Staple Products,Food,Packaged Food
+295,ARU AU Equity,ARAFURA RARE EARTHS LTD,2019-06-30 00:00:00,AUD,2004,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+296,TLG AU Equity,TALGA GROUP LTD,2019-06-30 00:00:00,AUD,2011,Materials,Functional Additives,Materials,Materials,Chemicals,Specialty Chemicals
+297,CVL SP Equity,CIVMEC LTD,2019-12-31 00:00:00,AUD,2012,Industrials,Construction & Mining Machinery,Industrials,Industrial Products,Machinery,Construction & Mining Machinery
+298,BMN AU Equity,BANNERMAN ENERGY LTD,2019-06-30 00:00:00,AUD,2005,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
+299,OFX AU Equity,OFX GROUP LTD,2019-06-30 00:00:00,AUD,2014,Financials,Financial Transaction Processors,Technology,Software & Tech Services,Technology Services,Data & Transaction Processors
+300,IMM AU Equity,IMMUTEP LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
+301,JMS AU Equity,JUPITER MINES LTD,2019-06-30 00:00:00,AUD,2005,Materials,Manganese,Materials,Materials,Metals & Mining,Base Metals
+302,RMC AU Equity,RESIMAC GROUP LTD,2019-06-30 00:00:00,AUD,2002,Financials,Mortgage Lenders,Financials,Financial Services,Specialty Finance,Mortgage Finance
+303,RNU AU Equity,RENASCOR RESOURCES LTD,2019-06-30 00:00:00,AUD,2011,Materials,Mineral & Precious Stone Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+304,CWP AU Equity,CEDAR WOODS PROPERTIES LTD,2019-12-31 00:00:00,AUD,2002,Real Estate,Residential Owners & Developers,Real Estate,Real Estate,Real Estate Owners & Developers,Residential Owners & Developers
+305,LYL AU Equity,LYCOPODIUM LTD,2019-06-30 00:00:00,AUD,2005,Industrials,Engineering Services,Industrials,Industrial Services,Engineering & Construction,Engineering Services
+306,ALK AU Equity,ALKANE RESOURCES LTD,2019-12-31 00:00:00,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+307,SPR AU Equity,SPARTAN RESOURCES LTD/AUSTRA,2019-06-30 00:00:00,AUD,2010,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+308,HLO AU Equity,HELLOWORLD TRAVEL LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Travel Agencies,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Travel Services
+309,BLY AU Equity,BOART LONGYEAR GROUP LTD-CDI,2019-12-31 00:00:00,AUD,2007,Materials,Metals Support Services,Materials,Materials,Metals & Mining,Mining Services
+310,AGI AU Equity,AINSWORTH GAME TECHNOLOGY LT,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Casinos & Gaming,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
+311,AFG AU Equity,AUSTRALIAN FINANCE GROUP LTD,2019-12-31 00:00:00,AUD,2015,Financials,Mortgage Loan Brokers,Financials,Financial Services,Specialty Finance,Mortgage Finance
+312,GNG AU Equity,GR ENGINEERING SERVICES LTD,2019-06-30 00:00:00,AUD,2011,Materials,Engineering Services,Industrials,Industrial Services,Engineering & Construction,Engineering Services
+313,CVW AU Equity,CLEARVIEW WEALTH LTD,2019-06-30 00:00:00,AUD,2004,Financials,Life Insurance,Financials,Insurance,Insurance,Life Insurance
+314,KSC AU Equity,K & S CORP LTD,2019-06-30 00:00:00,AUD,2002,Industrials,Logistics Services,Industrials,Industrial Services,Transportation & Logistics,Logistics Services
+315,DCN AU Equity,DACIAN GOLD LTD,2019-06-30 00:00:00,AUD,2013,Materials,Precious Metals,Materials,Materials,Metals & Mining,Precious Metals
+316,BCI AU Equity,BCI MINERALS LTD,2019-06-30 00:00:00,AUD,2007,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
+317,MAH AU Equity,MACMAHON HOLDINGS LTD,2019-06-30 00:00:00,AUD,2002,Materials,Mining Services,Materials,Materials,Metals & Mining,Mining Services
+318,REP AU Equity,RAM ESSENTIAL SERVICES PROPE,2019-06-30 00:00:00,AUD,2022,Real Estate,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+319,IPG AU Equity,IPD GROUP LTD,2019-06-30 00:00:00,AUD,2018,Industrials,Technology Distributors,Technology,Tech Hardware & Semiconductors,Technology Hardware,Technology Distributors
+320,LPI AU Equity,LITHIUM POWER INTERNATIONAL,2019-06-30 00:00:00,AUD,2016,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+321,NVX AU Equity,NOVONIX LTD,2019-06-30 00:00:00,AUD,2016,Information Technology,Energy Storage Systems,Energy,Renewable Energy,Renewable Energy,Renewable Energy Equipment
+322,3PL AU Equity,3P LEARNING LTD,2019-06-30 00:00:00,AUD,2015,Consumer Discretionary,Educational Services,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Educational Services
+323,RUL AU Equity,RPMGLOBAL HOLDINGS LTD,2019-06-30 00:00:00,AUD,2008,Information Technology,Technology Consulting,Technology,Software & Tech Services,Technology Services,IT Services
+324,SRG AU Equity,SRG GLOBAL LTD,2019-12-31 00:00:00,AUD,2008,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
+325,IVZ AU Equity,INVICTUS ENERGY LTD,2019-12-31 00:00:00,AUD,2012,Energy,Natural Gas Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+326,MYS AU Equity,MYSTATE LTD,2019-06-30 00:00:00,AUD,2010,Financials,Banks,Financials,Banking,Banking,Banks
+327,MHJ AU Equity,MICHAEL HILL INTERNATIONAL L,2019-06-30 00:00:00,AUD,2017,Consumer Discretionary,Watch & Jewelry Design,Consumer Discretionary,Consumer Discretionary Products,Apparel & Textile Products,"Apparel, Footwear & Acc Design"
+328,BFG AU Equity,BELL FINANCIAL GROUP LTD,2019-06-30 00:00:00,AUD,2007,Financials,Institutional Brokerage,Financials,Financial Services,Institutional Financial Svcs,Institutional Brokerage
+329,DLI AU Equity,DELTA LITHIUM LTD,2019-06-30 00:00:00,AUD,2019,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+330,MYX AU Equity,MAYNE PHARMA GROUP LTD,2019-06-30 00:00:00,AUD,2007,Health Care,Generic Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
+331,LOT AU Equity,LOTUS RESOURCES LTD,2019-06-30 00:00:00,AUD,2009,Materials,Uranium,Materials,Materials,Metals & Mining,Base Metals
+332,GL1 AU Equity,GLOBAL LITHIUM RESOURCES LTD,2019-12-31 00:00:00,AUD,2021,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+333,AVR AU Equity,ANTERIS TECHNOLOGIES LTD,2019-06-30 00:00:00,AUD,2004,Health Care,Interventional Cardiology,Health Care,Health Care,Medical Equipment & Devices,Medical Devices
+334,RHI AU Equity,RED HILL MINERALS LTD,2019-06-30 00:00:00,AUD,2006,Materials,Iron Ore Mining,Materials,Materials,Metals & Mining,Iron
+335,DXC AU Equity,DEXUS CONVENIENCE RETAIL REI,2019-06-30 00:00:00,AUD,2018,Real Estate,Retail REIT,Real Estate,Real Estate,REIT,Retail REIT
+336,EHL AU Equity,EMECO HOLDINGS LTD,2019-06-30 00:00:00,AUD,2007,Industrials,Industrial Rental Services,Industrials,Industrial Services,Industrial Support Services,Industrial Wholesale & Rental
+337,IMU AU Equity,IMUGENE LTD,2019-12-31 00:00:00,AUD,2002,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
+338,LAU AU Equity,LINDSAY AUSTRALIA LTD,2019-06-30 00:00:00,AUD,2002,Industrials,Trucking,Industrials,Industrial Services,Transportation & Logistics,Trucking
+339,SLC AU Equity,SUPERLOOP LTD,2019-06-30 00:00:00,AUD,2015,Communication Services,Wireline Telecommunications,Communications,Telecommunications,Telecommunications,Wireline Telecommunications
+340,BVS AU Equity,BRAVURA SOLUTIONS LTD,2019-12-31 00:00:00,AUD,2017,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+341,KCN AU Equity,KINGSGATE CONSOLIDATED LTD,2019-06-30 00:00:00,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+342,CDP AU Equity,CARINDALE PROPERTY TRUST,2019-06-30 00:00:00,AUD,2002,Real Estate,Regional Mall REIT,Real Estate,Real Estate,REIT,Retail REIT
+343,TER AU Equity,TERRACOM LTD,2019-06-30 00:00:00,AUD,2011,Energy,Coal Mining,Materials,Materials,Metals & Mining,Coal Mining
+344,INR AU Equity,IONEER LTD,2019-06-30 00:00:00,AUD,2008,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+345,APZ AU Equity,ASPEN GROUP,2019-06-30 00:00:00,AUD,2002,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
+346,BRN AU Equity,BRAINCHIP HOLDINGS LTD,2019-06-30 00:00:00,AUD,2011,Information Technology,Technology Distributors,Technology,Tech Hardware & Semiconductors,Technology Hardware,Technology Distributors
+347,SRV AU Equity,SERVCORP LTD,2019-06-30 00:00:00,AUD,2002,Real Estate,Other Professional Services,Industrials,Industrial Services,Commercial Support Services,Professional Services
+348,MSB AU Equity,MESOBLAST LTD,2019-12-31 00:00:00,AUD,2005,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
+349,DUR AU Equity,DURATEC LTD,2019-12-31 00:00:00,AUD,2018,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
+350,NGI AU Equity,NAVIGATOR GLOBAL INVESTMENTS,2019-06-30 00:00:00,AUD,2006,Financials,Investment Management,Financials,Financial Services,Asset Management,Investment Management
+351,GDG AU Equity,GENERATION DEVELOPMENT GROUP,2019-12-31 00:00:00,AUD,2008,Financials,Investment Companies,Financials,Financial Services,Asset Management,Investment Companies
+352,IGL AU Equity,IVE GROUP LTD,2019-06-30 00:00:00,AUD,2016,Communication Services,Advertising & Marketing,Communications,Media,Advertising & Marketing,Advertising & Marketing
+353,CVC AU Equity,CVC LTD,2019-06-30 00:00:00,AUD,2002,Financials,Real Estate Investments,Financials,Financial Services,Asset Management,Private Equity
+354,GRX AU Equity,GREENEX METALS LTD,2019-06-30 00:00:00,AUD,2002,Materials,Copper,Materials,Materials,Metals & Mining,Base Metals
+355,PPS AU Equity,PRAEMIUM LTD,2019-12-31 00:00:00,AUD,2006,Information Technology,Internet Media & Services,Communications,Media,Internet Media & Services,Internet Media & Services
+356,GDI AU Equity,GDI PROPERTY GROUP,2019-06-30 00:00:00,AUD,2014,Real Estate,Office REIT,Real Estate,Real Estate,REIT,Office REIT
+357,OBM AU Equity,ORA BANDA MINING LTD,2019-06-30 00:00:00,AUD,2005,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+358,SOLG LN Equity,SOLGOLD PLC,2019-06-30 00:00:00,AUD,2006,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+359,CVN AU Equity,CARNARVON ENERGY LTD,2019-06-30 00:00:00,AUD,2002,Energy,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+360,ZIP AU Equity,ZIP CO LTD,2019-06-30 00:00:00,AUD,2010,Financials,Financial Transaction Processors,Technology,Software & Tech Services,Technology Services,Data & Transaction Processors
+361,MAU AU Equity,MAGNETIC RESOURCES NL,2019-06-30 00:00:00,AUD,2007,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+362,D2O AU Equity,DUXTON WATER LTD,2019-06-30 00:00:00,AUD,2016,Utilities,Water Utilities,Utilities,Utilities,Gas & Water Utilities,Water Utilities
+363,AKP AU Equity,AUDIO PIXELS HOLDINGS LTD,2019-06-30 00:00:00,AUD,2005,Consumer Discretionary,Audio Equipment,Technology,Tech Hardware & Semiconductors,Technology Hardware,Consumer Electronics
+364,CGS AU Equity,COGSTATE LTD,2019-06-30 00:00:00,AUD,2004,Health Care,Contract Research,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
+365,MLX AU Equity,METALS X LTD,2019-06-30 00:00:00,AUD,2005,Materials,Tin,Materials,Materials,Metals & Mining,Base Metals
+366,UNI AU Equity,UNIVERSAL STORE HOLDINGS LTD,2019-06-30 00:00:00,AUD,2017,Consumer Discretionary,Family Clothing Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Specialty Apparel Stores
+367,COE AU Equity,COOPER ENERGY LTD,2019-06-30 00:00:00,AUD,2002,Energy,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+368,HZN AU Equity,HORIZON OIL LTD,2019-06-30 00:00:00,AUD,2002,Energy,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+369,LGL AU Equity,LYNCH GROUP HOLDINGS LTD,2019-06-30 00:00:00,AUD,2017,Consumer Staples,Florist Supplies Wholesalers,Consumer Discretionary,Retail & Whsle - Discretionary,Wholesale - Discretionary,Other Wholesalers
+370,COG AU Equity,COG FINANCIAL SERVICES LTD,2019-06-30 00:00:00,AUD,2003,Financials,Investment Holding Companies,Financials,Financial Services,Asset Management,Investment Companies
+371,HLA AU Equity,HEALTHIA LTD,2019-06-30 00:00:00,AUD,2019,Health Care,Health Care Services,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
+372,SVM AU Equity,SOVEREIGN METALS LTD,2019-06-30 00:00:00,AUD,2007,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+373,SVL AU Equity,SILVER MINES LTD,2019-06-30 00:00:00,AUD,2007,Materials,Silver,Materials,Materials,Metals & Mining,Precious Metals
+374,WR1 AU Equity,WINSOME RESOURCES LTD,2019-06-30 00:00:00,AUD,2022,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+375,BCB AU Equity,BOWEN COKING COAL LTD,2019-06-30 00:00:00,AUD,2016,Materials,Thermal Coal,Materials,Materials,Metals & Mining,Coal Mining
+376,IPX AU Equity,IPERIONX LTD,2019-06-30 00:00:00,AUD,2018,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+377,A1N AU Equity,ARN MEDIA LTD,2019-06-30 00:00:00,AUD,2002,Communication Services,Radio Broadcasting,Communications,Media,Publishing & Broadcasting,Local TV & Radio Broadcast
+378,PGH AU Equity,PACT GROUP HOLDINGS LTD,2019-06-30 00:00:00,AUD,2014,Materials,Plastic Containers & Packaging,Materials,Materials,Containers & Packaging,Containers & Packaging
+379,PBH AU Equity,POINTSBET HOLDINGS LTD,2019-06-30 00:00:00,AUD,2019,Consumer Discretionary,Betting,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Casinos & Gaming
+380,ABA AU Equity,AUSWIDE BANK LTD,2019-06-30 00:00:00,AUD,2002,Financials,Mortgage Lenders,Financials,Financial Services,Specialty Finance,Mortgage Finance
+381,1712 HK Equity,DRAGON MINING LTD,2019-06-30 00:00:00,AUD,2018,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+382,ACF AU Equity,ACROW FORMWORK AND CONSTRUCT,2019-06-30 00:00:00,AUD,2008,Industrials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
+383,SYM AU Equity,SYMBIO HOLDINGS LTD,2019-06-30 00:00:00,AUD,2006,Information Technology,Communications Software,Technology,Software & Tech Services,Software,Application Software
+384,ASM AU Equity,AUSTRALIAN STRATEGIC MATERIA,2019-06-30 00:00:00,AUD,2021,Materials,Rare Earth,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+385,SVR AU Equity,SOLVAR LTD,2019-06-30 00:00:00,AUD,2007,Financials,Consumer Finance,Financials,Financial Services,Specialty Finance,Consumer Finance
+386,IPD AU Equity,IMPEDIMED LTD,2019-06-30 00:00:00,AUD,2008,Health Care,Medical Equipment,Health Care,Health Care,Medical Equipment & Devices,Medical Equipment
+387,SFX AU Equity,SHEFFIELD RESOURCES LTD,2019-06-30 00:00:00,AUD,2011,Materials,Mineral & Precious Stone Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+388,TBN AU Equity,TAMBORAN RESOURCES LTD,2019-06-30 00:00:00,AUD,2022,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+389,CTM AU Equity,CENTAURUS METALS LTD,2019-12-31 00:00:00,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+390,BBN AU Equity,BABY BUNTING GROUP LTD,2019-06-30 00:00:00,AUD,2016,Consumer Discretionary,Toy & Game Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Other Spec Retail - Discr
+391,CAT AU Equity,CATAPULT GROUP INTERNATIONAL,2019-06-30 00:00:00,AUD,2015,Information Technology,Measurement Instruments,Industrials,Industrial Products,Electrical Equipment,Measurement Instruments
+392,DGL AU Equity,DGL GROUP LTD/AU,2019-12-31 00:00:00,AUD,2021,Materials,Specialty Chemicals,Materials,Materials,Chemicals,Specialty Chemicals
+393,LKE AU Equity,LAKE RESOURCES NL,2019-06-30 00:00:00,AUD,2002,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+394,SFC AU Equity,SCHAFFER CORP LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Seating & Trim,Consumer Discretionary,Consumer Discretionary Products,Automotive,Auto Parts
+395,ECF AU Equity,ELANOR COMMERCIAL PROPERTY F,2019-06-30 00:00:00,AUD,2020,Real Estate,Private Equity,Financials,Financial Services,Asset Management,Private Equity
+396,CRD AU Equity,CONRAD ASIA ENERGY LTD-CDI,2019-06-30 00:00:00,AUD,2022,Energy,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+397,AGY AU Equity,ARGOSY MINERALS LTD,2019-06-30 00:00:00,AUD,2002,Materials,Specialty Chemicals,Materials,Materials,Chemicals,Specialty Chemicals
+398,GLN AU Equity,GALAN LITHIUM LTD,2019-06-30 00:00:00,AUD,2012,Materials,Lithium,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+399,MAY AU Equity,MELBANA ENERGY LTD,2019-06-30 00:00:00,AUD,2002,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+400,GNX AU Equity,GENEX POWER LTD,2019-06-30 00:00:00,AUD,2016,Utilities,Power Generation,Utilities,Utilities,Electric Utilities,Power Generation
+401,BDM AU Equity,BURGUNDY DIAMOND MINES LTD,2019-06-30 00:00:00,AUD,2013,Materials,Diamonds,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+402,OPT AU Equity,OPTHEA LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
+403,GDF AU Equity,GARDA PROPERTY GROUP,2019-12-31 00:00:00,AUD,2016,Real Estate,Other Financial Services,Financials,Financial Services,Specialty Finance,Other Financial Services
+404,SXL AU Equity,SOUTHERN CROSS MEDIA GROUP L,2019-06-30 00:00:00,AUD,2006,Communication Services,Adv Rev - Local TV Broadcast,Communications,Media,Publishing & Broadcasting,Local TV & Radio Broadcast
+405,ORR AU Equity,ORECORP LTD,2019-06-30 00:00:00,AUD,2012,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+406,ALG AU Equity,ARDENT LEISURE GROUP LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Entertainment Facilities,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Entertainment Facilities
+407,ADH AU Equity,ADAIRS LTD,2019-06-30 00:00:00,AUD,2015,Consumer Discretionary,Home Furniture Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Home Products Stores
+408,URF AU Equity,US MASTERS RESIDENTIAL PROPE,2019-06-30 00:00:00,AUD,2011,Real Estate,Residential REIT,Real Estate,Real Estate,REIT,Residential REIT
+409,QGL AU Equity,QUANTUM GRAPHITE LTD,2019-06-30 00:00:00,AUD,2014,Materials,Mineral & Precious Stone Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+410,ASN AU Equity,ANSON RESOURCES LTD,2019-06-30 00:00:00,AUD,2011,Materials,Mineral Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+411,DUG AU Equity,DUG TECHNOLOGY LTD,2019-06-30 00:00:00,AUD,2021,Information Technology,IT Services,Technology,Software & Tech Services,Technology Services,IT Services
+412,QOR AU Equity,QORIA LTD,2019-06-30 00:00:00,AUD,2017,Information Technology,Infrastructure Software,Technology,Software & Tech Services,Software,Infrastructure Software
+413,SXE AU Equity,SOUTHERN CROSS ELECTRICAL,2019-06-30 00:00:00,AUD,2008,Industrials,Building Construction,Industrials,Industrial Services,Engineering & Construction,Building Construction
+414,PYC AU Equity,PYC THERAPEUTICS LTD,2019-06-30 00:00:00,AUD,2005,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
+415,HUM AU Equity,HUMM GROUP LTD,2019-06-30 00:00:00,AUD,2007,Financials,Credit Card Lending,Financials,Financial Services,Specialty Finance,Consumer Finance
+416,CAJ AU Equity,CAPITOL HEALTH LTD,2019-06-30 00:00:00,AUD,2006,Health Care,Radiology & Diagnostic Imaging,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
+417,SEE LN Equity,SEEING MACHINES LTD,2019-12-31 00:00:00,AUD,2006,Information Technology,Computer Hardware & Storage,Technology,Tech Hardware & Semiconductors,Technology Hardware,Computer Hardware & Storage
+418,IREN US Equity,IRIS ENERGY LTD,2019-06-30 00:00:00,AUD,2022,Information Technology,Renewable Energy Generation,Utilities,Utilities,Electric Utilities,Power Generation
+419,TRJ AU Equity,TRAJAN GROUP HOLDINGS LTD,2019-12-31 00:00:00,AUD,2021,Health Care,Medical Devices,Health Care,Health Care,Medical Equipment & Devices,Medical Devices
+420,BOT AU Equity,BOTANIX PHARMACEUTICALS LTD,2019-06-30 00:00:00,AUD,2002,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
+421,TRS AU Equity,REJECT SHOP LTD/THE,2019-06-30 00:00:00,AUD,2004,Consumer Discretionary,Mid-Tier Department Stores,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Department Stores
+422,GNP AU Equity,GENUSPLUS GROUP LTD,2019-06-30 00:00:00,AUD,2021,Industrials,Industrial Maintenance Svcs,Industrials,Industrial Services,Industrial Support Services,Industrial Maintenance Svcs
+423,PBP AU Equity,PROBIOTEC LTD,2019-12-31 00:00:00,AUD,2007,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
+424,WOT AU Equity,WOTSO PROPERTY,2019-06-30 00:00:00,AUD,2012,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
+425,AGE AU Equity,ALLIGATOR ENERGY LTD,2019-06-30 00:00:00,AUD,2011,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
+426,ATA AU Equity,ATTURRA LTD,2019-06-30 00:00:00,AUD,2022,Information Technology,IT Services,Technology,Software & Tech Services,Technology Services,IT Services
+427,4DS AU Equity,4DS MEMORY LTD,2019-06-30 00:00:00,AUD,2011,Information Technology,Memory ICs,Technology,Tech Hardware & Semiconductors,Semiconductors,Semiconductor Devices
+428,VIT AU Equity,VITURA HEALTH LTD,2019-06-30 00:00:00,AUD,2020,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
+429,NTU AU Equity,NORTHERN MINERALS LTD,2019-06-30 00:00:00,AUD,2007,Materials,Rare Earth,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+430,PSQ AU Equity,PACIFIC SMILES GROUP LTD,2019-06-30 00:00:00,AUD,2015,Health Care,Outpatient Health Services,Health Care,Health Care,Health Care Facilities & Svcs,Health Care Services
+431,A2B AU Equity,A2B AUSTRALIA LTD,2019-06-30 00:00:00,AUD,2002,Industrials,Taxi Services,Industrials,Industrial Services,Transportation & Logistics,Transit Services
+432,CYC AU Equity,CYCLOPHARM LTD,2019-06-30 00:00:00,AUD,2007,Health Care,Imaging Equipment,Health Care,Health Care,Medical Equipment & Devices,Medical Equipment
+433,KPG AU Equity,KELLY PARTNERS GROUP HOLDING,2019-06-30 00:00:00,AUD,2017,Industrials,Accounting Services,Industrials,Industrial Services,Commercial Support Services,Professional Services
+434,LIN AU Equity,LINDIAN RESOURCES LTD,2019-06-30 00:00:00,AUD,2002,Materials,Bauxite Mining,Materials,Materials,Metals & Mining,Base Metals
+435,AEE AU Equity,AURA ENERGY LTD,2019-06-30 00:00:00,AUD,2006,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
+436,LGI AU Equity,LGI LTD/AUSTRALIA,2019-06-30 00:00:00,AUD,2018,Utilities,Solid Waste Collection & Treat,Industrials,Industrial Services,Commercial Support Services,Waste Management
+437,BRI AU Equity,BIG RIVER INDUSTRIES LTD,2019-06-30 00:00:00,AUD,2017,Materials,Building Materials Dealers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Home Products Stores
+438,PLY AU Equity,PLAYSIDE STUDIOS LTD,2019-12-31 00:00:00,AUD,2021,Communication Services,Video Games,Communications,Media,Entertainment Content,Video Games
+439,ENN AU Equity,ELANOR INVESTOR GROUP,2019-06-30 00:00:00,AUD,2015,Consumer Discretionary,Hotel Owners & Developers,Real Estate,Real Estate,Real Estate Owners & Developers,Hotel Owners & Developers
+440,NXD AU Equity,NEXTED GROUP LTD,2019-12-31 00:00:00,AUD,2010,Consumer Discretionary,Vocational Schools,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Educational Services
+441,FRI AU Equity,FINBAR GROUP LTD,2019-06-30 00:00:00,AUD,2002,Real Estate,Apartment Owners & Develop,Real Estate,Real Estate,Real Estate Owners & Developers,Residential Owners & Developers
+442,SLA AU Equity,SILK LASER AUSTRALIA LTD,2019-06-30 00:00:00,AUD,2021,Health Care,Beauty Salons,Consumer Discretionary,Consumer Discretionary Services,Consumer Services,Personal Care Services
+443,CII AU Equity,CI RESOURCES LTD,2019-06-30 00:00:00,AUD,2002,Materials,Phosphate Rock,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+444,FID AU Equity,FIDUCIAN GROUP LTD,2019-06-30 00:00:00,AUD,2015,Financials,Fund of Funds,Financials,Financial Services,Asset Management,Private Equity
+445,NPR AU Equity,NEWMARK PROPERTY REIT,2019-06-30 00:00:00,AUD,2022,Real Estate,Multi Asset Class REIT,Real Estate,Real Estate,REIT,Multi Asset Class REIT
+446,WGN AU Equity,WAGNERS HOLDING CO LTD,2019-06-30 00:00:00,AUD,2018,Materials,Infrastructure Construction,Industrials,Industrial Services,Engineering & Construction,Infrastructure Construction
+447,4DX AU Equity,4DMEDICAL LTD,2019-06-30 00:00:00,AUD,2021,Health Care,Health Care Software,Technology,Software & Tech Services,Software,Application Software
+448,FDV AU Equity,FRONTIER DIGITAL VENTURES LT,2019-06-30 00:00:00,AUD,2016,Communication Services,Internet Media & Services,Communications,Media,Internet Media & Services,Internet Media & Services
+449,PAR AU Equity,PARADIGM BIOPHARMACEUTICALS,2019-06-30 00:00:00,AUD,2016,Health Care,Biotech,Health Care,Health Care,Biotech & Pharma,Biotech
+450,DSE AU Equity,DROPSUITE LTD,2019-06-30 00:00:00,AUD,2002,Information Technology,Cloud & Virtualization Software,Technology,Software & Tech Services,Software,Infrastructure Software
+451,STK AU Equity,STRICKLAND METALS LTD,2019-06-30 00:00:00,AUD,2006,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+452,AUT AU Equity,AUTECO MINERALS LTD,2019-06-30 00:00:00,AUD,2006,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+453,M7T AU Equity,MACH7 TECHNOLOGIES LTD,2019-06-30 00:00:00,AUD,2006,Health Care,Health Care Software,Technology,Software & Tech Services,Software,Application Software
+454,BTH AU Equity,BIGTINCAN HOLDINGS LTD,2019-06-30 00:00:00,AUD,2017,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+455,TBR AU Equity,TRIBUNE RESOURCES LTD,2019-06-30 00:00:00,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+456,COI AU Equity,COMET RIDGE LTD,2019-06-30 00:00:00,AUD,2004,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+457,HE8 AU Equity,HELIOS ENERGY LTD,2019-06-30 00:00:00,AUD,2011,Energy,Crude Oil & Natural Gas E&P,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+458,PNR AU Equity,PANTORO LTD,2019-06-30 00:00:00,AUD,2002,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+459,AOF AU Equity,AUSTRALIAN UNITY OFFICE FUND,2019-06-30 00:00:00,AUD,2016,Real Estate,CBD Office REIT,Real Estate,Real Estate,REIT,Office REIT
+460,DRO AU Equity,DRONESHIELD LTD,2019-06-30 00:00:00,AUD,2016,Industrials,Electronics & Mission Systems,Industrials,Industrial Products,Aerospace & Defense,Defense
+461,LM8 AU Equity,LUNNON METALS LTD,2019-06-30 00:00:00,AUD,2021,Materials,Nickel,Materials,Materials,Metals & Mining,Base Metals
+462,EXP AU Equity,EXPERIENCE CO LTD,2019-06-30 00:00:00,AUD,2015,Consumer Discretionary,Travel Services,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Travel Services
+463,SXG AU Equity,SOUTHERN CROSS GOLD LTD,2019-06-30 00:00:00,AUD,2022,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+464,RCT AU Equity,REEF CASINO TRUST,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Casino Hotels,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Lodging
+465,AMI AU Equity,AURELIA METALS LTD,2019-06-30 00:00:00,AUD,2007,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+466,FEX AU Equity,FENIX RESOURCES LTD,2019-06-30 00:00:00,AUD,2009,Materials,Uranium,Materials,Materials,Metals & Mining,Base Metals
+467,BSE AU Equity,BASE RESOURCES LTD,2019-06-30 00:00:00,AUD,2009,Materials,Mineral Mining,Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+468,FWD AU Equity,FLEETWOOD LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Manufactured Home (Mobile),Consumer Discretionary,Consumer Discretionary Products,Home Construction,Homebuilding
+469,GDC AU Equity,GLOBAL DATA CENTRE GROUP,2019-12-31 00:00:00,AUD,2020,#N/A,Private Equity,Financials,Financial Services,Asset Management,Private Equity
+470,PPE AU Equity,PEOPLEIN LTD,2019-06-30 00:00:00,AUD,2018,Industrials,Professional Services,Industrials,Industrial Services,Commercial Support Services,Professional Services
+471,RBL AU Equity,REDBUBBLE LTD,2019-06-30 00:00:00,AUD,2016,Consumer Discretionary,Specialty Food & Staples Stores,Consumer Staples,Retail & Wholesale - Staples,Retail - Consumer Staples,Food & Drug Stores
+472,CYL AU Equity,CATALYST METALS LTD,2019-06-30 00:00:00,AUD,2007,Materials,Gold,Materials,Materials,Metals & Mining,Precious Metals
+473,ANG AU Equity,AUSTIN ENGINEERING LTD,2019-06-30 00:00:00,AUD,2004,Industrials,Const & Mining Mach Parts & Svcs,Industrials,Industrial Products,Machinery,Construction & Mining Machinery
+474,IOD AU Equity,IODM LTD,2019-06-30 00:00:00,AUD,2004,Information Technology,Specialty Software,Technology,Software & Tech Services,Software,Application Software
+475,PEN AU Equity,PENINSULA ENERGY LTD,2019-06-30 00:00:00,AUD,2002,Energy,Uranium,Materials,Materials,Metals & Mining,Base Metals
+476,NOL AU Equity,NOBLEOAK LIFE LTD,2019-06-30 00:00:00,AUD,2022,Financials,Life Insurance,Financials,Insurance,Insurance,Life Insurance
+477,CAA AU Equity,CAPRAL LTD,2019-06-30 00:00:00,AUD,2002,Materials,Bauxite Mining,Materials,Materials,Metals & Mining,Base Metals
+478,CLV AU Equity,CLOVER CORP LTD,2019-06-30 00:00:00,AUD,2002,Materials,Fresh & Frozen Seafood Process,Consumer Staples,Consumer Staple Products,Food,Packaged Food
+479,COS AU Equity,COSOL LTD,2019-06-30 00:00:00,AUD,2020,Information Technology,IT Services,Technology,Software & Tech Services,Technology Services,IT Services
+480,WAT AU Equity,WATERCO LTD,2019-06-30 00:00:00,AUD,2002,Consumer Discretionary,Fitness & Recreation Centers,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Entertainment Facilities
+481,MTO AU Equity,MOTORCYCLE HOLDINGS LTD,2019-06-30 00:00:00,AUD,2016,Consumer Discretionary,Automotive Retailers,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
+482,RAC AU Equity,RACE ONCOLOGY LTD,2019-06-30 00:00:00,AUD,2017,Health Care,Specialty Pharma,Health Care,Health Care,Biotech & Pharma,Specialty & Generic Pharma
+483,SLH AU Equity,SILK LOGISTICS HOLDINGS LTD,2019-06-30 00:00:00,AUD,2022,Industrials,Logistics Services,Industrials,Industrial Services,Transportation & Logistics,Logistics Services
+484,CLG AU Equity,CLOSE THE LOOP LTD,2019-06-30 00:00:00,AUD,2017,Industrials,Recycling Facilities,Industrials,Industrial Services,Commercial Support Services,Waste Management
+485,CHL AU Equity,CAMPLIFY HOLDINGS LTD,2019-06-30 00:00:00,AUD,2021,Industrials,Passenger Car Rental & Leasing,Consumer Discretionary,Retail & Whsle - Discretionary,Retail - Discretionary,Automotive Retailers
+486,APX AU Equity,APPEN LTD,2019-06-30 00:00:00,AUD,2015,Information Technology,Technology Consulting,Technology,Software & Tech Services,Technology Services,IT Services
+487,LIS AU Equity,LI-S ENERGY LTD,2019-12-31 00:00:00,AUD,2022,Industrials,Electronics Batteries,Technology,Tech Hardware & Semiconductors,Technology Hardware,Electronics Components
+488,EZL AU Equity,EUROZ HARTLEYS GROUP LTD,2019-06-30 00:00:00,AUD,2002,Financials,Institutional Brokerage,Financials,Financial Services,Institutional Financial Svcs,Institutional Brokerage
+489,STA AU Equity,STRANDLINE RESOURCES LTD,2019-06-30 00:00:00,AUD,2002,Materials,Base Metals,Materials,Materials,Metals & Mining,Base Metals
+490,A1M AU Equity,AIC MINES LTD,2019-06-30 00:00:00,AUD,2002,Materials,Exploration & Production,Energy,Oil & Gas,Oil & Gas Producers,Exploration & Production
+491,EGG AU Equity,ENERO GROUP LTD,2019-06-30 00:00:00,AUD,2004,Communication Services,Market Research & Consulting,Communications,Media,Advertising & Marketing,Advertising & Marketing
+492,ENR AU Equity,ENCOUNTER RESOURCES LTD,2019-06-30 00:00:00,AUD,2006,Materials,Uranium,Materials,Materials,Metals & Mining,Base Metals
+493,SHA AU Equity,SHAPE AUSTRALIA PTY LTD,2019-06-30 00:00:00,AUD,2018,Industrials,Commercial Building Const,Industrials,Industrial Services,Engineering & Construction,Building Construction
+494,ESS AU Equity,ESSENTIAL METALS LTD,2019-06-30 00:00:00,AUD,2004,Materials,"Nickel, Lead & Zinc",Materials,Materials,Metals & Mining,Base Metals
+495,SSG AU Equity,SHAVER SHOP GROUP LTD,2019-06-30 00:00:00,AUD,2017,Consumer Discretionary,Razor & Razor Blade,Consumer Staples,Consumer Staple Products,Household Products,Personal Care Products
+496,EGH AU Equity,EUREKA GROUP HOLDINGS LTD,2019-06-30 00:00:00,AUD,2005,Real Estate,Residential REIT,Real Estate,Real Estate,REIT,Residential REIT
+497,HFR AU Equity,HIGHFIELD RESOURCES LTD,2019-06-30 00:00:00,AUD,2012,Materials,"Potash, Soda, Borate",Materials,Materials,Metals & Mining,Mineral & Precious Stone Mining
+498,EOL AU Equity,ENERGY ONE LTD,2019-06-30 00:00:00,AUD,2007,Information Technology,Enterprise Software,Technology,Software & Tech Services,Software,Application Software
+499,XRF AU Equity,XRF SCIENTIFIC LTD,2019-06-30 00:00:00,AUD,2007,Industrials,Other Machinery & Equipment,Industrials,Industrial Products,Machinery,Other Machinery & Equipment
+500,VVA AU Equity,VIVA LEISURE LTD,2019-12-31 00:00:00,AUD,2019,Consumer Discretionary,Fitness & Recreation Centers,Consumer Discretionary,Consumer Discretionary Services,Leisure Facilities & Services,Entertainment Facilities

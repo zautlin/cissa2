@@ -271,6 +271,27 @@ class Ingester:
             else:
                 geography = 'Australia'
             
+            # Parse FY Report Month - can be a date string (e.g., "2019-06-30 00:00:00") or int
+            fy_report_month = None
+            if 'FY Report Month' in df.columns:
+                fy_value = row.get('FY Report Month', 6)
+                if isinstance(fy_value, str):
+                    try:
+                        # Try to parse as date string and extract month
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(fy_value.replace(' 00:00:00', ''))
+                        fy_report_month = dt.month
+                    except (ValueError, AttributeError):
+                        # Fall back to direct int conversion
+                        try:
+                            fy_report_month = int(fy_value)
+                        except ValueError:
+                            fy_report_month = 6
+                else:
+                    fy_report_month = int(fy_value) if fy_value else 6
+            else:
+                fy_report_month = 6
+            
             company_rows.append({
                 'ticker': str(row.get('Ticker', '')).strip(),
                 'name': str(row.get('Name', '')).strip(),
@@ -281,7 +302,7 @@ class Ingester:
                 'bics_level_4': str(row.get('BICS 4', '')).strip() if 'BICS 4' in df.columns else None,
                 'currency': currency,
                 'geography': geography,
-                'fy_report_month': int(row.get('FY Report Month', 6)) if 'FY Report Month' in df.columns else None,
+                'fy_report_month': fy_report_month,
                 'begin_year': int(row.get('Begin Year', 2002)) if 'Begin Year' in df.columns else None,
             })
         
