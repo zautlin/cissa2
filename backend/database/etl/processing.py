@@ -54,15 +54,6 @@ class DataQualityProcessor:
         """
         print(f"[DataQualityProcessor] Starting process_dataset: {dataset_id}")
         
-        # Update dataset_versions status
-        with self.engine.begin() as conn:
-            conn.execute(text("""
-                UPDATE dataset_versions
-                SET status = 'PROCESSING',
-                    processing_timestamp = now()
-                WHERE dataset_id = :dataset_id
-            """), {"dataset_id": dataset_id})
-        
         try:
             # Step 1: FY-align raw data
             print("  [1/4] FY-aligning raw data...")
