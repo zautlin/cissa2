@@ -182,12 +182,12 @@ class ImputationCascade:
     
     def _load_sector_map(self) -> Dict[str, str]:
         """
-        Load sector mapping for all active companies.
+        Load sector mapping for all companies.
         
         Returns:
             Dictionary {ticker: sector}
         """
-        sql = "SELECT ticker, sector FROM companies WHERE active = TRUE"
+        sql = "SELECT ticker, sector FROM companies"
         
         with self.engine.connect() as conn:
             result = conn.execute(text(sql))
