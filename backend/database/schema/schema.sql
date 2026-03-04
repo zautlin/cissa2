@@ -34,6 +34,7 @@ CREATE TABLE companies (
   bics_level_4 TEXT,
   currency TEXT NOT NULL DEFAULT 'AUD',
   country TEXT NOT NULL DEFAULT 'Australia',
+  parent_index TEXT,
   fy_report_month DATE,
   begin_year INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -41,7 +42,8 @@ CREATE TABLE companies (
 CREATE INDEX idx_companies_ticker ON companies (ticker);
 CREATE INDEX idx_companies_sector ON companies (sector);
 CREATE INDEX idx_companies_country ON companies (country);
-COMMENT ON TABLE companies IS 'Master list of companies from Base.csv. One-to-many base for all financial data. Includes country (Australia/US/UK), fiscal year end month, and first year of data availability.';
+CREATE INDEX idx_companies_parent_index ON companies (parent_index);
+COMMENT ON TABLE companies IS 'Master list of companies from Base.csv. One-to-many base for all financial data. Includes country (Australia/US/UK), parent_index (ASX200 for top 200 by market cap), fiscal year end month, and first year of data availability.';
 
 -- Fiscal Year Mapping: FY dates from FY Dates.csv
 -- Maps (ticker, fiscal_year) → fy_period_date for alignment
@@ -300,10 +302,12 @@ COMMENT ON TABLE metrics_outputs IS 'Computed metric outputs derived from fundam
 
 -- Optimization Outputs: Results from optimization algorithms
 -- Stores hierarchical projection results with flexible metadata for run details
+-- Each optimization references one metric output for traceability
 CREATE TABLE optimization_outputs (
   optimization_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dataset_id UUID NOT NULL REFERENCES dataset_versions(dataset_id) ON DELETE CASCADE,
   param_set_id UUID NOT NULL REFERENCES parameter_sets(param_set_id),
+  metrics_output_id BIGINT NOT NULL REFERENCES metrics_outputs(metrics_output_id) ON DELETE CASCADE,
   ticker TEXT NOT NULL,
   
   -- Results: hierarchical structure {base_year: {metric: {projected_year: value}}}
@@ -321,6 +325,7 @@ CREATE TABLE optimization_outputs (
 CREATE INDEX idx_optimization_outputs_dataset ON optimization_outputs (dataset_id);
 CREATE INDEX idx_optimization_outputs_param_set ON optimization_outputs (param_set_id);
 CREATE INDEX idx_optimization_outputs_ticker ON optimization_outputs (ticker);
+CREATE INDEX idx_optimization_outputs_metrics_output ON optimization_outputs (metrics_output_id);
 
 -- Auto-update trigger for optimization_outputs.updated_at
 CREATE OR REPLACE FUNCTION update_optimization_outputs_timestamp()
@@ -336,7 +341,7 @@ BEFORE UPDATE ON optimization_outputs
 FOR EACH ROW
 EXECUTE FUNCTION update_optimization_outputs_timestamp();
 
-COMMENT ON TABLE optimization_outputs IS 'Results from optimization algorithms. result_summary stores hierarchical projections {base_year:{metric:{year:value}}}. metadata tracks optimization type, status, constraints, solver info.';
+COMMENT ON TABLE optimization_outputs IS 'Results from optimization algorithms. Each row references one metric_output. result_summary stores hierarchical projections {base_year:{metric:{year:value}}}. metadata tracks optimization type, status, constraints, solver info. Allows tracing: optimization → metric_output → fundamentals → raw_data.';
 
 -- ============================================================================
 -- OPTIONAL: VALIDATION AUDIT LOG

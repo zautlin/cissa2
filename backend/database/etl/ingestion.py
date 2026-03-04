@@ -256,12 +256,17 @@ class Ingester:
             })
     
     def _load_companies(self, csv_path: str) -> Dict[str, Any]:
-        """Load Base.csv → companies table."""
+        """Load Base.csv → companies table.
+        
+        Assigns parent_index based on market cap ordering:
+        - Top 200 companies (first 200 rows, already sorted by market cap): parent_index='ASX200'
+        - Remaining companies: parent_index=NULL
+        """
         df = pd.read_csv(csv_path)
         
         # Map columns from Base.csv
         company_rows = []
-        for _, row in df.iterrows():
+        for row_idx, (_, row) in enumerate(df.iterrows()):
             # Extract country from Data FX column
             currency = str(row.get('Data FX', 'AUD')).strip()
             if currency == 'USD':
@@ -270,6 +275,9 @@ class Ingester:
                 country = 'United Kingdom'
             else:
                 country = 'Australia'
+            
+            # Assign parent_index: ASX200 for top 200, NULL for rest
+            parent_index = 'ASX200' if row_idx < 200 else None
             
             # Parse FY Report Month - can be a date string (e.g., "2019-06-30 00:00:00") or int
             fy_report_month = None
@@ -300,6 +308,7 @@ class Ingester:
                 'bics_level_4': str(row.get('BICS 4', '')).strip() if 'BICS 4' in df.columns else None,
                 'currency': currency,
                 'country': country,
+                'parent_index': parent_index,
                 'fy_report_month': fy_report_month,
                 'begin_year': int(row.get('Begin Year', 2002)) if 'Begin Year' in df.columns else None,
             })
@@ -308,8 +317,8 @@ class Ingester:
         with self.engine.begin() as conn:
             for row in company_rows:
                 conn.execute(text("""
-                    INSERT INTO companies (ticker, name, sector, bics_level_1, bics_level_2, bics_level_3, bics_level_4, currency, country, fy_report_month, begin_year)
-                    VALUES (:ticker, :name, :sector, :bics_level_1, :bics_level_2, :bics_level_3, :bics_level_4, :currency, :country, :fy_report_month, :begin_year)
+                    INSERT INTO companies (ticker, name, sector, bics_level_1, bics_level_2, bics_level_3, bics_level_4, currency, country, parent_index, fy_report_month, begin_year)
+                    VALUES (:ticker, :name, :sector, :bics_level_1, :bics_level_2, :bics_level_3, :bics_level_4, :currency, :country, :parent_index, :fy_report_month, :begin_year)
                     ON CONFLICT (ticker) DO UPDATE SET
                         name = EXCLUDED.name,
                         sector = EXCLUDED.sector,
@@ -319,6 +328,7 @@ class Ingester:
                         bics_level_4 = EXCLUDED.bics_level_4,
                         currency = EXCLUDED.currency,
                         country = EXCLUDED.country,
+                        parent_index = EXCLUDED.parent_index,
                         fy_report_month = EXCLUDED.fy_report_month,
                         begin_year = EXCLUDED.begin_year
                 """), row)
