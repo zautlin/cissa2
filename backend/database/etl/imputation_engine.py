@@ -86,10 +86,13 @@ class ImputationCascade:
             - source_wide: Source labels (same shape as wide_clean, same temporal order)
             - log: Imputation statistics {metric: {source: count}}
         """
-        metrics = [c for c in wide_df.columns if c not in ('ticker', 'fiscal_year')]
+        metrics = [c for c in wide_df.columns if c not in ('ticker', 'fiscal_year', 'fiscal_month', 'fiscal_day')]
         
-        # Initialize source tracking
-        source_wide = wide_df[['ticker', 'fiscal_year']].copy()
+        # Initialize source tracking - preserve all dimension columns
+        dimension_cols = ['ticker', 'fiscal_year']
+        if 'fiscal_month' in wide_df.columns:
+            dimension_cols.extend(['fiscal_month', 'fiscal_day'])
+        source_wide = wide_df[dimension_cols].copy()
         for m in metrics:
             source_wide[m] = np.where(wide_df[m].notna(), SRC_RAW, None)
         
