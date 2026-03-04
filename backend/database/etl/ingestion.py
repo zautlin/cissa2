@@ -93,7 +93,7 @@ class Ingester:
             end_year = 0
         
         # Count unique companies
-        num_companies = data_df['Ticker'].nunique()
+        num_companies = base_df['Ticker'].nunique()
         
         dataset_name = f"{geography[:2].upper()}_{start_year}_{end_year}_{num_companies}"
         return dataset_name, geography, start_year, end_year
@@ -341,16 +341,29 @@ class Ingester:
                 if col.startswith('FY'):
                     try:
                         fiscal_year = int(col.split()[-1])
-                        # Value is Excel date serial; convert to date
-                        excel_serial = int(float(row[col]))
-                        # Excel epoch: 1899-12-30
-                        from datetime import datetime, timedelta
-                        excel_epoch = datetime(1899, 12, 30)
-                        fy_date = excel_epoch + timedelta(days=excel_serial)
+                        value = row[col]
+                        
+                        # Handle different date formats
+                        if isinstance(value, str):
+                            # Parse date string (e.g., "2002-06-30 00:00:00" or "2002-06-30")
+                            from datetime import datetime
+                            # Remove time portion if present
+                            date_str = value.split()[0] if ' ' in value else value
+                            fy_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                        else:
+                            # Handle Excel serial number (if not a string)
+                            try:
+                                excel_serial = int(float(value))
+                                from datetime import datetime, timedelta
+                                excel_epoch = datetime(1899, 12, 30)
+                                fy_date = (excel_epoch + timedelta(days=excel_serial)).date()
+                            except (ValueError, TypeError):
+                                continue
+                        
                         fy_mapping_rows.append({
                             'ticker': ticker,
                             'fiscal_year': fiscal_year,
-                            'fy_period_date': fy_date.date(),
+                            'fy_period_date': fy_date,
                         })
                     except (ValueError, TypeError):
                         continue
