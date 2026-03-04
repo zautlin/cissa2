@@ -252,26 +252,26 @@ class SchemaManager:
             return False
     
     def init(self) -> bool:
-        """Full initialization: create schema + init parameters."""
+        """Full initialization: create schema (includes parameters + default parameter_set via schema.sql)."""
         print("="*70)
         print("FULL DATABASE INITIALIZATION")
         print("="*70 + "\n")
         
-        # Step 1: Create schema
+        # Schema creation now includes baseline parameters and default parameter_set
+        # via INSERT statements in schema.sql (PHASE 7)
         if not self.create():
             print("\n✗ Schema creation failed")
-            return False
-        
-        print()
-        
-        # Step 2: Initialize parameters
-        if not self.init_parameters():
-            print("\n✗ Parameter initialization failed")
             return False
         
         print("\n" + "="*70)
         print("✓ FULL INITIALIZATION COMPLETE")
         print("="*70)
+        print("\nInitialized:")
+        print("  ✓ 10 tables created")
+        print("  ✓ 25+ indexes created")
+        print("  ✓ 4 auto-update triggers created")
+        print("  ✓ 13 baseline parameters inserted")
+        print("  ✓ Default parameter_set 'base_case' created")
         print("\nNext steps:")
         print("  1. Load reference tables (companies, fiscal_year_mapping)")
         print("  2. Run data ingestion (load_dataset)")

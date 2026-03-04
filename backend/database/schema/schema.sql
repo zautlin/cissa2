@@ -332,6 +332,36 @@ COMMENT ON TABLE optimization_outputs IS 'Results from optimization algorithms. 
 -- ============================================================================
 
 -- ============================================================================
+-- PHASE 7: BASELINE PARAMETERS & DEFAULT PARAMETER SET
+-- ============================================================================
+-- Initialize 13 baseline parameters and create default "base_case" parameter set
+-- This is run as part of schema creation to ensure complete initialization
+
+-- Insert 13 baseline parameters (if not already present)
+INSERT INTO parameters (parameter_name, display_name, value_type, default_value)
+VALUES
+  ('country_geography', 'Country Geography', 'TEXT', 'Australia'),
+  ('currency_notation', 'Currency Notation', 'TEXT', 'A$m'),
+  ('cost_of_equity_approach', 'Cost of Equity Approach', 'TEXT', 'Floating'),
+  ('include_franking_credits_tsr', 'Include Franking Credits (TSR)', 'BOOLEAN', 'false'),
+  ('fixed_benchmark_return_wealth_preservation', 'Fixed Benchmark Return (Wealth Preservation)', 'NUMERIC', '7.5'),
+  ('equity_risk_premium', 'Equity Risk Premium', 'NUMERIC', '5.0'),
+  ('tax_rate_franking_credits', 'Tax Rate (Franking Credits)', 'NUMERIC', '30.0'),
+  ('value_of_franking_credits', 'Value of Franking Credits', 'NUMERIC', '75.0'),
+  ('risk_free_rate_rounding', 'Risk-Free Rate Rounding', 'NUMERIC', '0.5'),
+  ('beta_rounding', 'Beta Rounding', 'NUMERIC', '0.1'),
+  ('last_calendar_year', 'Last Calendar Year', 'NUMERIC', '2019'),
+  ('beta_relative_error_tolerance', 'Beta Relative Error Tolerance', 'NUMERIC', '40.0'),
+  ('terminal_year', 'Terminal Year', 'NUMERIC', '60')
+ON CONFLICT (parameter_name) DO NOTHING;
+
+-- Create default parameter_set "base_case" (if not already present)
+INSERT INTO parameter_sets (param_set_name, description, is_default, is_active, param_overrides, created_by)
+VALUES
+  ('base_case', 'Default parameter set using all 13 baseline parameters', true, true, '{}', 'admin')
+ON CONFLICT (param_set_name) DO NOTHING;
+
+-- ============================================================================
 -- SUMMARY
 -- ============================================================================
 -- Total tables created: 11
@@ -345,4 +375,6 @@ COMMENT ON TABLE optimization_outputs IS 'Results from optimization algorithms. 
 --
 -- Total indexes: 25+
 -- Total triggers: 4 (auto-update timestamps)
+-- Baseline parameters: 13 (initialized on schema creation)
+-- Default parameter_set: 1 (base_case, created on schema creation)
 -- ============================================================================
