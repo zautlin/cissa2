@@ -1,14 +1,16 @@
 """
 Fiscal Year Alignment Engine.
 
-Maps raw calendar-year data to fiscal years using the fiscal_year_mapping table.
-For each company and fiscal year, looks up which calendar year the data should
-come from, then retrieves the corresponding raw value.
+Maps raw financial data to fiscal years.
 
-Refactored from reference-dq-scripts/fy_aligner.py with clean API.
+IMPORTANT: raw_data contains periods as strings (e.g., 'FY 2003').
+This aligner extracts the fiscal_year from the period string and uses that
+to create aligned output. No mapping to calendar dates is needed — the fiscal_year
+is already encoded in the period string.
 """
 
 from typing import Optional
+import re
 import pandas as pd
 from sqlalchemy.engine import Engine
 from sqlalchemy import text
@@ -16,10 +18,10 @@ from sqlalchemy import text
 
 class FYAligner:
     """
-    Aligns raw calendar-year data to fiscal years.
+    Aligns raw data to fiscal years by extracting fiscal_year from period strings.
     
-    The FY mapping table stores (ticker, fiscal_year) → fy_period_date mappings,
-    which tells us which calendar year's data to pull for each fiscal year.
+    Raw data contains periods like 'FY 2003'. We extract the year and use it directly
+    as the fiscal_year, without needing calendar-year translation.
     """
     
     def __init__(self, db_engine: Engine):
@@ -30,6 +32,7 @@ class FYAligner:
             db_engine: SQLAlchemy database engine
         """
         self.engine = db_engine
+        self.fiscal_year_pattern = re.compile(r'FY\s+(\d{4})')
     
     def align(
         self,
@@ -37,7 +40,7 @@ class FYAligner:
         metrics: Optional[list] = None,
     ) -> pd.DataFrame:
         """
-        Produce FY-aligned DataFrame from raw_data.
+        Align raw data by extracting fiscal_year from period strings.
         
         Returns a DataFrame with columns:
         - ticker
@@ -46,59 +49,36 @@ class FYAligner:
         - value
         - source = 'aligned'
         
-        Logic (INDEX/MATCH pattern):
-        For each (ticker, fiscal_year, metric):
-          1. Look up fiscal_year_mapping to find which calendar year to use
-          2. Find raw value for (ticker, calendar_year, metric)
-          3. If not found → NULL
+        Logic:
+        For each row in raw_data (ticker, metric_name, period, numeric_value):
+          1. Extract fiscal_year from period string (e.g., 'FY 2003' → 2003)
+          2. If extraction successful, emit row with (ticker, fiscal_year, metric_name, value)
+          3. If extraction fails, skip row (no fiscal_year to align to)
         
         Args:
-            dataset_id: UUID of dataset to align
+            dataset_id: UUID of dataset to align (not currently used, but kept for API compatibility)
             metrics: Optional list of metric names to filter on
             
         Returns:
             DataFrame with columns: ticker, fiscal_year, metric_name, value, source
-            
-        Raises:
-            ValueError: If no FY mapping found for dataset
         """
-        # Load FY date mapping for this dataset
-        fy_map = self._load_fy_mapping(dataset_id)
-        if fy_map.empty:
-            raise ValueError(
-                f"No fiscal_year_mapping found for dataset {dataset_id}. "
-                "Ensure FY Dates.csv was loaded."
-            )
-        
         # Load raw data for this dataset
         raw = self._load_raw_data(dataset_id, metrics)
         if raw.empty:
             return pd.DataFrame(columns=['ticker', 'fiscal_year', 'metric_name', 'value', 'source'])
         
-        # Build lookup: (ticker, period, metric) → numeric_value
-        raw_lookup = raw.set_index(['ticker', 'period', 'metric_name'])['numeric_value'].to_dict()
-        
-        # Align: for each (ticker, fiscal_year), find the period to use
+        # Extract fiscal_year from period strings
         records = []
-        for _, fy_row in fy_map.iterrows():
-            ticker = fy_row['ticker']
-            fiscal_year = int(fy_row['fiscal_year'])
-            fy_period = fy_row['fy_period_date']
+        for _, row in raw.iterrows():
+            period_str = row['period']
+            fiscal_year = self._extract_fiscal_year(period_str)
             
-            # Get metrics for this ticker from raw
-            ticker_metrics = raw[raw['ticker'] == ticker]['metric_name'].unique()
-            target_metrics = metrics if metrics else ticker_metrics
-            
-            for metric in target_metrics:
-                # Try to find raw value for this metric
-                key = (ticker, fy_period, metric)
-                value = raw_lookup.get(key)
-                
+            if fiscal_year is not None:
                 records.append({
-                    'ticker': ticker,
+                    'ticker': row['ticker'],
                     'fiscal_year': fiscal_year,
-                    'metric_name': metric,
-                    'value': float(value) if value is not None and pd.notna(value) else None,
+                    'metric_name': row['metric_name'],
+                    'value': float(row['numeric_value']) if row['numeric_value'] is not None and pd.notna(row['numeric_value']) else None,
                     'source': 'aligned',
                 })
         
@@ -107,25 +87,33 @@ class FYAligner:
         
         return pd.DataFrame(records)
     
-    def _load_fy_mapping(self, dataset_id: str) -> pd.DataFrame:
+    def _extract_fiscal_year(self, period_str: str) -> Optional[int]:
         """
-        Load the FY period mapping.
+        Extract fiscal year from period string.
         
-        Returns DataFrame with columns: ticker, fiscal_year, fy_period_date
+        Examples:
+        - 'FY 2003' → 2003
+        - 'FY2003' → 2003
+        - '2003-12-31 00:00:00' → None (calendar date, not fiscal year)
+        - 'FY 2004' → 2004
+        
+        Args:
+            period_str: Period string from raw_data
+            
+        Returns:
+            Fiscal year as integer, or None if extraction fails
         """
-        sql = """
-            SELECT ticker, fiscal_year, fy_period_date
-            FROM fiscal_year_mapping
-            ORDER BY ticker, fiscal_year
-        """
-        with self.engine.connect() as conn:
-            result = conn.execute(text(sql))
-            rows = result.fetchall()
+        if not isinstance(period_str, str):
+            return None
         
-        if not rows:
-            return pd.DataFrame()
+        match = self.fiscal_year_pattern.search(period_str)
+        if match:
+            try:
+                return int(match.group(1))
+            except (ValueError, IndexError):
+                return None
         
-        return pd.DataFrame(rows, columns=['ticker', 'fiscal_year', 'fy_period_date'])
+        return None
     
     def _load_raw_data(self, dataset_id: str, metrics: Optional[list] = None) -> pd.DataFrame:
         """

@@ -89,13 +89,16 @@ class DataQualityProcessor:
             quality_metadata = self._calculate_quality_metadata(imputation_log, n_rows)
             
             # Update dataset_versions with success
+            # Store all stats in metadata JSONB column (schema has no separate status/processing_completed_at/quality_metadata columns)
             with self.engine.begin() as conn:
                 conn.execute(text("""
                     UPDATE dataset_versions
-                    SET status = 'PROCESSED',
-                        processing_completed_at = now(),
-                        quality_metadata = CAST(:quality_metadata AS jsonb)
-                    WHERE dataset_id = :dataset_id
+                    SET metadata = metadata || jsonb_build_object(
+                        'status', 'PROCESSED',
+                        'processing_completed_at', now(),
+                        'quality_metadata', %(quality_metadata)s::jsonb
+                    )
+                    WHERE dataset_id = %(dataset_id)s
                 """), {
                     "dataset_id": dataset_id,
                     "quality_metadata": json.dumps(quality_metadata),
@@ -123,6 +126,11 @@ class DataQualityProcessor:
     ) -> int:
         """
         Write cleaned data to fundamentals table.
+        
+        The fundamentals schema has:
+        - numeric_value: the cleaned, imputed value
+        - imputed: boolean flag (true if source != 'RAW')
+        - metadata: JSONB storing imputation_source and confidence_level
         
         Args:
             dataset_id: UUID of dataset
@@ -159,25 +167,34 @@ class DataQualityProcessor:
                 if pd.isna(val) if val is not None else True:
                     continue
                 
+                # Store imputation metadata as JSONB
+                metadata = {
+                    'imputation_source': src,
+                    'confidence_level': confidence,
+                }
+                
                 rows.append({
                     'dataset_id': dataset_id,
                     'ticker': ticker,
                     'metric_name': metric,
                     'fiscal_year': fiscal_year,
-                    'value': float(val),
-                    'imputation_source': src,
-                    'confidence_level': confidence,
-                    'data_quality_flags': '{}',  # Empty flags initially
+                    'numeric_value': float(val),
+                    'currency': 'AUD',  # Default to AUD for ASX data
+                    'imputed': src != 'RAW',  # True if source is anything other than RAW
+                    'metadata': json.dumps(metadata),
                 })
         
         # Bulk insert
         if rows:
             with self.engine.begin() as conn:
-                conn.execute(text("""
+                # Use proper SQL with metadata as JSONB
+                stmt = """
                     INSERT INTO fundamentals 
-                    (dataset_id, ticker, metric_name, fiscal_year, value, imputation_source, confidence_level, data_quality_flags)
-                    VALUES (:dataset_id, :ticker, :metric_name, :fiscal_year, :value, :imputation_source, :confidence_level, :data_quality_flags::jsonb)
-                """), rows)
+                    (dataset_id, ticker, metric_name, fiscal_year, numeric_value, currency, imputed, metadata)
+                    VALUES (%(dataset_id)s, %(ticker)s, %(metric_name)s, %(fiscal_year)s, %(numeric_value)s, %(currency)s, %(imputed)s, %(metadata)s::jsonb)
+                """
+                # executemany for bulk insert
+                conn.exec_driver_sql(stmt, rows)
         
         return len(rows)
     
