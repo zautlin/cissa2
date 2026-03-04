@@ -89,20 +89,19 @@ class DataQualityProcessor:
             quality_metadata = self._calculate_quality_metadata(imputation_log, n_rows)
             
             # Update dataset_versions with success
-            # Store all stats in metadata JSONB column (schema has no separate status/processing_completed_at/quality_metadata columns)
+            # Store all stats in metadata JSONB column
             with self.engine.begin() as conn:
-                conn.execute(text("""
+                # Use exec_driver_sql to avoid parameter escaping issues with text() + jsonb_build_object
+                quality_metadata_json = json.dumps(quality_metadata)
+                conn.exec_driver_sql("""
                     UPDATE dataset_versions
                     SET metadata = metadata || jsonb_build_object(
                         'status', 'PROCESSED',
                         'processing_completed_at', now(),
-                        'quality_metadata', %(quality_metadata)s::jsonb
+                        'quality_metadata', %s::jsonb
                     )
-                    WHERE dataset_id = %(dataset_id)s
-                """), {
-                    "dataset_id": dataset_id,
-                    "quality_metadata": json.dumps(quality_metadata),
-                })
+                    WHERE dataset_id = %s
+                """, (quality_metadata_json, str(dataset_id)))
             
             print(f"[DataQualityProcessor] ✓ Done. dataset_id={dataset_id}")
             
