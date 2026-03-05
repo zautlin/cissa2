@@ -1,103 +1,330 @@
 # Data Ingestion Validation Guide
 
-## Overview
+This document validates that data was properly ingested and processed through the CISSA ETL pipeline into the `cissa` schema. It also documents the current schema structure and data quality tracking.
 
-This document provides a reference guide for visually inspecting the database tables to confirm that data was properly ingested through the three-stage ETL pipeline into the `cissa` schema.
+## Quick Start
 
----
-
-## Data Ingestion Sequence
-
-The pipeline ingests data in the following order:
-
-### **Stage 0: Reference Tables (One-Time Setup)**
-
-These tables are populated once from the input data files and remain relatively static.
-
-#### **1. companies**
-- **Source File**: `/home/ubuntu/cissa/input-data/ASX/extracted-worksheets/Base.csv`
-- **Expected Records**: 500
-- **Contains**: ASX company master data
-- **Key Columns**: 
-  - `ticker` (unique identifier, e.g., "BHP AU Equity")
-  - `name` (company name)
-  - `sector` (market sector classification)
-  - `bics_level_1`, `bics_level_2`, `bics_level_3`, `bics_level_4` (detailed industry classification)
-  - `currency` (typically "AUD")
-- **What to Look For**:
-  - 500 unique ticker values
-  - Company names that are recognizable ASX stocks (BHP, CBA, RIO, CSL, etc.)
-  - 12 unique sectors
-  - All records have same currency (AUD)
-
-##### **SCHEMA REFINEMENTS NEEDED:**
-- ✅ **ADD**: `fy_report_month` (INTEGER, e.g., 6 for June) - tracks which month each company's fiscal year ends in (from Base.csv)
-- ✅ **ADD**: `begin_year` (INTEGER) - tracks the first year this company data is available for (from Base.csv)
-- ✅ **ADD**: `geography` (TEXT NOT NULL DEFAULT 'Australia') - tracks which market/geography the company is listed in (from Base.csv); supports future expansion to US/UK markets; kept as single column (not junction table) since each company has one primary listing geography
-- ✅ **REMOVE**: `active` column - redundant since all companies should be active by default; if needed, use soft deletes or a separate decommissioned_at timestamp instead
-- ✅ **KEEP**: All other columns as-is
-
-#### **2. fiscal_year_mapping**
-- **Source File**: `/home/ubuntu/cissa/input-data/ASX/extracted-worksheets/FY Dates.csv`
-- **Expected Records**: ~10,900
-- **Contains**: Mapping of (ticker, fiscal_year) combinations to their fiscal period end dates
-- **Key Columns**:
-  - `ticker` (e.g., "BHP AU Equity")
-  - `fiscal_year` (e.g., 2002, 2003, ..., 2023)
-  - `fy_period_date` (DATE when that fiscal year ends for that company)
-- **What to Look For**:
-  - Multiple fiscal years per company (roughly 20+ years of history)
-  - ~500 companies × ~20 fiscal years = ~10,000 mappings
-  - Dates make sense (e.g., BHP's FY 2002 ends in 2002, FY 2003 ends in 2003)
-  - Some companies may have fewer years of history (NULL or missing entries)
+For the most common validation tasks, see:
+- **Schema reference**: See `/backend/database/CURRENT_SCHEMA.md` for complete table descriptions
+- **Schema queries**: See `/VALIDATION_QUERIES.md` for copy-paste SQL validation queries
+- **Deployment**: See `/backend/database/DEPLOYMENT_GUIDE.md` for the three essential commands
 
 ---
 
-### **Stage 1: Dataset Version & Raw Data (Per Ingestion Run)**
+## Current Schema Overview
 
-#### **4. dataset_versions**
-- **Created By**: `Ingester.load_dataset()` at start of each pipeline run
-- **Expected Records**: 1 per unique dataset (same dataset_name + source_file_hash = same version)
-- **Contains**: Metadata and audit trail for each data ingestion
-- **Key Columns**:
-   - `dataset_id` (UUID, PRIMARY KEY, unique identifier for this ingestion)
-   - `dataset_name` (auto-generated: `<geography>_<start_year>_<end_year>_<num_companies>`, e.g., "AU_2002_2023_500")
-   - `version_number` (increments each time same dataset_name is re-uploaded with different source_file_hash)
-   - `source_file` (full file path, e.g., "/home/ubuntu/cissa/input-data/ASX/raw-data/Bloomberg Download data.xlsx")
-   - `source_file_hash` (SHA256 hash of the source file; used to detect duplicates and track versions)
-   - `metadata` (JSONB, flexible; captures validation step outputs, e.g., `{validation_passed: 5000, validation_failed: 0, ...}`)
-   - `created_by` (TEXT NOT NULL DEFAULT 'admin'; will integrate with user authentication in future)
-   - `created_at` (TIMESTAMPTZ NOT NULL DEFAULT now())
-   - `updated_at` (TIMESTAMPTZ NOT NULL DEFAULT now())
-- **What to Look For**:
-   - At least 1 record (from our test run)
-   - `dataset_name` follows format: `<geography>_<start_year>_<end_year>_<num_companies>` (calculated from data)
-   - `version_number` increments only when same dataset_name is re-uploaded with different source_file_hash
-   - `source_file_hash` prevents re-ingesting the same file twice
-   - `metadata` contains validation statistics
+The CISSA database contains **10 tables** organized into 5 phases. This section documents each table and how to validate its contents.
 
-##### **SCHEMA REFINEMENTS NEEDED:**
-- ✅ **UPDATE**: `dataset_name` generation logic - auto-calculate from data as `<geography>_<start_year>_<end_year>_<num_companies>` and always enforce this naming convention
-- ✅ **KEEP**: `dataset_id` as PRIMARY KEY (UUID)
-- ✅ **ADD**: `source_file_hash` (TEXT NOT NULL) - SHA256 hash of source file for duplicate detection and versioning
-- ✅ **ADD**: `version_number` (INTEGER) - increments when same dataset_name is re-uploaded with different file hash
-- ✅ **UPDATE**: `source_file` to store full file path (not just filename)
-- ✅ **REMOVE**: `status`, `ingestion_timestamp`, `processing_completed_at`, `processing_timestamp`
-- ✅ **REPLACE**: `total_raw_rows`, `validation_rejected_rows`, `validation_reject_summary` → use flexible `metadata` (JSONB) instead
-- ✅ **REPLACE**: `quality_metadata` → use `metadata` (JSONB)
-- ✅ **ADD**: `created_by` (TEXT NOT NULL DEFAULT 'admin') - tracks who initiated the ingestion (future: integrate with user authentication)
-- ✅ **REMOVE**: `notes`
-- ✅ **KEEP/ADD**: `created_at`, `updated_at` (TIMESTAMPTZ NOT NULL DEFAULT now())
-- ✅ **ADD CONSTRAINT**: UNIQUE (dataset_name, source_file_hash) to prevent duplicate ingestions
+### Phase 1: Raw Data Ingestion
 
-#### **5. raw_data**
-- **Source File**: `/home/ubuntu/cissa/input-data/ASX/consolidated-data/financial_metrics_fact_table.csv`
-- **Expected Records**: 
-   - Sample test: ~5,000 rows
-   - Full dataset: ~275,000 rows
-- **Contains**: Raw ingested financial data (only successfully validated/parsed rows; rejected rows go to separate log)
-- **Key Columns**:
-   - `raw_data_id` (BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY)
+#### **dataset_versions**
+**Purpose:** Track each data ingestion run with metadata and versioning
+
+**Key Columns:**
+- `dataset_id` (UUID, PK): Unique identifier for this ingestion
+- `dataset_name` (TEXT): Name of the dataset (e.g., "ASX Financial Metrics")
+- `version_number` (INT): Sequential version counter
+- `status` (TEXT): 'processing' | 'completed' | 'failed'
+- `metadata` (JSONB): Ingestion reconciliation statistics
+- `processed_at` (TIMESTAMPTZ): When ingestion completed
+
+**What to Look For:**
+- At least 1 record per ingestion run
+- `status` should be 'completed' after successful ingestion
+- `metadata` contains:
+  - `total_csv_rows`: Total rows in source file (275,343)
+  - `total_rows_processed`: Rows with valid ticker/metric/period (275,343)
+  - `rows_with_unparseable_values`: Rejected invalid values (485)
+  - `duplicate_combinations_found`: Duplicate (ticker, metric, period) (1,000)
+  - `unique_rows_in_raw_data`: Final rows stored (273,858)
+
+**Validation Query:**
+```sql
+SELECT dataset_name, version_number, status, 
+       (metadata->>'total_csv_rows')::int as csv_rows,
+       (metadata->>'unique_rows_in_raw_data')::int as unique_rows
+FROM cissa.dataset_versions
+ORDER BY created_at DESC LIMIT 1;
+-- Should return: at least 1 row with status='completed'
+```
+
+---
+
+#### **raw_data**
+**Purpose:** Store all ingested rows with deduplication
+
+**Key Columns:**
+- `raw_data_id` (BIGINT, PK): Identity primary key
+- `dataset_id` (UUID, FK): References dataset_versions
+- `ticker` (TEXT): Stock ticker symbol
+- `metric_name` (TEXT): Metric identifier
+- `period` (DATE): Period for this data point
+- `value` (NUMERIC): The numeric value
+
+**Special Constraints:**
+- `UNIQUE (dataset_id, ticker, metric_name, period)`: Only first occurrence of duplicate is kept
+
+**What to Look For:**
+- Total rows should equal unique rows from dataset_versions metadata (273,858)
+- No NULL values in ticker, metric_name, period, or value
+- Date range should span multiple years (1981-2024)
+- All values should be numeric (no strings or special characters)
+
+**Validation Query:**
+```sql
+SELECT COUNT(*) as total_rows,
+       COUNT(DISTINCT ticker) as unique_tickers,
+       COUNT(DISTINCT metric_name) as unique_metrics,
+       MIN(period) as earliest_period,
+       MAX(period) as latest_period
+FROM cissa.raw_data;
+-- Should return: ~273,858 rows, ~500 tickers, 20 metrics
+```
+
+---
+
+### Phase 2: Company Reference Data
+
+#### **companies**
+**Purpose:** Master list of all companies
+
+**Key Columns:**
+- `ticker` (TEXT, PK): Stock ticker symbol
+- `company_name` (TEXT): Full company name
+- `parent_index` (TEXT): NULL or "ASX200"
+- `sector` (TEXT): Industry sector
+- `created_at`, `updated_at` (TIMESTAMPTZ)
+
+**What to Look For:**
+- ~500 total companies
+- 200 with parent_index = 'ASX200' (top 200 companies)
+- ~300 with parent_index = NULL (other ASX companies)
+- Recognizable company names (BHP, CBA, RIO, CSL, etc.)
+
+**Validation Query:**
+```sql
+SELECT parent_index, COUNT(*) as count
+FROM cissa.companies
+GROUP BY parent_index
+ORDER BY count DESC;
+-- Should return: ASX200: 200, NULL: ~300
+```
+
+---
+
+#### **metric_units**
+**Purpose:** Define the unit of measurement for each metric
+
+**Key Columns:**
+- `metric_id` (BIGINT, PK): Identity primary key
+- `metric_name` (TEXT, UNIQUE): Metric identifier
+- `unit` (TEXT): Unit of measurement (millions, %, number of shares, etc.)
+
+**What to Look For:**
+- Exactly 20 metrics defined
+- Units should be consistent (e.g., all financial metrics in "millions")
+
+**Validation Query:**
+```sql
+SELECT COUNT(*) as total_metrics,
+       COUNT(DISTINCT unit) as unique_units
+FROM cissa.metric_units;
+-- Should return: 20 metrics, 5 unique units
+```
+
+---
+
+### Phase 3: Cleaned Data
+
+#### **fundamentals**
+**Purpose:** Final cleaned, imputed fact table - Single source of truth
+
+**Key Columns:**
+- `fundamental_id` (BIGINT, PK): Identity primary key
+- `dataset_id` (UUID, FK): References dataset_versions
+- `ticker` (TEXT, FK): References companies
+- `metric_name` (TEXT): Metric identifier
+- `fiscal_year` (INT): Fiscal year (1981-2024)
+- `fiscal_month` (INT): 1-12 for MONTHLY, NULL for FISCAL
+- `fiscal_day` (INT): 1-31 for MONTHLY, NULL for FISCAL
+- `period_type` (TEXT): 'FISCAL' | 'MONTHLY'
+- `value` (NUMERIC): Final value (NEVER NULL after imputation)
+- `metadata` (JSONB): Imputation tracking
+- `created_at` (TIMESTAMPTZ)
+
+**What to Look For:**
+- ~273,858 total rows
+- **NO NULL values** in the `value` column (all gaps imputed)
+- FISCAL records have NULL fiscal_month and fiscal_day
+- MONTHLY records have all fiscal components populated
+- ~140,670 FISCAL rows, ~133,188 MONTHLY rows
+- metadata contains `imputation_step` and `confidence_level`
+
+**Critical Validations:**
+```sql
+-- Verify NO NULL values in fundamentals
+SELECT COUNT(*) as null_values
+FROM cissa.fundamentals
+WHERE value IS NULL;
+-- Should return: 0
+
+-- Verify FISCAL records have NULL month/day
+SELECT COUNT(*) as fiscal_with_month_day
+FROM cissa.fundamentals
+WHERE period_type = 'FISCAL' AND (fiscal_month IS NOT NULL OR fiscal_day IS NOT NULL);
+-- Should return: 0
+
+-- Verify period type distribution
+SELECT period_type, COUNT(*) as count
+FROM cissa.fundamentals
+GROUP BY period_type;
+-- Should return: FISCAL: ~140K, MONTHLY: ~133K
+```
+
+---
+
+#### **imputation_audit_trail**
+**Purpose:** Audit trail of imputation decisions and data quality issues
+
+**Key Columns:**
+- `audit_id` (BIGINT, PK): Identity primary key
+- `dataset_id` (UUID, FK): References dataset_versions
+- `ticker` (TEXT): Stock ticker symbol
+- `metric_name` (TEXT): Metric identifier
+- `fiscal_year` (INTEGER, NULLABLE): Fiscal year; NULL for ambiguous data quality issues
+- `imputation_step` (TEXT): Classification of issue/imputation
+- `original_value` (NUMERIC): Value before imputation (NULL for duplicates)
+- `imputed_value` (NUMERIC): Value used in fundamentals
+- `metadata` (JSONB): Additional context
+- `created_at` (TIMESTAMPTZ)
+
+**Imputation Steps:**
+- `FORWARD_FILL`: Previous valid value carried forward
+- `BACKWARD_FILL`: Next valid value carried backward
+- `INTERPOLATE`: Linear interpolation between valid values
+- `SECTOR_MEDIAN`: Filled with sector median
+- `MARKET_MEDIAN`: Filled with market median
+- `MISSING`: Gap that couldn't be imputed
+- `DATA_QUALITY_DUPLICATE`: Duplicate record (only first occurrence kept)
+- `DATA_QUALITY_INVALID_VALUE`: Non-numeric value that couldn't be parsed
+- `DATA_QUALITY_MISSING`: Missing value in source data
+
+**Metadata Examples:**
+
+For duplicates:
+```json
+{
+  "period": "2024-03-29",
+  "num_occurrences": 2
+}
+```
+
+For imputations:
+```json
+{
+  "imputation_step": "FORWARD_FILL",
+  "confidence_level": 0.95
+}
+```
+
+**What to Look For:**
+- DATA_QUALITY_DUPLICATE: ~1,000 entries (duplicates found and logged)
+- DATA_QUALITY_INVALID_VALUE: ~485 entries (unparseable values)
+- FORWARD_FILL/BACKWARD_FILL/INTERPOLATE: various imputation entries
+- `fiscal_year` should be NULL for data quality issues without clear year
+- `metadata` should contain period/date for duplicates
+- No rows should have NULL `imputed_value` (value is always required)
+
+**Validation Query:**
+```sql
+SELECT imputation_step, COUNT(*) as count
+FROM cissa.imputation_audit_trail
+GROUP BY imputation_step
+ORDER BY count DESC;
+
+-- Expected approximate distribution:
+-- DATA_QUALITY_DUPLICATE: ~1,000
+-- FORWARD_FILL: ~100-200
+-- INTERPOLATE: ~50-100
+-- Other steps: ~50-100
+```
+
+**Check for Duplicate Records:**
+```sql
+-- See all duplicates with period details
+SELECT 
+    ticker,
+    metric_name,
+    COUNT(*) as duplicate_count,
+    metadata->>'period' as period
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_DUPLICATE'
+GROUP BY ticker, metric_name, metadata->>'period'
+ORDER BY duplicate_count DESC
+LIMIT 20;
+```
+
+---
+
+### Phase 4: Downstream Analysis Outputs
+
+#### **metrics_outputs**
+**Purpose:** Store calculated metrics from analysis runs
+
+**What to Look For:**
+- Should have entries after running analysis/optimization code
+- References should be valid (FK to dataset_versions, parameter_sets, companies)
+- Values should be numeric and reasonable for the metric type
+
+---
+
+#### **optimization_outputs**
+**Purpose:** Store optimization results
+
+**What to Look For:**
+- Should be populated after running optimization analysis
+- Results should be stored as JSONB and be retrievable
+- Should reference valid metrics_outputs
+
+---
+
+### Phase 5: Configuration & Parameters
+
+#### **parameters**
+**Purpose:** Master list of tunable parameters
+
+**What to Look For:**
+- Should have 13 baseline parameters loaded during initialization
+- Parameters should have reasonable default values
+
+**Validation Query:**
+```sql
+SELECT COUNT(*) as parameter_count
+FROM cissa.parameters;
+-- Should return: 13
+```
+
+---
+
+#### **parameter_sets**
+**Purpose:** Versioned parameter overrides
+
+**What to Look For:**
+- Should have at least 1 default parameter set (base_case)
+- Parameter overrides should be stored as JSONB
+- References should be valid (FK to dataset_versions)
+
+**Validation Query:**
+```sql
+SELECT set_name, COUNT(*) as count
+FROM cissa.parameter_sets
+GROUP BY set_name;
+-- Should return: at least base_case
+```
+
+---
+
+## Data Quality Validation
    - `dataset_id` (UUID linking back to dataset_versions)
    - `ticker` (company ticker)
    - `metric_name` (which metric this value is for)
@@ -371,86 +598,182 @@ These tables are populated once from the input data files and remain relatively 
 
 ---
 
-Use this checklist when visually inspecting the database:
+## Data Quality Validation
 
-### Reference Tables
-- [ ] `companies`: 500 rows, all unique tickers, 12 sectors, includes fy_report_month and begin_year
-- [ ] `fiscal_year_mapping`: ~10,900 rows, dates make sense
+### Duplicate Detection System
 
-### Ingestion Run
-- [ ] `dataset_versions`: 1+ rows, dataset_name follows format, source_file_hash populated
-- [ ] `raw_data`: 5,000+ rows (sample) or 275,000+ (full), mix of FISCAL/MONTHLY period types
+The pipeline includes a duplicate detection system that:
+1. Identifies rows with identical (ticker, metric_name, period) combinations
+2. Keeps only the first occurrence (ON CONFLICT DO NOTHING)
+3. Logs all duplicates to `imputation_audit_trail` with metadata
 
-### Processing Results
-- [ ] `fundamentals`: Has rows (>0), multiple tickers and fiscal years
-- [ ] `imputation_audit_trail`: Shows distribution of imputation methods
+**Verify Duplicates Were Detected:**
+```sql
+-- Count duplicates found
+SELECT COUNT(*) as duplicates_found
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_DUPLICATE';
+-- Expected: ~1,000
+
+-- See specific duplicates by metric
+SELECT 
+    metric_name,
+    COUNT(*) as count,
+    COUNT(DISTINCT ticker) as affected_tickers
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_DUPLICATE'
+GROUP BY metric_name
+ORDER BY count DESC;
+```
 
 ---
 
-## Typical Row Counts (Reference)
+### Invalid Values Processing
 
-| Table | Expected | Sample Test | Full Dataset |
-|-------|----------|-------------|--------------|
-| companies | 500 | 500 | 500 |
-| fiscal_year_mapping | ~10,900 | ~10,900 | ~10,900 |
-| dataset_versions | 1+ | 1 | 1 |
-| raw_data | variable | 5,000 | ~275,000 |
-| raw_data_validation_log | 0-low | 0 | 0-low |
-| fundamentals | variable | 0-1,000 | ~50,000-100,000 |
-| imputation_audit_trail | variable | 0-500 | ~10,000-50,000 |
+The pipeline logs any non-numeric or unparseable values:
+
+**Verify Invalid Values Were Captured:**
+```sql
+-- Count invalid values
+SELECT COUNT(*) as invalid_values
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_INVALID_VALUE';
+-- Expected: ~485
+
+-- Check a few examples
+SELECT 
+    ticker,
+    metric_name,
+    original_value,
+    imputed_value
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_INVALID_VALUE'
+LIMIT 10;
+```
 
 ---
 
-## How to Query These Tables
+### Imputation Coverage
 
-### Connect to Database
-```bash
-export PGPASSWORD='5VbL7dK4jM8sN6cE2fG'
-psql -h localhost -U postgres -d rozetta
+Verify that the pipeline successfully imputed all necessary gaps:
+
+**Verify All Fundamentals Have Values:**
+```sql
+-- Check for any NULL values (should be none)
+SELECT COUNT(*) as null_count
+FROM cissa.fundamentals
+WHERE value IS NULL;
+-- Expected: 0
+
+-- Show distribution of imputation methods used
+SELECT 
+    imputation_step,
+    COUNT(*) as count
+FROM cissa.imputation_audit_trail
+WHERE imputation_step NOT LIKE 'DATA_QUALITY_%'
+GROUP BY imputation_step
+ORDER BY count DESC;
 ```
 
-### View Table Structure
+---
+
+## Common Queries
+
+### Dataset Summary
 ```sql
--- In psql, use \d to describe a table
-\d cissa.companies
-\d cissa.raw_data
-\d cissa.fundamentals
+SELECT 
+    dataset_name,
+    version_number,
+    (metadata->>'unique_rows_in_raw_data')::int as raw_data_rows,
+    (metadata->>'duplicate_combinations_found')::int as duplicates,
+    (metadata->>'rows_with_unparseable_values')::int as invalid_values,
+    processed_at
+FROM cissa.dataset_versions
+ORDER BY processed_at DESC LIMIT 1;
 ```
 
-### Count Rows
+### Data Distribution Check
 ```sql
-SELECT COUNT(*) FROM cissa.companies;
+SELECT 
+    'fundamentals' as table_name, COUNT(*) as rows FROM cissa.fundamentals
+UNION ALL
+SELECT 'raw_data', COUNT(*) FROM cissa.raw_data
+UNION ALL
+SELECT 'companies', COUNT(*) FROM cissa.companies
+UNION ALL
+SELECT 'metric_units', COUNT(*) FROM cissa.metric_units;
+```
+
+### Period Type Breakdown
+```sql
+SELECT period_type, COUNT(*) as count
+FROM cissa.fundamentals
+GROUP BY period_type
+ORDER BY count DESC;
+```
+
+---
+
+## Troubleshooting
+
+### Issue: Fewer rows than expected in fundamentals
+```sql
+-- Check raw_data count
 SELECT COUNT(*) FROM cissa.raw_data;
-SELECT COUNT(*) FROM cissa.fundamentals;
+
+-- Check if duplicates were detected
+SELECT COUNT(*) FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_DUPLICATE';
+
+-- Check if invalid values were logged
+SELECT COUNT(*) FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_INVALID_VALUE';
+
+-- Verify reconciliation formula
+-- Expected: raw_data_count + duplicates + invalid_values = csv_rows (approx)
 ```
 
-### Sample Data
+### Issue: NULL values found in fundamentals.value
 ```sql
-SELECT * FROM cissa.companies LIMIT 5;
-SELECT * FROM cissa.raw_data LIMIT 10;
-SELECT * FROM cissa.fundamentals LIMIT 10;
+-- Find which rows have NULLs
+SELECT ticker, metric_name, fiscal_year, fiscal_month, fiscal_day
+FROM cissa.fundamentals
+WHERE value IS NULL
+LIMIT 10;
+
+-- This should not happen - all values should be imputed
+-- If found, re-run Stage 3 (Imputation & FY Alignment)
 ```
 
-### View Dataset Version Info
+### Issue: FISCAL records have fiscal_month or fiscal_day populated
 ```sql
-SELECT dataset_name, version_number, status, total_raw_rows, validation_rejected_rows 
-FROM cissa.dataset_versions;
+-- Find problematic records
+SELECT COUNT(*) as problem_count
+FROM cissa.fundamentals
+WHERE period_type = 'FISCAL' 
+  AND (fiscal_month IS NOT NULL OR fiscal_day IS NOT NULL);
+
+-- This should return 0
 ```
+
+---
+
+## Related Documentation
+
+For more detailed information, see:
+- **Schema Reference**: `/backend/database/CURRENT_SCHEMA.md`
+- **Validation Queries**: `/VALIDATION_QUERIES.md`
+- **Deployment Guide**: `/backend/database/DEPLOYMENT_GUIDE.md`
+- **README**: `/README.md`
 
 ---
 
 ## Notes
 
-- All tables are in the `cissa` schema (separate from `public`)
-- Queries automatically use `cissa` schema due to connection string `search_path=cissa`
-- Tables are immutable in design: `raw_data` is never updated, only inserted/deleted
-- `fundamentals` is the single source of truth for clean, processed data
-- Each pipeline run creates a new `dataset_versions` row with unique `dataset_id`
-- All timestamps are in UTC (`TIMESTAMPTZ` type)
-
----
-
-## Last Updated
-
-Generated: 2026-03-03  
-Pipeline Status: ✅ Deployed and tested successfully
+- All tables are in the `cissa` schema
+- All timestamps are in UTC (TIMESTAMPTZ type)
+- The `fundamentals` table is the single source of truth for clean data
+- The `imputation_audit_trail` provides full traceability of all data quality decisions
+- Each pipeline run creates a new `dataset_versions` entry with unique `dataset_id`
+- Duplicate detection happens automatically during Stage 1 (Ingestion)
+- All data quality issues are logged and queryable for analysis

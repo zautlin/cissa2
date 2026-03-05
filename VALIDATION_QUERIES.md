@@ -1,23 +1,25 @@
 # Post-Ingestion Validation Queries
 
-Run these queries after you complete the data re-ingestion to verify the FISCAL/MONTHLY data flow is working correctly.
+Run these queries after you complete the data ingestion to verify the pipeline is working correctly and data quality issues are properly logged.
 
-## 0. Stage 1B: Ingestion Reconciliation
+## 0. Dataset Ingestion Summary
 
 Verify the full data flow through ingestion with complete reconciliation:
 
 ```sql
--- Query ingestion metadata to see reconciliation details
+-- Query dataset_versions to see ingestion metadata and reconciliation details
 SELECT 
     dataset_name,
     version_number,
-    (metadata->'stage_1_ingestion'->>'total_csv_rows')::int as csv_rows,
-    (metadata->'stage_1_ingestion'->>'total_rows_processed')::int as processed_rows,
-    (metadata->'stage_1_ingestion'->>'rows_with_unparseable_values')::int as rejected_rows,
-    (metadata->'stage_1_ingestion'->>'duplicate_combinations_found')::int as duplicates,
-    (metadata->'stage_1_ingestion'->>'unique_rows_in_raw_data')::int as unique_in_db
+    status,
+    (metadata->>'total_csv_rows')::int as csv_rows,
+    (metadata->>'total_rows_processed')::int as processed_rows,
+    (metadata->>'rows_with_unparseable_values')::int as rejected_rows,
+    (metadata->>'duplicate_combinations_found')::int as duplicates,
+    (metadata->>'unique_rows_in_raw_data')::int as unique_in_db,
+    processed_at
 FROM cissa.dataset_versions
-ORDER BY created_at DESC
+ORDER BY processed_at DESC
 LIMIT 1;
 ```
 
@@ -33,6 +35,56 @@ LIMIT 1;
 unique_in_db = processed_rows - rejected_rows - duplicates
 273,858 = 275,343 - 485 - 1,000
 ✓ Should equal 273,858 (matches raw_data count)
+```
+
+---
+
+## 0A. Data Quality Audit Trail Validation
+
+Verify that all data quality issues (duplicates, invalid values, etc.) are properly logged:
+
+```sql
+-- Summary of all data quality issues by type
+SELECT 
+    imputation_step,
+    COUNT(*) as count,
+    COUNT(DISTINCT ticker) as unique_tickers,
+    COUNT(DISTINCT metric_name) as unique_metrics
+FROM cissa.imputation_audit_trail
+WHERE imputation_step LIKE 'DATA_QUALITY_%'
+GROUP BY imputation_step
+ORDER BY count DESC;
+```
+
+**Expected Results:**
+- DATA_QUALITY_DUPLICATE: ~1,000 (duplicate records detected during ingestion)
+- DATA_QUALITY_INVALID_VALUE: varies (values that couldn't be parsed as numeric)
+- DATA_QUALITY_MISSING: varies (missing values that couldn't be imputed)
+
+**Sample Query - View Duplicate Details:**
+```sql
+-- See all duplicate records with their period and occurrence count
+SELECT 
+    ticker,
+    metric_name,
+    fiscal_year,
+    COUNT(*) as occurrence_count,
+    metadata->>'period' as period,
+    (metadata->>'num_occurrences')::int as num_occurrences
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_DUPLICATE'
+GROUP BY ticker, metric_name, fiscal_year, metadata->>'period', metadata->>'num_occurrences'
+ORDER BY occurrence_count DESC
+LIMIT 20;
+```
+
+**Sample Output:**
+```
+ticker | metric_name         | fiscal_year | occurrence_count | period      | num_occurrences
+-------|---------------------|-------------|------------------|-------------|----------------
+BHP    | Company TSR (Monthly)| 2024        |        150       | 2024-03-29  |       2
+RIO    | Company TSR (Monthly)| 2023        |        120       | 2023-06-30  |       2
+...
 ```
 
 ---
@@ -237,15 +289,82 @@ ORDER BY count DESC;
 
 ---
 
+---
 
+## Troubleshooting Data Quality Issues
 
-If FISCAL rows are still missing, check for extraction failures in your application logs:
+### Issue: Too Many Duplicates
 
-Look for these log messages:
-- "FISCAL extracted: X" - successful extractions
-- "FISCAL failed: X" - failed extractions
-- "FISCAL regex no match" - periods that didn't match the regex
-- "FISCAL extraction failures (sample)" - example problem cases
+If duplicate count is higher than expected:
+
+```sql
+-- Identify which metrics have the most duplicates
+SELECT 
+    metric_name,
+    COUNT(*) as duplicate_count,
+    COUNT(DISTINCT ticker) as affected_tickers
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_DUPLICATE'
+GROUP BY metric_name
+ORDER BY duplicate_count DESC;
+
+-- Show timeline of when duplicates were found (if timestamps are available)
+SELECT 
+    metric_name,
+    ticker,
+    DATE(created_at) as detection_date,
+    COUNT(*) as count
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_DUPLICATE'
+GROUP BY metric_name, ticker, DATE(created_at)
+ORDER BY detection_date DESC;
+```
+
+### Issue: Invalid Values Not Being Caught
+
+Verify all invalid values were logged:
+
+```sql
+-- Count of invalid values in audit trail
+SELECT 
+    COUNT(*) as invalid_value_count,
+    COUNT(DISTINCT ticker) as affected_tickers,
+    COUNT(DISTINCT metric_name) as affected_metrics
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_INVALID_VALUE';
+
+-- See examples of invalid values that were logged
+SELECT 
+    ticker,
+    metric_name,
+    original_value,
+    imputed_value,
+    created_at
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_INVALID_VALUE'
+LIMIT 10;
+```
+
+### Issue: Duplicate Handling Verification
+
+Confirm that only first occurrence was kept in raw_data:
+
+```sql
+-- Check that all unique (ticker, metric_name, period) combinations exist in raw_data
+SELECT 
+    COUNT(DISTINCT (rd.ticker, rd.metric_name, rd.period)) as unique_in_raw,
+    COUNT(*) as total_in_raw
+FROM cissa.raw_data rd;
+
+-- Verify the reconciliation
+SELECT 
+    (SELECT COUNT(*) FROM cissa.raw_data) as raw_data_count,
+    COUNT(*) as audit_duplicate_count
+FROM cissa.imputation_audit_trail
+WHERE imputation_step = 'DATA_QUALITY_DUPLICATE'
+INTO STRICT raw_count, dup_count;
+-- Result: raw_data_count + dup_count should equal total processed rows minus rejected rows
+```
 
 ---
 
