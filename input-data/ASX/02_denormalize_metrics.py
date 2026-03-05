@@ -31,6 +31,10 @@ def load_metric_config(config_path):
     Load metric configuration from metric_units.json.
     Returns dict mapping filename to database_name (canonical DB value).
     
+    Logic:
+      - metric_name (e.g., "Revenue") + ".csv" → filename to look for
+      - database_name (e.g., "REVENUE") → value to write to output CSV
+    
     Example:
       "Revenue.csv" -> "REVENUE"
       "Company TSR.csv" -> "COMPANY_TSR"
@@ -40,7 +44,7 @@ def load_metric_config(config_path):
             metrics_config = json.load(f)
         
         # Build filename -> database_name mapping
-        # Use metric_name (display name) to build filename, but output database_name to CSV
+        # Use metric_name to build filename, but output database_name to CSV
         metric_files = {}
         for metric_data in metrics_config:
             metric_name = metric_data.get('metric_name', '')
@@ -49,16 +53,14 @@ def load_metric_config(config_path):
             if not metric_name or not database_name:
                 continue
             
-            # Build filename pattern from metric_name (display name)
-            # Most metrics: "Revenue" -> "Revenue.csv"
-            # Monthly metrics: "Company TSR (Monthly)" -> "Company TSR.csv"
-            
+            # Build filename: metric_name + ".csv"
+            # For "Company TSR (Monthly)", the metric_name is "Company TSR (Monthly)"
+            # but we need to strip "(Monthly)" to match the actual CSV filename
+            filename_base = metric_name
             if '(Monthly)' in metric_name:
-                # Strip "(Monthly)" suffix for filename
-                base_name = metric_name.replace(' (Monthly)', '')
-                filename = f"{base_name}.csv"
-            else:
-                filename = f"{metric_name}.csv"
+                filename_base = metric_name.replace(' (Monthly)', '')
+            
+            filename = f"{filename_base}.csv"
             
             # Store mapping: filename -> database_name (for output to CSV)
             metric_files[filename] = database_name
@@ -68,6 +70,14 @@ def load_metric_config(config_path):
     except FileNotFoundError:
         print(f"❌ Error: Config file not found: {config_path}")
         print("Expected location: backend/database/config/metric_units.json")
+        return None
+    
+    except json.JSONDecodeError as e:
+        print(f"❌ Error: Invalid JSON in config file: {e}")
+        return None
+    
+    except Exception as e:
+        print(f"❌ Error loading config: {e}")
         return None
     
     except json.JSONDecodeError as e:
