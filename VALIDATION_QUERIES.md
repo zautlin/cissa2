@@ -181,7 +181,63 @@ GROUP BY period_type;
 
 ---
 
-## Debugging: If FISCAL count is low
+## 9. Metric Units Coverage
+
+Verify that all metrics in raw_data have corresponding unit definitions:
+
+```sql
+-- Find metrics in raw_data without defined units
+SELECT 
+    COUNT(DISTINCT rd.metric_name) as metrics_in_data,
+    COUNT(DISTINCT mu.metric_name) as metrics_with_units,
+    COUNT(DISTINCT CASE WHEN mu.metric_name IS NULL THEN rd.metric_name END) as unknown_metrics
+FROM cissa.raw_data rd
+LEFT JOIN cissa.metric_units mu ON rd.metric_name = mu.metric_name;
+
+-- See which specific metrics are missing units
+SELECT DISTINCT rd.metric_name
+FROM cissa.raw_data rd
+WHERE NOT EXISTS (
+    SELECT 1 FROM cissa.metric_units mu
+    WHERE mu.metric_name = rd.metric_name
+)
+ORDER BY rd.metric_name;
+```
+
+**Expected Results:**
+- metrics_in_data: 20 (all 20 ASX metrics)
+- metrics_with_units: 20 (all have units defined)
+- unknown_metrics: 0 (no gaps)
+
+**Unit Breakdown:**
+- 14 financial metrics → "millions" (Revenue, Cash, Total Assets, etc.)
+- 3 TSR metrics → "%" (FY TSR, Company TSR Monthly, Index TSR Monthly)
+- 1 Risk-Free Rate → "%" 
+- 1 Spot Shares → "number of shares"
+- 1 Share Price → "millions"
+
+---
+
+## Debugging: If Metric Units Are Missing
+
+If you find unknown metrics:
+
+```sql
+-- See full metric unit definitions
+SELECT metric_name, unit, created_at
+FROM cissa.metric_units
+ORDER BY metric_name;
+
+-- Count metrics by unit type
+SELECT unit, COUNT(*) as count
+FROM cissa.metric_units
+GROUP BY unit
+ORDER BY count DESC;
+```
+
+---
+
+
 
 If FISCAL rows are still missing, check for extraction failures in your application logs:
 

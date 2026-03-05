@@ -397,6 +397,57 @@ class Ingester:
         
         return {'loaded': len(fy_mapping_rows), 'path': csv_path}
     
+    def _validate_metrics_against_units(self, dataset_id: str) -> Dict[str, Any]:
+        """
+        Validate that all metrics in raw_data have corresponding entries in metric_units.
+        
+        Logs warnings for any metrics without defined units.
+        
+        Returns:
+            Dict with validation results (metrics_found, metrics_with_units, unknown_metrics)
+        """
+        try:
+            with self.engine.connect() as conn:
+                # Get all unique metrics in raw_data for this dataset
+                result = conn.execute(text("""
+                    SELECT DISTINCT metric_name FROM raw_data WHERE dataset_id = :dataset_id
+                """), {'dataset_id': dataset_id})
+                
+                metrics_in_data = {row[0] for row in result.fetchall()}
+                
+                # Get all metrics in metric_units
+                result = conn.execute(text("""
+                    SELECT DISTINCT metric_name FROM metric_units
+                """))
+                
+                metrics_with_units = {row[0] for row in result.fetchall()}
+            
+            # Find unknown metrics
+            unknown_metrics = metrics_in_data - metrics_with_units
+            
+            if unknown_metrics:
+                print(f"⚠  Found {len(unknown_metrics)} metrics without defined units:")
+                for metric in sorted(unknown_metrics):
+                    print(f"   - {metric}")
+            else:
+                print(f"✓ All {len(metrics_in_data)} metrics have defined units")
+            
+            return {
+                'metrics_found': len(metrics_in_data),
+                'metrics_with_units': len(metrics_with_units),
+                'unknown_metrics': len(unknown_metrics),
+                'unknown_metric_names': sorted(unknown_metrics),
+            }
+        
+        except Exception as e:
+            print(f"⚠  Could not validate metrics against units: {e}")
+            return {
+                'metrics_found': 0,
+                'metrics_with_units': 0,
+                'unknown_metrics': 0,
+                'unknown_metric_names': [],
+            }
+    
     def _load_raw_data(self, dataset_id: str, csv_path: str) -> Dict[str, Any]:
         """Load financial_metrics_fact_table.csv → raw_data with full reconciliation.
         
@@ -481,6 +532,10 @@ class Ingester:
                 """), {'dataset_id': dataset_id})
                 unique_rows_in_db = result.scalar()
         
+        # Validate metrics against metric_units
+        print()
+        metrics_validation = self._validate_metrics_against_units(dataset_id)
+        
         return {
             'status': 'INGESTED',
             'total_csv_rows': len(df),
@@ -489,5 +544,6 @@ class Ingester:
             'duplicate_combinations': duplicate_combinations,
             'unique_rows_in_db': unique_rows_in_db,
             'validation_summary': validation_summary,
+            'metrics_validation': metrics_validation,
             'path': csv_path,
         }

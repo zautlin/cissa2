@@ -20,37 +20,63 @@ Process:
 
 import sys
 import csv
+import json
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime, timedelta
 
 
-# Metric files to process (filename -> metric name)
-METRIC_FILES = {
-    # Fiscal/Annual metrics (17 files)
-    'Revenue.csv': 'Revenue',
-    'Op Income.csv': 'Operating Income',
-    'PBT.csv': 'Profit Before Tax',
-    'PAT.csv': 'Profit After Tax',
-    'PAT XO.csv': 'Profit After Tax (Exc)',
-    'Cash.csv': 'Cash',
-    'FA.csv': 'Fixed Assets',
-    'GW.csv': 'Goodwill',
-    'MC.csv': 'Market Cap',
-    'MI.csv': 'Minority Interest',
-    'Div.csv': 'Dividends',
-    'Franking.csv': 'Franking',
-    'FY TSR.csv': 'FY TSR',
-    'Spot Shares.csv': 'Spot Shares',
-    'Share Price.csv': 'Share Price',
-    'Total Assets.csv': 'Total Assets',
-    'Total Equity.csv': 'Total Equity',
+def load_metric_config(config_path):
+    """
+    Load metric configuration from metric_units.json.
+    Returns dict mapping filename to database_name (canonical DB value).
     
-    # Monthly metrics (3 files)
-    'Company TSR.csv': 'Company TSR (Monthly)',
-    'Index TSR.csv': 'Index TSR (Monthly)',
-    'Rf.csv': 'Risk-Free Rate (Monthly)',
-}
+    Example:
+      "Revenue.csv" -> "REVENUE"
+      "Company TSR.csv" -> "COMPANY_TSR"
+    """
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            metrics_config = json.load(f)
+        
+        # Build filename -> database_name mapping
+        # Use metric_name (display name) to build filename, but output database_name to CSV
+        metric_files = {}
+        for metric_data in metrics_config:
+            metric_name = metric_data.get('metric_name', '')
+            database_name = metric_data.get('database_name', '')
+            
+            if not metric_name or not database_name:
+                continue
+            
+            # Build filename pattern from metric_name (display name)
+            # Most metrics: "Revenue" -> "Revenue.csv"
+            # Monthly metrics: "Company TSR (Monthly)" -> "Company TSR.csv"
+            
+            if '(Monthly)' in metric_name:
+                # Strip "(Monthly)" suffix for filename
+                base_name = metric_name.replace(' (Monthly)', '')
+                filename = f"{base_name}.csv"
+            else:
+                filename = f"{metric_name}.csv"
+            
+            # Store mapping: filename -> database_name (for output to CSV)
+            metric_files[filename] = database_name
+        
+        return metric_files
+    
+    except FileNotFoundError:
+        print(f"❌ Error: Config file not found: {config_path}")
+        print("Expected location: backend/database/config/metric_units.json")
+        return None
+    
+    except json.JSONDecodeError as e:
+        print(f"❌ Error: Invalid JSON in config file: {e}")
+        return None
+    
+    except Exception as e:
+        print(f"❌ Error loading config: {e}")
+        return None
 
 
 def identify_period_type(headers):
@@ -158,10 +184,29 @@ def process_metric_file(csv_path, metric_name, metric_dir):
         return records
 
 
-def denormalize_metrics(metric_dir, output_file):
+def denormalize_metrics(metric_dir, output_file, config_path=None):
     """
     Main function: Process all metric files and create denormalized fact table.
+    
+    Args:
+        metric_dir: Directory containing metric CSV files
+        output_file: Output CSV file path
+        config_path: Path to metric_units.json config file
+                    Defaults to backend/database/config/metric_units.json
     """
+    # Determine config path if not provided
+    if config_path is None:
+        # Try to find config relative to script location
+        script_dir = Path(__file__).parent
+        # Go up to project root, then to backend/database/config
+        config_path = script_dir.parent.parent / 'backend' / 'database' / 'config' / 'metric_units.json'
+    
+    # Load metric configuration
+    METRIC_FILES = load_metric_config(config_path)
+    
+    if METRIC_FILES is None:
+        sys.exit(1)
+    
     metric_path = Path(metric_dir)
     
     if not metric_path.exists():
@@ -175,6 +220,7 @@ def denormalize_metrics(metric_dir, output_file):
     print("=" * 80)
     print(f"Metric directory: {metric_path}")
     print(f"Output file:      {output_path}")
+    print(f"Config source:    {config_path}")
     print()
     
     # Collect all records
@@ -191,7 +237,7 @@ def denormalize_metrics(metric_dir, output_file):
     print()
     
     # Process each metric file
-    for filename, metric_name in sorted(METRIC_FILES.items()):
+    for filename, database_name in sorted(METRIC_FILES.items()):
         csv_path = metric_path / filename
         
         if not csv_path.exists():
@@ -199,10 +245,10 @@ def denormalize_metrics(metric_dir, output_file):
             continue
         
         stats['files_found'] += 1
-        print(f"  → {filename:25} ({metric_name})")
+        print(f"  → {filename:25} ({database_name})")
         
         # Process the file
-        records = process_metric_file(csv_path, metric_name, metric_path)
+        records = process_metric_file(csv_path, database_name, metric_path)
         
         if records:
             all_records.extend(records)

@@ -58,6 +58,35 @@ CREATE UNIQUE INDEX idx_fy_mapping_unique ON fiscal_year_mapping (ticker, fiscal
 CREATE INDEX idx_fy_mapping_ticker ON fiscal_year_mapping (ticker);
 COMMENT ON TABLE fiscal_year_mapping IS 'Maps (ticker, fiscal_year) to fiscal period end date. Used for FY alignment during processing.';
 
+-- Metric Units: Lookup table for metric measurement units
+-- Maps each metric name to its unit (e.g., "Revenue" → "millions", "FY TSR" → "%")
+-- Populated during schema initialization from metric_units.json configuration
+CREATE TABLE metric_units (
+  metric_units_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  metric_name TEXT NOT NULL UNIQUE,
+  unit TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_metric_units_name ON metric_units (metric_name);
+COMMENT ON TABLE metric_units IS 'Reference table mapping metric names to their units. Units: "millions" (AUD/currency), "%", "number of shares". Populated from backend/database/config/metric_units.json during schema initialization.';
+COMMENT ON COLUMN metric_units.metric_name IS 'Unique metric identifier (e.g., "Revenue", "Company TSR (Monthly)", "Spot Shares")';
+COMMENT ON COLUMN metric_units.unit IS 'Unit of measurement for the metric (e.g., "millions", "%", "number of shares")';
+
+-- Auto-update trigger for metric_units.updated_at
+CREATE OR REPLACE FUNCTION update_metric_units_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_metric_units_updated
+BEFORE UPDATE ON metric_units
+FOR EACH ROW
+EXECUTE FUNCTION update_metric_units_timestamp();
+
 -- ============================================================================
 -- PHASE 2: VERSIONING & TRACKING
 -- ============================================================================

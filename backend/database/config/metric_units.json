@@ -1,0 +1,102 @@
+[
+  {
+    "metric_name": "Revenue",
+    "database_name": "REVENUE",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Operating Income",
+    "database_name": "OPERATING_INCOME",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Profit Before Tax",
+    "database_name": "PROFIT_BEFORE_TAX",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Profit After Tax",
+    "database_name": "PROFIT_AFTER_TAX",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Profit After Tax (Exc)",
+    "database_name": "PROFIT_AFTER_TAX_EX",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Cash",
+    "database_name": "CASH",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Fixed Assets",
+    "database_name": "FIXED_ASSETS",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Goodwill",
+    "database_name": "GOODWILL",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Market Cap",
+    "database_name": "MARKET_CAP",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Minority Interest",
+    "database_name": "MINORITY_INTEREST",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Dividends",
+    "database_name": "DIVIDENDS",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Franking",
+    "database_name": "FRANKING",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "FY TSR",
+    "database_name": "FY_TSR",
+    "unit": "%"
+  },
+  {
+    "metric_name": "Spot Shares",
+    "database_name": "SPOT_SHARES",
+    "unit": "number of shares"
+  },
+  {
+    "metric_name": "Share Price",
+    "database_name": "SHARE_PRICE",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Total Assets",
+    "database_name": "TOTAL_ASSETS",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Total Equity",
+    "database_name": "TOTAL_EQUITY",
+    "unit": "millions"
+  },
+  {
+    "metric_name": "Company TSR (Monthly)",
+    "database_name": "COMPANY_TSR",
+    "unit": "%"
+  },
+  {
+    "metric_name": "Index TSR (Monthly)",
+    "database_name": "INDEX_TSR",
+    "unit": "%"
+  },
+  {
+    "metric_name": "Risk-Free Rate (Monthly)",
+    "database_name": "RISK_FREE_RATE",
+    "unit": "%"
+  }
+]

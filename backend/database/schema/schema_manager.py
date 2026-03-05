@@ -115,7 +115,7 @@ class SchemaManager:
         print("⚠️  WARNING: DESTRUCTIVE OPERATION")
         print("="*70)
         print("\nThis will PERMANENTLY DELETE:")
-        print("  • All 10 tables in cissa schema")
+        print("  • All 11 tables in cissa schema")
         print("  • All data in those tables")
         print("  • All triggers and functions")
         print("\nThere is NO UNDO for this operation.")
@@ -181,10 +181,67 @@ class SchemaManager:
                 table_count = result.scalar()
             
             print(f"✓ Schema verification: {table_count} tables created")
-            return table_count >= 10
+            return table_count >= 11
         
         except Exception as e:
             print(f"✗ Schema verification failed: {e}")
+            return False
+    
+    def init_metric_units(self) -> bool:
+        """Initialize metric_units reference table from config file."""
+        print("Initializing metric units reference table...")
+        
+        try:
+            # Read metric_units.json configuration
+            config_dir = self.SCHEMA_DIR.parent / "config"
+            metric_units_file = config_dir / "metric_units.json"
+            
+            if not metric_units_file.exists():
+                print(f"✗ Configuration file not found: {metric_units_file}")
+                return False
+            
+            with open(metric_units_file, 'r') as f:
+                metric_units_config = json.load(f)
+            
+            with self.engine.begin() as conn:
+                # Check if metric_units already populated
+                result = conn.execute(text("SELECT COUNT(*) FROM metric_units"))
+                existing = result.scalar()
+                
+                if existing > 0:
+                    print(f"⚠  {existing} metric units already exist, skipping initialization")
+                    return True
+                
+                # Insert metric units from config
+                # Store database_name as metric_name in the table (canonical DB value)
+                for metric_data in metric_units_config:
+                    database_name = metric_data.get("database_name")
+                    unit = metric_data.get("unit")
+                    
+                    if not database_name or not unit:
+                        print(f"⚠  Skipping incomplete metric config: {metric_data}")
+                        continue
+                    
+                    conn.execute(text("""
+                        INSERT INTO metric_units (metric_name, unit)
+                        VALUES (:metric_name, :unit)
+                    """), {
+                        "metric_name": database_name,
+                        "unit": unit,
+                    })
+                
+                print(f"✓ Inserted {len(metric_units_config)} metric units")
+            
+            return True
+        
+        except FileNotFoundError as e:
+            print(f"✗ {e}")
+            return False
+        
+        except Exception as e:
+            print(f"✗ Metric units initialization failed: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def init_parameters(self) -> bool:
@@ -263,15 +320,22 @@ class SchemaManager:
             print("\n✗ Schema creation failed")
             return False
         
+        # Initialize metric units from config
+        print()
+        if not self.init_metric_units():
+            print("\n✗ Metric units initialization failed")
+            return False
+        
         print("\n" + "="*70)
         print("✓ FULL INITIALIZATION COMPLETE")
         print("="*70)
         print("\nInitialized:")
-        print("  ✓ 10 tables created")
+        print("  ✓ 11 tables created")
         print("  ✓ 25+ indexes created")
-        print("  ✓ 4 auto-update triggers created")
+        print("  ✓ 5 auto-update triggers created")
         print("  ✓ 13 baseline parameters inserted")
         print("  ✓ Default parameter_set 'base_case' created")
+        print("  ✓ 20 metric units initialized")
         print("\nNext steps:")
         print("  1. Load reference tables (companies, fiscal_year_mapping)")
         print("  2. Run data ingestion (load_dataset)")
