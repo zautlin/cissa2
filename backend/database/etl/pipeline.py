@@ -387,6 +387,12 @@ class PipelineOrchestrator:
                 'validation_summary': result['validation_summary'],
             }
             
+            # Display data quality notice if duplicates were found
+            if result['duplicate_combinations'] > 0:
+                self.logger.info("")
+                self.logger.info(f"⚠ Data Quality Notice: {result['duplicate_combinations']:,} duplicate records detected and logged")
+                self.logger.info(f"  Review imputation_audit_trail with imputation_step = 'DATA_QUALITY_DUPLICATE'")
+            
             return True
         
         except Exception as e:

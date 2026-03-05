@@ -209,30 +209,38 @@ COMMENT ON TABLE fundamentals IS 'Final cleaned, FY-aligned, imputed fact table.
 
 -- Imputation Audit Trail: Detailed audit of imputation decisions
 -- One row per imputed (ticker, fiscal_year, metric); raw data rows have no entry
-CREATE TABLE imputation_audit_trail (
-  audit_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  dataset_id UUID NOT NULL REFERENCES dataset_versions(dataset_id) ON DELETE CASCADE,
-  ticker TEXT NOT NULL,
-  metric_name TEXT NOT NULL,
-  fiscal_year INTEGER NOT NULL,
-  
-  -- Imputation details
-  imputation_step TEXT NOT NULL CHECK (imputation_step IN (
-    'FORWARD_FILL',
-    'BACKWARD_FILL',
-    'INTERPOLATE',
-    'SECTOR_MEDIAN',
-    'MARKET_MEDIAN',
-    'MISSING'
-  )),
-  original_value NUMERIC,
-  imputed_value NUMERIC NOT NULL,
-  
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+ CREATE TABLE imputation_audit_trail (
+   audit_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+   dataset_id UUID NOT NULL REFERENCES dataset_versions(dataset_id) ON DELETE CASCADE,
+   ticker TEXT NOT NULL,
+   metric_name TEXT NOT NULL,
+   fiscal_year INTEGER,  -- Nullable for data quality issues without clear fiscal year mapping
+   
+   -- Imputation or data quality issue details
+   imputation_step TEXT NOT NULL CHECK (imputation_step IN (
+     'FORWARD_FILL',
+     'BACKWARD_FILL',
+     'INTERPOLATE',
+     'SECTOR_MEDIAN',
+     'MARKET_MEDIAN',
+     'MISSING',
+     'DATA_QUALITY_DUPLICATE',
+     'DATA_QUALITY_INVALID_VALUE',
+     'DATA_QUALITY_MISSING'
+   )),
+   original_value NUMERIC,
+   imputed_value NUMERIC NOT NULL,
+   
+   -- Metadata: stores period/date and other context as JSON
+   -- For duplicates: {"period": "2023-09-29", "num_occurrences": 2}
+   metadata JSONB DEFAULT '{}',
+   
+   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+ );
 CREATE INDEX idx_imputation_audit_dataset ON imputation_audit_trail (dataset_id);
 CREATE INDEX idx_imputation_audit_ticker_fy ON imputation_audit_trail (ticker, fiscal_year);
-COMMENT ON TABLE imputation_audit_trail IS 'Audit trail of imputation decisions. One row per imputed value showing which step succeeded.';
+CREATE INDEX idx_imputation_audit_step ON imputation_audit_trail (imputation_step);
+COMMENT ON TABLE imputation_audit_trail IS 'Audit trail of imputation decisions and data quality issues. Records imputations (forward fill, interpolation, etc.) and raw data quality issues (duplicates, invalid values). For duplicates, metadata contains the period/date where issue was found.';
 
 -- ============================================================================
 -- PHASE 5: CONFIGURATION & PARAMETERS

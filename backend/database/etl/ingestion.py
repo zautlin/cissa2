@@ -14,6 +14,24 @@ from sqlalchemy import text
 from .validators import validate_numeric
 
 
+class DuplicateDataException(Exception):
+    """
+    Raised when duplicate (ticker, metric_name, period) combinations are detected in raw data.
+    
+    Stores the list of duplicates found so they can be logged to audit trail.
+    """
+    def __init__(self, duplicates: list, message: str = None):
+        """
+        Args:
+            duplicates: List of dicts with keys: ticker, metric_name, period, original_value, imputed_value
+            message: Optional custom error message
+        """
+        self.duplicates = duplicates
+        if message is None:
+            message = f"Found {len(duplicates)} duplicate (ticker, metric_name, period) combinations in raw data"
+        super().__init__(message)
+
+
 class Ingester:
     """
     Ingestion orchestrator for Stage 1.
@@ -451,17 +469,76 @@ class Ingester:
                 'unknown_metric_names': [],
             }
     
+    def _log_duplicates_to_audit_trail(self, dataset_id: str, duplicates_found: list[Dict[str, Any]]) -> None:
+        """
+        Log all detected duplicates to imputation_audit_trail table.
+        
+        For each duplicate (ticker, metric_name, period):
+        - Extracts fiscal_year from period string if possible
+        - Logs with imputation_step = 'DATA_QUALITY_DUPLICATE'
+        - Stores period in metadata JSONB column
+        - Records first occurrence as original_value, second as imputed_value
+        
+        Args:
+            dataset_id: The dataset_id being ingested
+            duplicates_found: List of dicts with keys: ticker, metric_name, period, occurrences
+                            Each duplicate has occurrences list with value/raw_value
+        """
+        audit_records = []
+        
+        for duplicate in duplicates_found:
+            ticker: str = duplicate['ticker']
+            metric_name: str = duplicate['metric_name']
+            period: str = duplicate['period']
+            occurrences: list = duplicate['occurrences']
+            
+            # Extract fiscal_year from period if possible (e.g., "FY 2023" → 2023)
+            fiscal_year: Optional[int] = None
+            if isinstance(period, str) and period.startswith('FY '):
+                try:
+                    fiscal_year = int(period.split()[-1])
+                except (ValueError, IndexError):
+                    pass
+            
+            # Log using first occurrence value as original, second as imputed
+            original_value = str(occurrences[0]['value'])
+            imputed_value = str(occurrences[1]['value']) if len(occurrences) > 1 else str(occurrences[0]['value'])
+            
+            audit_records.append({
+                'dataset_id': dataset_id,
+                'ticker': ticker,
+                'metric_name': metric_name,
+                'fiscal_year': fiscal_year,
+                'original_value': original_value,
+                'imputed_value': imputed_value,
+                'imputation_step': 'DATA_QUALITY_DUPLICATE',
+                'metadata': json.dumps({'period': period, 'num_occurrences': len(occurrences)}),
+            })
+        
+        # Insert all duplicate records at once
+        if audit_records:
+            with self.engine.begin() as conn:
+                conn.execute(text("""
+                    INSERT INTO imputation_audit_trail 
+                    (dataset_id, ticker, metric_name, fiscal_year, original_value, imputed_value, imputation_step, metadata)
+                    VALUES (:dataset_id, :ticker, :metric_name, :fiscal_year, :original_value, :imputed_value, :imputation_step, :metadata)
+                """), audit_records)
+    
     def _load_raw_data(self, dataset_id: str, csv_path: str) -> Dict[str, Any]:
-        """Load financial_metrics_fact_table.csv → raw_data with full reconciliation.
+        """Load financial_metrics_fact_table.csv → raw_data with duplicate detection.
+        
+        Detects ALL duplicate (ticker, metric_name, period) combinations and logs them
+        to imputation_audit_trail. Continues ingestion using ON CONFLICT DO NOTHING
+        to keep first occurrence and skip duplicates.
         
         Tracks all rows through the ingestion pipeline:
         - total_csv_rows: All rows in CSV file
         - total_rows_processed: Rows with valid ticker/period/metric
         - rejected_rows: Rows with unparseable numeric values
-        - duplicate_combinations: Duplicate (ticker, metric_name, period) within valid rows
-        - unique_rows_in_db: Final rows in raw_data after deduplication
+        - duplicate_combinations: Duplicate (ticker, metric_name, period) combinations detected
         
-        Reconciliation: CSV rows = processed + rejects + duplicates (duplicates update existing)
+        Returns:
+            Dict with ingestion statistics including duplicate_combinations count
         """
         df = pd.read_csv(csv_path)
         
@@ -470,10 +547,11 @@ class Ingester:
         validation_summary = {}
         
         raw_data_rows = []
-        seen_combinations = set()  # Track (ticker, metric_name, period) duplicates
-        duplicate_combinations = 0
+        # Track: (ticker, metric_name, period) → list of (row_index, value, period_type)
+        combination_map = {}
+        duplicates_found = []
         
-        for _, row in df.iterrows():
+        for row_idx, (_, row) in enumerate(df.iterrows(), start=2):  # Start at 2 (after header)
             ticker = str(row.get('Ticker', '')).strip()
             period = str(row.get('Period', '')).strip()
             period_type = str(row.get('Period_Type', '')).strip()
@@ -490,12 +568,19 @@ class Ingester:
             numeric_val, is_valid, rejection_reason = validate_numeric(raw_value)
             
             if is_valid:
-                # Track duplicates: check if we've already seen this combination
                 combination = (ticker, metric_name, period)
-                if combination in seen_combinations:
-                    duplicate_combinations += 1
-                else:
-                    seen_combinations.add(combination)
+                
+                # Track for duplicate detection
+                if combination not in combination_map:
+                    combination_map[combination] = []
+                
+                combination_map[combination].append({
+                    'row_index': row_idx,
+                    'value': numeric_val,
+                    'raw_value': raw_value,
+                    'period_type': period_type,
+                    'currency': currency,
+                })
                 
                 raw_data_rows.append({
                     'dataset_id': dataset_id,
@@ -514,19 +599,34 @@ class Ingester:
                     validation_summary[rejection_reason] = 0
                 validation_summary[rejection_reason] += 1
         
-        # Bulk insert valid rows into raw_data
+        # Check for duplicates BEFORE inserting
+        duplicate_count = 0
+        for (ticker, metric_name, period), occurrences in combination_map.items():
+            if len(occurrences) > 1:
+                # Multiple occurrences = duplicate
+                duplicate_count += 1
+                duplicates_found.append({
+                    'ticker': ticker,
+                    'metric_name': metric_name,
+                    'period': period,
+                    'occurrences': occurrences,
+                })
+        
+        # If duplicates found, log them but continue ingestion
+        if duplicates_found:
+            self._log_duplicates_to_audit_trail(dataset_id, duplicates_found)
+        
+        # Insert raw data with ON CONFLICT DO NOTHING (keeps first occurrence, skips duplicates)
         if raw_data_rows:
             with self.engine.begin() as conn:
                 conn.execute(text("""
                     INSERT INTO raw_data 
                     (dataset_id, ticker, metric_name, period, period_type, raw_string_value, numeric_value, currency)
                     VALUES (:dataset_id, :ticker, :metric_name, :period, :period_type, :raw_string_value, :numeric_value, :currency)
-                    ON CONFLICT (dataset_id, ticker, metric_name, period) DO UPDATE SET
-                        raw_string_value = EXCLUDED.raw_string_value,
-                        numeric_value = EXCLUDED.numeric_value
+                    ON CONFLICT (dataset_id, ticker, metric_name, period) DO NOTHING
                 """), raw_data_rows)
         
-        # Query to get actual unique rows inserted
+        # Query to get actual rows inserted
         unique_rows_in_db = 0
         if raw_data_rows:
             with self.engine.connect() as conn:
@@ -544,7 +644,7 @@ class Ingester:
             'total_csv_rows': len(df),
             'total_rows_processed': total_rows,
             'rejected_rows': rejected_rows,
-            'duplicate_combinations': duplicate_combinations,
+            'duplicate_combinations': duplicate_count,
             'unique_rows_in_db': unique_rows_in_db,
             'validation_summary': validation_summary,
             'metrics_validation': metrics_validation,
