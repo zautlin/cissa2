@@ -53,7 +53,7 @@ clear-metrics.sh
 
 **1. Get a dataset_id:**
 ```bash
-psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta -t -c "
+psql ${DATABASE_URL} -t -c "
   SELECT DISTINCT dataset_id FROM cissa.fundamentals LIMIT 1;
 "
 ```
@@ -112,7 +112,7 @@ curl -X POST http://localhost:8000/api/v1/metrics/calculate \
 ### Check metrics_outputs table
 
 ```bash
-psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta << 'EOF'
+psql ${DATABASE_URL} << 'EOF'
 SELECT 
   metric_name,
   COUNT(*) as count,
@@ -136,7 +136,7 @@ Expected output for Calc MC:
 ```bash
 DATASET_ID="550e8400-e29b-41d4-a716-446655440000"
 
-psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta << EOF
+psql ${DATABASE_URL} << EOF
 SELECT 
   ticker,
   fiscal_year,
@@ -169,7 +169,7 @@ This script:
 ### Manual SQL
 
 ```bash
-psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta \
+psql ${DATABASE_URL} \
   -c "TRUNCATE TABLE cissa.metrics_outputs;"
 ```
 
@@ -215,7 +215,7 @@ done
 ./test-metrics.sh
 
 # Step 4: View detailed results
-psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta \
+psql ${DATABASE_URL} \
   -c "SELECT * FROM cissa.metrics_outputs LIMIT 20;"
 
 # Step 5: Stop the API
@@ -235,14 +235,14 @@ pkill -f "uvicorn"
 ### Issue: "No datasets found in fundamentals"
 **Fix:** Check if fundamentals table has data
 ```bash
-psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta \
+psql ${DATABASE_URL} \
   -c "SELECT COUNT(*) FROM cissa.fundamentals WHERE metric_name = 'SPOT_SHARES';"
 ```
 
 ### Issue: "Error calculating metric"
 **Fix:** Check API logs and PostgreSQL functions exist
 ```bash
-psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta \
+psql ${DATABASE_URL} \
   -c "SELECT COUNT(*) FROM information_schema.routines WHERE routine_name LIKE 'fn_calc%';"
 ```
 
@@ -251,7 +251,7 @@ Should return: `15`
 ### Issue: "Connection refused"
 **Fix:** Make sure PostgreSQL is running and credentials are correct
 ```bash
-psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta -c "SELECT 1;"
+psql ${DATABASE_URL} -c "SELECT 1;"
 ```
 
 ---
@@ -260,7 +260,7 @@ psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta -c "SELECT
 
 **For any manual queries:**
 ```
-postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta
+${DATABASE_URL}
 ```
 
 **Schema:** `cissa`  

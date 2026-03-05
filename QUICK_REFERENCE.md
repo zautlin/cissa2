@@ -14,7 +14,7 @@
 
 ### 3. View Results
 ```bash
-psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta -c \
+psql ${DATABASE_URL} -c \
   "SELECT metric_name, COUNT(*) FROM cissa.metrics_outputs GROUP BY metric_name;"
 ```
 
@@ -29,7 +29,7 @@ psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta -c \
 
 Get a dataset:
 ```bash
-DATASET_ID=$(psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta \
+DATASET_ID=$(psql ${DATABASE_URL} \
   -t -c "SELECT DISTINCT dataset_id FROM cissa.fundamentals LIMIT 1;" | xargs)
 ```
 
@@ -55,7 +55,7 @@ Open in browser: **http://localhost:8000/docs**
 ## View in Database
 
 ```bash
-psql postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta << EOF
+psql ${DATABASE_URL} << EOF
 SELECT 
   ticker,
   fiscal_year,
@@ -72,7 +72,7 @@ EOF
 ## Database Connection
 
 ```
-postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta
+${DATABASE_URL}
 Schema: cissa
 Main tables:
   - cissa.fundamentals (input)
