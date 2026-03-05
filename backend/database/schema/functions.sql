@@ -148,7 +148,7 @@ BEGIN
   WHERE
     f1.dataset_id = p_dataset_id
     AND f1.metric_name = 'REVENUE'
-    AND f2.metric_name = 'OP_INCOME'
+    AND f2.metric_name = 'OPERATING_INCOME'
     AND f1.numeric_value IS NOT NULL
     AND f2.numeric_value IS NOT NULL;
 END;
@@ -179,8 +179,8 @@ BEGIN
     AND f1.dataset_id = f2.dataset_id
   WHERE
     f1.dataset_id = p_dataset_id
-    AND f1.metric_name = 'OP_INCOME'
-    AND f2.metric_name = 'PBT'
+    AND f1.metric_name = 'OPERATING_INCOME'
+    AND f2.metric_name = 'PROFIT_BEFORE_TAX'
     AND f1.numeric_value IS NOT NULL
     AND f2.numeric_value IS NOT NULL;
 END;
@@ -211,8 +211,8 @@ BEGIN
     AND f1.dataset_id = f2.dataset_id
   WHERE
     f1.dataset_id = p_dataset_id
-    AND f1.metric_name = 'PBT'
-    AND f2.metric_name = 'PAT_XO'
+    AND f1.metric_name = 'PROFIT_BEFORE_TAX'
+    AND f2.metric_name = 'PROFIT_AFTER_TAX_EX'
     AND f1.numeric_value IS NOT NULL
     AND f2.numeric_value IS NOT NULL;
 END;
@@ -243,8 +243,8 @@ BEGIN
     AND f1.dataset_id = f2.dataset_id
   WHERE
     f1.dataset_id = p_dataset_id
-    AND f1.metric_name = 'PAT_XO'
-    AND f2.metric_name = 'PAT'
+    AND f1.metric_name = 'PROFIT_AFTER_TAX_EX'
+    AND f2.metric_name = 'PROFIT_AFTER_TAX'
     AND f1.numeric_value IS NOT NULL
     AND f2.numeric_value IS NOT NULL;
 END;
@@ -279,7 +279,7 @@ BEGIN
     AND f1.dataset_id = f2.dataset_id
   WHERE
     f1.dataset_id = p_dataset_id
-    AND f1.metric_name = 'PAT'
+    AND f1.metric_name = 'PROFIT_AFTER_TAX'
     AND f2.metric_name = 'REVENUE'
     AND f1.numeric_value IS NOT NULL
     AND f2.numeric_value IS NOT NULL
@@ -382,7 +382,7 @@ BEGIN
   WHERE
     mo.dataset_id = p_dataset_id
     AND mo.output_metric_name = 'Calc Tax Cost'
-    AND f.metric_name = 'PBT'
+    AND f.metric_name = 'PROFIT_BEFORE_TAX'
     AND mo.output_metric_value IS NOT NULL
     AND f.numeric_value IS NOT NULL
     AND f.numeric_value != 0;
@@ -524,7 +524,7 @@ BEGIN
   WHERE
     mo.dataset_id = p_dataset_id
     AND mo.output_metric_name = 'Calc Assets'
-    AND f.metric_name = 'PAT'
+    AND f.metric_name = 'PROFIT_AFTER_TAX'
     AND mo.output_metric_value IS NOT NULL
     AND f.numeric_value IS NOT NULL
     AND mo.output_metric_value != 0;
