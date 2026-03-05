@@ -6,8 +6,8 @@ FILE LOCATION:
   /home/ubuntu/cissa/input-data/ASX/consolidated-data/financial_metrics_fact_table.csv
 
 FILE STATISTICS:
-  Size: 18.39 MB
-  Records: 321,688
+  Size: 15.45 MB
+  Records: 275,343 (140,670 fiscal + 134,673 monthly)
   Format: CSV (comma-separated, UTF-8)
   Headers: Yes (Ticker, Period, Period_Type, Metric, Value, Currency)
 
@@ -18,64 +18,120 @@ TABLE SCHEMA (6 columns)
 1. Ticker (String, 50 chars max)
    - Company or index symbol
    - Examples: "BHP AU Equity", "ASX Index", "1208 HK Equity"
-   - 535 unique values
+   - 568 unique values
 
 2. Period (String, 20 chars max)
-    - Fiscal year or date reference
-    - Fiscal format: "FY 2002", "FY 2003", ..., "FY 2023"
-    - Daily format: ISO date (e.g., "1981-11-30", "1981-12-31") - converted from Excel serials
-    - 536 unique values
+   - Fiscal year or calendar month reference
+   - Fiscal format: "FY 2002", "FY 2003", ..., "FY 2023"
+   - Monthly format: ISO date (e.g., "1981-11-30", "1981-12-31")
+   - Monthly dates converted from Excel serials (calendar month endpoints)
+   - 563 unique values (22 fiscal + 541 monthly)
 
 3. Period_Type (String, 10 chars max)
    - Type of period
-   - Values: "FISCAL" or "DAILY"
+   - Values: "FISCAL" or "MONTHLY"
    - 2 unique values
+   - Note: MONTHLY represents calendar months, not daily trading data
 
 4. Metric (String, 100 chars max)
-   - Financial metric name
-   - Examples: "Revenue", "Cash", "Company TSR (Daily)"
+   - Canonical metric name (database_name in uppercase)
+   - Examples: "REVENUE", "CASH", "COMPANY_TSR", "OPERATING_INCOME"
    - 20 unique values
+   - See metric_units reference for mapping to display names
 
 5. Value (String/Numeric, 50 chars max)
    - Actual measurement
-   - Examples: "30390.0379", "2660.631", "9.054", "#N/A"
+   - Examples: "30390.0379", "2660.631", "9.054"
    - Stored as text, convert to DECIMAL for calculations
 
 6. Currency (String, 10 chars max)
    - Currency code
-   - Examples: "AUD", "USD", "EUR", "JPY", ""
-   - 24 unique values (may be empty for indices)
+   - Examples: "AUD", other
+   - 2 unique values (may be empty for indices)
 
 ================================================================================
-METRICS (20 total)
+METRICS (20 TOTAL) - Stored with canonical database_name values
 ================================================================================
 
-ANNUAL METRICS (17 - Period_Type = FISCAL):
-  1.  Revenue
-  2.  Operating Income
-  3.  Profit Before Tax
-  4.  Profit After Tax
-  5.  Profit After Tax (Excluding)
-  6.  Cash
-  7.  Fixed Assets
-  8.  Goodwill
-  9.  Market Cap
-  10. Minority Interest
-  11. Dividends
-  12. Franking
-  13. FY TSR
-  14. Spot Shares
-  15. Share Price
-  16. Total Assets
-  17. Total Equity
+ANNUAL FISCAL METRICS (14 - Period_Type = FISCAL):
+   1.  REVENUE                    (metric_name: Revenue)
+   2.  OPERATING_INCOME           (metric_name: Operating Income)
+   3.  PROFIT_BEFORE_TAX          (metric_name: Profit Before Tax)
+   4.  PROFIT_AFTER_TAX           (metric_name: Profit After Tax)
+   5.  PROFIT_AFTER_TAX_EX        (metric_name: Profit After Tax (Exc))
+   6.  CASH                       (metric_name: Cash)
+   7.  FIXED_ASSETS               (metric_name: Fixed Assets)
+   8.  GOODWILL                   (metric_name: Goodwill)
+   9.  MARKET_CAP                 (metric_name: Market Cap)
+   10. MINORITY_INTEREST          (metric_name: Minority Interest)
+   11. DIVIDENDS                  (metric_name: Dividends)
+   12. FRANKING                   (metric_name: Franking)
+   13. TOTAL_ASSETS               (metric_name: Total Assets)
+   14. TOTAL_EQUITY               (metric_name: Total Equity)
 
-DAILY METRICS (3 - Period_Type = DAILY):
-  18. Company TSR (Daily)
-  19. Index TSR (Daily)
-  20. Risk-Free Rate (Daily)
+TSR & SHARE METRICS (3 - Period_Type = FISCAL):
+   15. FY_TSR                     (metric_name: FY TSR)
+   16. SPOT_SHARES                (metric_name: Spot Shares)
+   17. SHARE_PRICE                (metric_name: Share Price)
+
+MONTHLY PERFORMANCE METRICS (3 - Period_Type = MONTHLY):
+   18. COMPANY_TSR                (metric_name: Company TSR (Monthly))
+   19. INDEX_TSR                  (metric_name: Index TSR (Monthly))
+   20. RISK_FREE_RATE             (metric_name: Risk-Free Rate (Monthly))
 
 ================================================================================
-POSTGRESQL LOAD SCRIPT
+METRIC_UNITS REFERENCE - Complete Configuration
+================================================================================
+
+All metrics are configured in backend/database/config/metric_units.json.
+Maps: metric_name (display) ↔ worksheet_name (file) ↔ database_name (DB) ↔ unit
+
+ANNUAL FINANCIAL METRICS:
+┌─────────────────────────┬──────────────────┬──────────────────────┬──────────┐
+│ metric_name             │ worksheet_name   │ database_name        │ unit     │
+├─────────────────────────┼──────────────────┼──────────────────────┼──────────┤
+│ Revenue                 │ Revenue.csv      │ REVENUE              │ millions │
+│ Operating Income        │ Op Income.csv    │ OPERATING_INCOME     │ millions │
+│ Profit Before Tax       │ PBT.csv          │ PROFIT_BEFORE_TAX    │ millions │
+│ Profit After Tax        │ PAT.csv          │ PROFIT_AFTER_TAX     │ millions │
+│ Profit After Tax (Exc)  │ PAT XO.csv       │ PROFIT_AFTER_TAX_EX  │ millions │
+│ Cash                    │ Cash.csv         │ CASH                 │ millions │
+│ Fixed Assets            │ FA.csv           │ FIXED_ASSETS         │ millions │
+│ Goodwill                │ GW.csv           │ GOODWILL             │ millions │
+│ Market Cap              │ MC.csv           │ MARKET_CAP           │ millions │
+│ Minority Interest       │ MI.csv           │ MINORITY_INTEREST    │ millions │
+│ Dividends               │ Div.csv          │ DIVIDENDS            │ millions │
+│ Franking                │ Franking.csv     │ FRANKING             │ millions │
+│ Total Assets            │ Total Assets.csv │ TOTAL_ASSETS         │ millions │
+│ Total Equity            │ Total Equity.csv │ TOTAL_EQUITY         │ millions │
+│ FY TSR                  │ FY TSR.csv       │ FY_TSR               │ %        │
+│ Spot Shares             │ Spot Shares.csv  │ SPOT_SHARES          │ # shares │
+│ Share Price             │ Share Price.csv  │ SHARE_PRICE          │ millions │
+└─────────────────────────┴──────────────────┴──────────────────────┴──────────┘
+
+MONTHLY PERFORMANCE METRICS:
+┌─────────────────────────┬──────────────────┬──────────────────────┬──────────┐
+│ metric_name             │ worksheet_name   │ database_name        │ unit     │
+├─────────────────────────┼──────────────────┼──────────────────────┼──────────┤
+│ Company TSR (Monthly)   │ Company TSR.csv  │ COMPANY_TSR          │ %        │
+│ Index TSR (Monthly)     │ Index TSR.csv    │ INDEX_TSR            │ %        │
+│ Risk-Free Rate (Monthly)│ Rf.csv           │ RISK_FREE_RATE       │ %        │
+└─────────────────────────┴──────────────────┴──────────────────────┴──────────┘
+
+WHY THREE NAMES?
+  • metric_name: Human-readable display name (for documentation)
+  • worksheet_name: Actual CSV filename in extracted-worksheets/ (source of truth)
+  • database_name: Canonical uppercase value stored in database (normalized form)
+  • unit: Measurement unit (millions, %, number of shares)
+
+This separation enables:
+  ✓ Reliable file discovery (worksheet_name is explicit, not derived)
+  ✓ Normalized database values (database_name enforces consistency)
+  ✓ Human-friendly documentation (metric_name for readability)
+  ✓ Data validation (all metrics validated against metric_units during ingestion)
+
+================================================================================
+POSTGRESQL LOAD & VERIFY SCRIPT
 ================================================================================
 
 -- Create table
@@ -101,10 +157,18 @@ FROM 'financial_metrics_fact_table.csv'
 WITH (FORMAT CSV, HEADER, NULL '', DELIMITER ',');
 
 -- Verify load
-SELECT COUNT(*) FROM financial_metrics;  -- Should be 321,688
+SELECT COUNT(*) FROM financial_metrics;  -- Should be 275,343
+
+-- Verify all 20 metrics loaded
+SELECT DISTINCT metric FROM financial_metrics ORDER BY metric;
+-- Should show all 20 database_name values
+
+-- Verify period types
+SELECT DISTINCT period_type, COUNT(*) FROM financial_metrics GROUP BY period_type;
+-- Should show: FISCAL: 140,670, MONTHLY: 134,673
 
 ================================================================================
-COMMON QUERIES
+COMMON QUERIES (Using database_name metric values)
 ================================================================================
 
 1. All metrics for a company in a fiscal year:
@@ -112,21 +176,23 @@ COMMON QUERIES
    FROM financial_metrics
    WHERE ticker = 'BHP AU Equity'
      AND period = 'FY 2023'
+     AND period_type = 'FISCAL'
    ORDER BY metric;
 
-2. Highest revenue companies:
+2. Highest revenue companies (using database_name REVENUE):
    SELECT ticker, value, currency
    FROM financial_metrics
-   WHERE metric = 'Revenue'
+   WHERE metric = 'REVENUE'
      AND period = 'FY 2023'
+     AND period_type = 'FISCAL'
    ORDER BY CAST(value AS DECIMAL) DESC
    LIMIT 10;
 
-3. Time series for a metric:
+3. Time series for a metric (using database_name CASH):
    SELECT period, value
    FROM financial_metrics
    WHERE ticker = 'BHP AU Equity'
-     AND metric = 'Cash'
+     AND metric = 'CASH'
      AND period_type = 'FISCAL'
    ORDER BY period;
 
@@ -135,35 +201,34 @@ COMMON QUERIES
    FROM financial_metrics f
    JOIN base b ON f.ticker = b.ticker
    WHERE b.sector = 'Materials'
-     AND f.metric = 'Revenue'
+     AND f.metric = 'REVENUE'
      AND f.period = 'FY 2023';
 
-5. Daily returns for specific index:
+5. Monthly returns for specific company (using database_name COMPANY_TSR):
+   SELECT period, value
+   FROM financial_metrics
+   WHERE ticker = 'BHP AU Equity'
+     AND metric = 'COMPANY_TSR'
+     AND period_type = 'MONTHLY'
+   ORDER BY period DESC
+   LIMIT 20;
+
+6. Index performance data (using database_name INDEX_TSR):
    SELECT period, value
    FROM financial_metrics
    WHERE ticker = 'ASX Index'
-     AND metric = 'Index TSR (Daily)'
-     AND period_type = 'DAILY'
-   ORDER BY CAST(period AS INTEGER);
+     AND metric = 'INDEX_TSR'
+     AND period_type = 'MONTHLY'
+   ORDER BY period;
 
-6. Convert daily dates:
-   SELECT 
-       ticker,
-       DATE '1899-12-30' + (period::INTEGER || ' days')::INTERVAL as date,
-       value
-   FROM financial_metrics
-   WHERE metric = 'Company TSR (Daily)'
-     AND ticker = 'BHP AU Equity'
-   ORDER BY date;
-
-7. Multiple metrics comparison:
+7. Multiple metrics comparison for a year:
    SELECT ticker, metric, value, currency
    FROM financial_metrics
    WHERE ticker IN ('BHP AU Equity', 'RIO AU Equity', 'CBA AU Equity')
      AND period = 'FY 2023'
-     AND metric IN ('Revenue', 'Profit After Tax', 'Total Assets');
+     AND metric IN ('REVENUE', 'PROFIT_AFTER_TAX', 'TOTAL_ASSETS');
 
-8. Growth analysis:
+8. Growth analysis (year-over-year change):
    SELECT 
        f1.ticker,
        f1.value as fy2022,
@@ -176,68 +241,95 @@ COMMON QUERIES
        ON f1.ticker = f2.ticker
        AND f1.metric = f2.metric
        AND f1.period_type = f2.period_type
-   WHERE f1.metric = 'Revenue'
+   WHERE f1.metric = 'REVENUE'
      AND f1.period = 'FY 2022'
      AND f2.period = 'FY 2023'
    ORDER BY pct_change DESC;
 
+9. Record distribution by period type:
+   SELECT period_type, COUNT(*) as count
+   FROM financial_metrics
+   GROUP BY period_type;
+   -- FISCAL: 140,670, MONTHLY: 134,673
+
 ================================================================================
-DATA CONVERSION FUNCTIONS
+DATA CONVERSION & DATE HANDLING
 ================================================================================
 
-Excel Date Serial to Date (SQL):
-  SELECT DATE '1899-12-30' + (period::INTEGER || ' days')::INTERVAL
+Convert value string to numeric (SQL):
+   SELECT CAST(value AS DECIMAL) as numeric_value
 
-Value String to Numeric (SQL):
-  SELECT CAST(value AS DECIMAL)
+Query numeric values with range (SQL):
+   SELECT ticker, period, CAST(value AS DECIMAL) as numeric_value
+   FROM financial_metrics
+   WHERE metric = 'REVENUE'
+     AND CAST(value AS DECIMAL) > 1000000
+   ORDER BY numeric_value DESC;
 
-Excel Date Serial to Date (Python):
-  import datetime
-  date = datetime.datetime(1899, 12, 30) + datetime.timedelta(days=29920)
+Monthly periods are calendar month endpoints in ISO format (YYYY-MM-DD):
+   - Converted from Excel date serials during denormalization
+   - Examples: "1981-11-30", "1981-12-31", "1982-01-29"
+   - NOT individual daily trading dates
+   - Use period_type = 'MONTHLY' to filter monthly data
 
-Convert Daily Dates (Python):
-  import pandas as pd
-  df['date'] = pd.to_datetime(df['period'].astype(int), unit='D', 
-                              origin=pd.Timestamp('1899-12-30'))
+Fiscal periods in format "FY YYYY":
+   - Examples: "FY 2002", "FY 2003", ..., "FY 2023"
+   - 22 unique fiscal years
+   - Use period_type = 'FISCAL' to filter fiscal data
+
+Excel Date Serial to ISO conversion (Python):
+   import datetime
+   excel_serial = 29920
+   date = datetime.datetime(1899, 12, 30) + datetime.timedelta(days=excel_serial)
+   iso_date = date.strftime('%Y-%m-%d')  # '1981-12-14'
 
 ================================================================================
 DATA QUALITY NOTES
 ================================================================================
 
 ✓ Included:
-  - All 500 companies + 35 indices/series
-  - All 22 fiscal years (FY 2002-FY 2023)
-  - All 514 trading days in daily metrics
-  - All 24 currencies
-  - 321,688 total records
+   - All 568 entities (500 companies + 68 indices/series)
+   - All 22 fiscal years (FY 2002-FY 2023)
+   - All 541 calendar months (from Excel serials)
+   - All 2 currencies (AUD + other)
+   - All 20 metrics (with canonical database_name values)
+   - 275,343 total records (140,670 fiscal + 134,673 monthly)
 
 ✗ Excluded:
-  - Empty cells (no "")
-  - #N/A values
-  - Rows with only blanks
+   - Empty cells (no blank values)
+   - #N/A values (excluded from monthly metrics)
+   - Rows with only blanks
 
-⚠ Known Issues:
-  - Daily dates are Excel serials (not standard dates)
-  - Currency may be empty for index records
-  - Some companies have incomplete year coverage
-  - Some indices have no currency assigned
+⚠ Known Characteristics:
+   - Currency may be empty for index records
+   - Some companies have incomplete year coverage
+   - Some indices have no currency assigned
+   - Monthly dates are calendar month endpoints (not daily trading dates)
+   - All metrics stored with uppercase database_name values
+
+✓ Validated:
+   - All 20 metrics have corresponding entries in metric_units table
+   - All metrics stored with canonical database_name values
+   - Monthly dates converted from Excel serials to ISO 8601 format
+   - Numeric values validated during ingestion
 
 ================================================================================
 DIMENSION TABLES (Optional Joins)
 ================================================================================
 
 Base.csv - Company master data:
-  Columns: Num, Ticker, Name, FY Report Month, Data FX, Begin Year,
-           Sector, BICS Name, BICS 1, BICS 2, BICS 3, BICS 4
-  Join on: Ticker
+   Columns: Num, Ticker, Name, FY Report Month, Data FX, Begin Year,
+            Sector, BICS Name, BICS 1, BICS 2, BICS 3, BICS 4
+   Join on: Ticker
+   Purpose: Add company attributes to metrics queries
 
 FY Dates.csv - Fiscal year end dates:
-  Columns: Num, Ticker, Name, Data FX, FY 2002, FY 2003, ..., FY 2027
-  Use to: Map fiscal periods to actual end dates
+   Columns: Num, Ticker, Name, Data FX, FY 2002, FY 2003, ..., FY 2027
+   Use to: Map fiscal periods to actual end dates
 
 FY Period.csv - Fiscal period labels:
-  Columns: Num, Ticker, Name, Data FX, FY 2002, FY 2003, ..., FY 2027
-  Use to: Get period labels (e.g., "FY1 2002")
+   Columns: Num, Ticker, Name, Data FX, FY 2002, FY 2003, ..., FY 2027
+   Use to: Get period labels (e.g., "FY1 2002")
 
 ================================================================================
 PERFORMANCE TIPS
@@ -254,11 +346,14 @@ PERFORMANCE TIPS
    WHERE CAST(value AS DECIMAL) > 1000000
 
 4. Use period_type to filter:
-   WHERE period_type = 'FISCAL'  -- Only annual data
-   WHERE period_type = 'DAILY'   -- Only daily data
+   WHERE period_type = 'FISCAL'   -- Only annual data
+   WHERE period_type = 'MONTHLY'  -- Only monthly data
 
-5. Partition large table if needed:
-   -- Partition by period_type for better performance
+5. Use metric database_name values for queries:
+   WHERE metric = 'REVENUE'       -- Use uppercase database_name
+   WHERE metric IN ('REVENUE', 'CASH', 'OPERATING_INCOME')
+
+6. Partition large table by period_type for better performance:
    CREATE TABLE fm_fiscal PARTITION OF financial_metrics
    FOR VALUES IN ('FISCAL');
 
@@ -267,34 +362,72 @@ FILE FORMATS & ENCODING
 ================================================================================
 
 CSV Format: Standard comma-separated values
-  - Delimiter: comma (,)
-  - Quote character: double quote (")
-  - Escape character: backslash (\)
-  - Line ending: LF (\n)
+   - Delimiter: comma (,)
+   - Quote character: double quote (")
+   - Escape character: backslash (\)
+   - Line ending: LF (\n)
 
 Encoding: UTF-8
 
 Line 1: Headers (Ticker,Period,Period_Type,Metric,Value,Currency)
 Lines 2+: Data rows
 
-Example:
-  Ticker,Period,Period_Type,Metric,Value,Currency
-  BHP AU Equity,FY 2002,FISCAL,Revenue,30390.0379,AUD
-  BHP AU Equity,FY 2003,FISCAL,Revenue,26823.8732,AUD
+Example data rows:
+   Ticker,Period,Period_Type,Metric,Value,Currency
+   BHP AU Equity,FY 2002,FISCAL,REVENUE,30390.0379,AUD
+   BHP AU Equity,FY 2003,FISCAL,REVENUE,26823.8732,AUD
+   BHP AU Equity,1981-11-30,MONTHLY,COMPANY_TSR,9.054,AUD
+   BHP AU Equity,1981-12-31,MONTHLY,COMPANY_TSR,-2.814,AUD
+   ASX Index,1981-11-30,MONTHLY,INDEX_TSR,8.123,AUD
+
+================================================================================
+PIPELINE ARCHITECTURE & METRIC CONFIGURATION
+================================================================================
+
+DENORMALIZATION PIPELINE:
+   1. Extract: XLSX → 23 CSV files in extracted-worksheets/
+   2. Configure: Load metric_units.json configuration
+   3. Denormalize: WIDE → LONG format using metric_units mappings
+   4. Output: consolidated-data/financial_metrics_fact_table.csv
+   5. Ingest: Load into PostgreSQL with validation
+
+METRIC_UNITS CONFIGURATION:
+   • Source file: backend/database/config/metric_units.json
+   • Purpose: Maps display names to database names and file locations
+   • Key fields:
+     - metric_name: Display name (e.g., "Operating Income")
+     - worksheet_name: CSV filename (e.g., "Op Income.csv")
+     - database_name: Database value (e.g., "OPERATING_INCOME")
+     - unit: Measurement unit (e.g., "millions")
+   • Validation: All metrics validated against metric_units during ingestion
+   • Population: Via schema_manager.py init_metric_units()
+
+FILE DISCOVERY:
+   • Uses worksheet_name from metric_units.json (not derived from metric_name)
+   • Handles abbreviations: "Op Income.csv", "PBT.csv", "Div.csv", "FA.csv", "Rf.csv"
+   • Reliable mapping: 1:1 correspondence between worksheet_name and database_name
+
+DENARMLIZATION OUTPUT:
+   • All metrics stored with canonical database_name values
+   • Monthly dates converted from Excel serials to ISO 8601 format
+   • 275,343 total records (140,670 fiscal + 134,673 monthly)
+   • Ready for PostgreSQL ingestion
 
 ================================================================================
 CONTACT & SUPPORT
 ================================================================================
 
 For detailed information:
-  • See FACT_TABLE_DOCUMENTATION.md for full schema and examples
-  • See DENORMALIZATION_COMPLETE.txt for transformation details
-  • See README.md for original data structure
-  • See CLEANING_SUMMARY.txt for data extraction process
+   • See README.md for pipeline architecture
+   • See FACT_TABLE_DOCUMENTATION.md for complete schema and examples
+   • See QUICK_REFERENCE.txt for quick lookup (this file)
 
-Original source files still available:
-  • Base.csv - Company master
-  • 17 individual annual metric CSV files
-  • 3 individual daily metric CSV files
+Configuration files:
+   • backend/database/config/metric_units.json - Metric configuration
+
+Original data files:
+   • Base.csv - Company master data
+   • FY Dates.csv, FY Period.csv - Fiscal year reference
+   • 20 individual metric CSV files in extracted-worksheets/
 
 ================================================================================
