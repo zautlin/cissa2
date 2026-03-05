@@ -6,16 +6,25 @@
 # 1. Installs dependencies from requirements.txt
 # 2. Ensures PostgreSQL schema functions are loaded
 # 3. Starts the FastAPI server
+#
+# Usage: ./backend/scripts/start-api.sh
+# (Run from project root: /home/ubuntu/cissa)
 
 set -e
 
 echo "===== CISSA Metrics API Startup ====="
 
-# Load environment variables
-if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
+# Determine project root (parent of backend/)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
+BACKEND_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
+
+# Load environment variables from project root
+ENV_FILE="$PROJECT_ROOT/.env"
+if [ -f "$ENV_FILE" ]; then
+    export $(cat "$ENV_FILE" | grep -v '^#' | xargs)
 else
-    echo "ERROR: .env file not found in /home/ubuntu/cissa"
+    echo "ERROR: .env file not found at $ENV_FILE"
     exit 1
 fi
 
@@ -25,7 +34,7 @@ DB_URL="$DATABASE_URL_CLI"
 # Step 1: Install Python dependencies
 echo ""
 echo "[1/4] Installing Python dependencies..."
-cd /home/ubuntu/cissa
+cd "$PROJECT_ROOT"
 pip install -r requirements.txt > /dev/null 2>&1 || pip install -r requirements.txt
 
 # Step 2: Check PostgreSQL connection
@@ -46,7 +55,7 @@ echo ""
 echo "[3/4] Loading SQL functions into database..."
 if ! psql "$DB_URL" -c "SELECT 1 FROM information_schema.routines WHERE routine_name = 'fn_calc_market_cap'" 2>/dev/null | grep -q 1; then
     echo "  Loading functions.sql..."
-    psql "$DB_URL" -f /home/ubuntu/cissa/backend/database/schema/functions.sql > /dev/null 2>&1
+    psql "$DB_URL" -f "$BACKEND_DIR/database/schema/functions.sql" > /dev/null 2>&1
     echo "  ✓ Functions loaded"
 else
     echo "  ✓ Functions already loaded"
@@ -59,5 +68,5 @@ echo "  Server running at: http://localhost:8000"
 echo "  API Docs at: http://localhost:8000/docs"
 echo ""
 
-cd /home/ubuntu/cissa/backend
+cd "$BACKEND_DIR"
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

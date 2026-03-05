@@ -5,11 +5,16 @@
 
 set -e
 
-# Load database URL from .env
-if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
+# Determine project root (parent of backend/)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
+
+# Load environment variables from project root
+ENV_FILE="$PROJECT_ROOT/.env"
+if [ -f "$ENV_FILE" ]; then
+    export $(cat "$ENV_FILE" | grep -v '^#' | xargs)
 else
-    echo "Error: .env file not found"
+    echo "ERROR: .env file not found at $ENV_FILE"
     exit 1
 fi
 
