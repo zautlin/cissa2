@@ -93,7 +93,7 @@ The legacy repository for this work is located in: `https://github.com/rozettate
 3. **Create and activate the virtual environment**:
    ```bash
    source ~/miniconda3/bin/activate
-   conda create -n cissa_env python=3.14 -y
+   conda create -n cissa_env python=3.12 -y
    conda activate cissa_env
    ```
 
