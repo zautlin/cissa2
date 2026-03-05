@@ -13,6 +13,9 @@ else
     exit 1
 fi
 
+# Use CLI-compatible database URL for psql
+DB_URL="$DATABASE_URL_CLI"
+
 # Colors
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
@@ -25,12 +28,12 @@ echo -e "${YELLOW}╚═══════════════════�
 
 # Show current record count
 echo -e "\n${YELLOW}Current metrics_outputs records:${NC}"
-CURRENT_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM cissa.metrics_outputs;" 2>/dev/null | xargs)
+CURRENT_COUNT=$(psql "$DB_URL" -t -c "SELECT COUNT(*) FROM cissa.metrics_outputs;" 2>/dev/null | xargs)
 echo "  Total records: $CURRENT_COUNT"
 
 # Show breakdown by metric
 echo -e "\n${YELLOW}Records by metric:${NC}"
-psql "$DATABASE_URL" << EOF
+psql "$DB_URL" << EOF
 SELECT 
   metric_name,
   COUNT(*) as count
@@ -50,10 +53,10 @@ fi
 
 # Clear the table
 echo -e "\n${YELLOW}Clearing cissa.metrics_outputs...${NC}"
-psql "$DATABASE_URL" -c "TRUNCATE TABLE cissa.metrics_outputs;" 2>/dev/null
+psql "$DB_URL" -c "TRUNCATE TABLE cissa.metrics_outputs;" 2>/dev/null
 
 # Verify
-NEW_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM cissa.metrics_outputs;" 2>/dev/null | xargs)
+NEW_COUNT=$(psql "$DB_URL" -t -c "SELECT COUNT(*) FROM cissa.metrics_outputs;" 2>/dev/null | xargs)
 
 if [ "$NEW_COUNT" -eq 0 ]; then
     echo -e "${GREEN}✓ Successfully cleared! Deleted $CURRENT_COUNT records${NC}"

@@ -19,6 +19,9 @@ else
     exit 1
 fi
 
+# Use CLI-compatible database URL for psql
+DB_URL="$DATABASE_URL_CLI"
+
 # Step 1: Install Python dependencies
 echo ""
 echo "[1/4] Installing Python dependencies..."
@@ -31,7 +34,7 @@ echo "[2/4] Checking PostgreSQL connection..."
 if ! command -v psql &> /dev/null; then
     echo "WARNING: psql not found. Install postgresql-client or ensure DB is accessible"
 else
-    psql "$DATABASE_URL" -c "\dt cissa.fundamentals" > /dev/null 2>&1 || {
+    psql "$DB_URL" -c "\dt cissa.fundamentals" > /dev/null 2>&1 || {
         echo "ERROR: Cannot connect to database. Ensure PostgreSQL is running and .env DATABASE_URL is correct."
         exit 1
     }
@@ -41,9 +44,9 @@ fi
 # Step 3: Load SQL functions (if not already loaded)
 echo ""
 echo "[3/4] Loading SQL functions into database..."
-if ! psql "$DATABASE_URL" -c "SELECT 1 FROM information_schema.routines WHERE routine_name = 'fn_calc_market_cap'" 2>/dev/null | grep -q 1; then
+if ! psql "$DB_URL" -c "SELECT 1 FROM information_schema.routines WHERE routine_name = 'fn_calc_market_cap'" 2>/dev/null | grep -q 1; then
     echo "  Loading functions.sql..."
-    psql "$DATABASE_URL" -f /home/ubuntu/cissa/backend/database/schema/functions.sql > /dev/null 2>&1
+    psql "$DB_URL" -f /home/ubuntu/cissa/backend/database/schema/functions.sql > /dev/null 2>&1
     echo "  ✓ Functions loaded"
 else
     echo "  ✓ Functions already loaded"
