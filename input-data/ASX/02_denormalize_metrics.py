@@ -29,55 +29,39 @@ from datetime import datetime, timedelta
 def load_metric_config(config_path):
     """
     Load metric configuration from metric_units.json.
-    Returns dict mapping filename to database_name (canonical DB value).
+    Returns dict mapping worksheet_name (actual CSV filename) to database_name (canonical DB value).
     
     Logic:
-      - metric_name (e.g., "Revenue") + ".csv" → filename to look for
-      - database_name (e.g., "REVENUE") → value to write to output CSV
+      - worksheet_name (e.g., "Op Income.csv") → actual CSV filename to look for
+      - database_name (e.g., "OPERATING_INCOME") → value to write to output CSV
     
     Example:
       "Revenue.csv" -> "REVENUE"
+      "Op Income.csv" -> "OPERATING_INCOME"
       "Company TSR.csv" -> "COMPANY_TSR"
     """
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
             metrics_config = json.load(f)
         
-        # Build filename -> database_name mapping
-        # Use metric_name to build filename, but output database_name to CSV
+        # Build filename -> database_name mapping using worksheet_name from config
         metric_files = {}
         for metric_data in metrics_config:
-            metric_name = metric_data.get('metric_name', '')
+            worksheet_name = metric_data.get('worksheet_name', '')
             database_name = metric_data.get('database_name', '')
             
-            if not metric_name or not database_name:
+            if not worksheet_name or not database_name:
                 continue
             
-            # Build filename: metric_name + ".csv"
-            # For "Company TSR (Monthly)", the metric_name is "Company TSR (Monthly)"
-            # but we need to strip "(Monthly)" to match the actual CSV filename
-            filename_base = metric_name
-            if '(Monthly)' in metric_name:
-                filename_base = metric_name.replace(' (Monthly)', '')
-            
-            filename = f"{filename_base}.csv"
-            
-            # Store mapping: filename -> database_name (for output to CSV)
-            metric_files[filename] = database_name
+            # Use worksheet_name directly as the filename
+            # This is the source of truth for actual CSV filenames
+            metric_files[worksheet_name] = database_name
         
         return metric_files
     
     except FileNotFoundError:
         print(f"❌ Error: Config file not found: {config_path}")
         print("Expected location: backend/database/config/metric_units.json")
-        return None
-    
-    except json.JSONDecodeError as e:
-        print(f"❌ Error: Invalid JSON in config file: {e}")
-        return None
-    
-    except Exception as e:
-        print(f"❌ Error loading config: {e}")
         return None
     
     except json.JSONDecodeError as e:

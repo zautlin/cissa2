@@ -183,7 +183,7 @@ class Ingester:
             'dataset_name': dataset_name,
             'version_number': version_number,
             'source_file': csv_path,
-            'total_rows': result['total_rows'],
+            'total_rows': result['total_rows_processed'],
             'rejected_rows': result['rejected_rows'],
             'validation_summary': result['validation_summary'],
         }

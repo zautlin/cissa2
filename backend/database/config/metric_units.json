@@ -1,101 +1,121 @@
 [
   {
     "metric_name": "Revenue",
+    "worksheet_name": "Revenue.csv",
     "database_name": "REVENUE",
     "unit": "millions"
   },
   {
     "metric_name": "Operating Income",
+    "worksheet_name": "Op Income.csv",
     "database_name": "OPERATING_INCOME",
     "unit": "millions"
   },
   {
     "metric_name": "Profit Before Tax",
+    "worksheet_name": "PBT.csv",
     "database_name": "PROFIT_BEFORE_TAX",
     "unit": "millions"
   },
   {
     "metric_name": "Profit After Tax",
+    "worksheet_name": "PAT.csv",
     "database_name": "PROFIT_AFTER_TAX",
     "unit": "millions"
   },
   {
     "metric_name": "Profit After Tax (Exc)",
+    "worksheet_name": "PAT XO.csv",
     "database_name": "PROFIT_AFTER_TAX_EX",
     "unit": "millions"
   },
   {
     "metric_name": "Cash",
+    "worksheet_name": "Cash.csv",
     "database_name": "CASH",
     "unit": "millions"
   },
   {
     "metric_name": "Fixed Assets",
+    "worksheet_name": "FA.csv",
     "database_name": "FIXED_ASSETS",
     "unit": "millions"
   },
   {
     "metric_name": "Goodwill",
+    "worksheet_name": "GW.csv",
     "database_name": "GOODWILL",
     "unit": "millions"
   },
   {
     "metric_name": "Market Cap",
+    "worksheet_name": "MC.csv",
     "database_name": "MARKET_CAP",
     "unit": "millions"
   },
   {
     "metric_name": "Minority Interest",
+    "worksheet_name": "MI.csv",
     "database_name": "MINORITY_INTEREST",
     "unit": "millions"
   },
   {
     "metric_name": "Dividends",
+    "worksheet_name": "Div.csv",
     "database_name": "DIVIDENDS",
     "unit": "millions"
   },
   {
     "metric_name": "Franking",
+    "worksheet_name": "Franking.csv",
     "database_name": "FRANKING",
     "unit": "millions"
   },
   {
     "metric_name": "FY TSR",
+    "worksheet_name": "FY TSR.csv",
     "database_name": "FY_TSR",
     "unit": "%"
   },
   {
     "metric_name": "Spot Shares",
+    "worksheet_name": "Spot Shares.csv",
     "database_name": "SPOT_SHARES",
     "unit": "number of shares"
   },
   {
     "metric_name": "Share Price",
+    "worksheet_name": "Share Price.csv",
     "database_name": "SHARE_PRICE",
     "unit": "millions"
   },
   {
     "metric_name": "Total Assets",
+    "worksheet_name": "Total Assets.csv",
     "database_name": "TOTAL_ASSETS",
     "unit": "millions"
   },
   {
     "metric_name": "Total Equity",
+    "worksheet_name": "Total Equity.csv",
     "database_name": "TOTAL_EQUITY",
     "unit": "millions"
   },
   {
     "metric_name": "Company TSR (Monthly)",
+    "worksheet_name": "Company TSR.csv",
     "database_name": "COMPANY_TSR",
     "unit": "%"
   },
   {
     "metric_name": "Index TSR (Monthly)",
+    "worksheet_name": "Index TSR.csv",
     "database_name": "INDEX_TSR",
     "unit": "%"
   },
   {
     "metric_name": "Risk-Free Rate (Monthly)",
+    "worksheet_name": "Rf.csv",
     "database_name": "RISK_FREE_RATE",
     "unit": "%"
   }
