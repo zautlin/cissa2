@@ -5,7 +5,14 @@
 
 set -e
 
-DB_URL="postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta"
+# Load database URL from .env
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+else
+    echo "Error: .env file not found"
+    exit 1
+fi
+
 API_URL="http://localhost:8000"
 
 # Colors for output
@@ -30,7 +37,7 @@ echo -e "${GREEN}✓ API is running${NC}"
 
 # Step 2: Get a dataset_id
 echo -e "\n${YELLOW}[2/5] Getting a dataset_id from fundamentals...${NC}"
-DATASET_ID=$(psql "$DB_URL" -t -c "
+DATASET_ID=$(psql "$DATABASE_URL" -t -c "
     SELECT DISTINCT dataset_id 
     FROM cissa.fundamentals 
     WHERE metric_name = 'SPOT_SHARES' 
@@ -57,7 +64,7 @@ echo "$RESPONSE" | python3 -m json.tool
 
 # Step 4: Check metrics_outputs table
 echo -e "\n${YELLOW}[4/5] Checking metrics_outputs table...${NC}"
-psql "$DB_URL" << EOF
+psql "$DATABASE_URL" << EOF
 SELECT 
   metric_name,
   COUNT(*) as count,
@@ -72,7 +79,7 @@ EOF
 
 # Step 5: Show sample data
 echo -e "\n${YELLOW}[5/5] Sample of inserted metrics_outputs records...${NC}"
-psql "$DB_URL" << EOF
+psql "$DATABASE_URL" << EOF
 SELECT 
   ticker,
   fiscal_year,

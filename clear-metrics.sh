@@ -5,7 +5,13 @@
 
 set -e
 
-DB_URL="postgresql://postgres:5VbL7dK4jM8sN6cE2fG@localhost:5432/rozetta"
+# Load database URL from .env
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+else
+    echo "Error: .env file not found"
+    exit 1
+fi
 
 # Colors
 RED='\033[0;31m'
@@ -19,12 +25,12 @@ echo -e "${YELLOW}╚═══════════════════�
 
 # Show current record count
 echo -e "\n${YELLOW}Current metrics_outputs records:${NC}"
-CURRENT_COUNT=$(psql "$DB_URL" -t -c "SELECT COUNT(*) FROM cissa.metrics_outputs;" 2>/dev/null | xargs)
+CURRENT_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM cissa.metrics_outputs;" 2>/dev/null | xargs)
 echo "  Total records: $CURRENT_COUNT"
 
 # Show breakdown by metric
 echo -e "\n${YELLOW}Records by metric:${NC}"
-psql "$DB_URL" << EOF
+psql "$DATABASE_URL" << EOF
 SELECT 
   metric_name,
   COUNT(*) as count
@@ -44,10 +50,10 @@ fi
 
 # Clear the table
 echo -e "\n${YELLOW}Clearing cissa.metrics_outputs...${NC}"
-psql "$DB_URL" -c "TRUNCATE TABLE cissa.metrics_outputs;" 2>/dev/null
+psql "$DATABASE_URL" -c "TRUNCATE TABLE cissa.metrics_outputs;" 2>/dev/null
 
 # Verify
-NEW_COUNT=$(psql "$DB_URL" -t -c "SELECT COUNT(*) FROM cissa.metrics_outputs;" 2>/dev/null | xargs)
+NEW_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM cissa.metrics_outputs;" 2>/dev/null | xargs)
 
 if [ "$NEW_COUNT" -eq 0 ]; then
     echo -e "${GREEN}✓ Successfully cleared! Deleted $CURRENT_COUNT records${NC}"
