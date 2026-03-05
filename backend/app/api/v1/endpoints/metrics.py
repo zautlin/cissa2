@@ -5,14 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
-from ...core.database import get_db
-from ...models import (
+from ....core.database import get_db
+from ....models import (
     CalculateMetricsRequest,
     CalculateMetricsResponse,
     MetricsHealthResponse
 )
-from ...services.metrics_service import MetricsService
-from ...core.config import get_logger
+from ....services.metrics_service import MetricsService
+from ....core.config import get_logger
 
 logger = get_logger(__name__)
 

@@ -1,13 +1,20 @@
 # ============================================================================
 # FastAPI Configuration and Settings
 # ============================================================================
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 import logging
+from pathlib import Path
 
 
 class Settings(BaseSettings):
     """Application settings loaded from .env file"""
+    
+    model_config = SettingsConfigDict(
+        env_file=str(Path(__file__).parent.parent.parent / ".env"),
+        case_sensitive=False,
+        extra='ignore'
+    )
     
     # Database
     database_url: str
@@ -20,10 +27,6 @@ class Settings(BaseSettings):
     # Metric Calculation
     metrics_batch_size: int = 1000
     metrics_timeout_seconds: int = 300
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
 
 @lru_cache()

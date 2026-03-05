@@ -30,7 +30,7 @@ BEGIN
   SELECT
     f1.ticker,
     f1.fiscal_year,
-    (f1.numeric_value * f2.numeric_value) AS calc_mc
+    (f1.metric_value * f2.metric_value) AS calc_mc
   FROM cissa.fundamentals f1
   INNER JOIN cissa.fundamentals f2
     ON f1.ticker = f2.ticker
@@ -40,8 +40,8 @@ BEGIN
     f1.dataset_id = p_dataset_id
     AND f1.metric_name = 'SPOT_SHARES'
     AND f2.metric_name = 'SHARE_PRICE'
-    AND f1.numeric_value IS NOT NULL
-    AND f2.numeric_value IS NOT NULL;
+    AND f1.metric_value IS NOT NULL
+    AND f2.metric_value IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -63,7 +63,7 @@ BEGIN
   SELECT
     f1.ticker,
     f1.fiscal_year,
-    (f1.numeric_value - f2.numeric_value) AS calc_assets
+    (f1.metric_value - f2.metric_value) AS calc_assets
   FROM cissa.fundamentals f1
   INNER JOIN cissa.fundamentals f2
     ON f1.ticker = f2.ticker
@@ -73,8 +73,8 @@ BEGIN
     f1.dataset_id = p_dataset_id
     AND f1.metric_name = 'TOTAL_ASSETS'
     AND f2.metric_name = 'CASH'
-    AND f1.numeric_value IS NOT NULL
-    AND f2.numeric_value IS NOT NULL;
+    AND f1.metric_value IS NOT NULL
+    AND f2.metric_value IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -96,7 +96,7 @@ BEGIN
   SELECT
     mo.ticker,
     mo.fiscal_year,
-    (mo.output_metric_value - f1.numeric_value - f2.numeric_value) AS calc_oa
+    (mo.metric_value - f1.metric_value - f2.metric_value) AS calc_oa
   FROM cissa.metrics_outputs mo
   INNER JOIN cissa.fundamentals f1
     ON mo.ticker = f1.ticker
@@ -108,12 +108,12 @@ BEGIN
     AND mo.dataset_id = f2.dataset_id
   WHERE
     mo.dataset_id = p_dataset_id
-    AND mo.output_metric_name = 'Calc Assets'
+    AND mo.metric_name = 'Calc Assets'
     AND f1.metric_name = 'FIXED_ASSETS'
     AND f2.metric_name = 'GOODWILL'
-    AND mo.output_metric_value IS NOT NULL
-    AND f1.numeric_value IS NOT NULL
-    AND f2.numeric_value IS NOT NULL;
+    AND mo.metric_value IS NOT NULL
+    AND f1.metric_value IS NOT NULL
+    AND f2.metric_value IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -139,7 +139,7 @@ BEGIN
   SELECT
     f1.ticker,
     f1.fiscal_year,
-    (f1.numeric_value - f2.numeric_value) AS calc_op_cost
+    (f1.metric_value - f2.metric_value) AS calc_op_cost
   FROM cissa.fundamentals f1
   INNER JOIN cissa.fundamentals f2
     ON f1.ticker = f2.ticker
@@ -149,8 +149,8 @@ BEGIN
     f1.dataset_id = p_dataset_id
     AND f1.metric_name = 'REVENUE'
     AND f2.metric_name = 'OP_INCOME'
-    AND f1.numeric_value IS NOT NULL
-    AND f2.numeric_value IS NOT NULL;
+    AND f1.metric_value IS NOT NULL
+    AND f2.metric_value IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -171,7 +171,7 @@ BEGIN
   SELECT
     f1.ticker,
     f1.fiscal_year,
-    (f1.numeric_value - f2.numeric_value) AS calc_non_op_cost
+    (f1.metric_value - f2.metric_value) AS calc_non_op_cost
   FROM cissa.fundamentals f1
   INNER JOIN cissa.fundamentals f2
     ON f1.ticker = f2.ticker
@@ -181,8 +181,8 @@ BEGIN
     f1.dataset_id = p_dataset_id
     AND f1.metric_name = 'OP_INCOME'
     AND f2.metric_name = 'PBT'
-    AND f1.numeric_value IS NOT NULL
-    AND f2.numeric_value IS NOT NULL;
+    AND f1.metric_value IS NOT NULL
+    AND f2.metric_value IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -203,7 +203,7 @@ BEGIN
   SELECT
     f1.ticker,
     f1.fiscal_year,
-    (f1.numeric_value - f2.numeric_value) AS calc_tax_cost
+    (f1.metric_value - f2.metric_value) AS calc_tax_cost
   FROM cissa.fundamentals f1
   INNER JOIN cissa.fundamentals f2
     ON f1.ticker = f2.ticker
@@ -213,8 +213,8 @@ BEGIN
     f1.dataset_id = p_dataset_id
     AND f1.metric_name = 'PBT'
     AND f2.metric_name = 'PAT_XO'
-    AND f1.numeric_value IS NOT NULL
-    AND f2.numeric_value IS NOT NULL;
+    AND f1.metric_value IS NOT NULL
+    AND f2.metric_value IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -235,7 +235,7 @@ BEGIN
   SELECT
     f1.ticker,
     f1.fiscal_year,
-    (f1.numeric_value - f2.numeric_value) AS calc_xo_cost
+    (f1.metric_value - f2.metric_value) AS calc_xo_cost
   FROM cissa.fundamentals f1
   INNER JOIN cissa.fundamentals f2
     ON f1.ticker = f2.ticker
@@ -245,8 +245,8 @@ BEGIN
     f1.dataset_id = p_dataset_id
     AND f1.metric_name = 'PAT_XO'
     AND f2.metric_name = 'PAT'
-    AND f1.numeric_value IS NOT NULL
-    AND f2.numeric_value IS NOT NULL;
+    AND f1.metric_value IS NOT NULL
+    AND f2.metric_value IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -271,7 +271,7 @@ BEGIN
   SELECT
     f1.ticker,
     f1.fiscal_year,
-    (f1.numeric_value / f2.numeric_value) AS profit_margin
+    (f1.metric_value / f2.metric_value) AS profit_margin
   FROM cissa.fundamentals f1
   INNER JOIN cissa.fundamentals f2
     ON f1.ticker = f2.ticker
@@ -281,9 +281,9 @@ BEGIN
     f1.dataset_id = p_dataset_id
     AND f1.metric_name = 'PAT'
     AND f2.metric_name = 'REVENUE'
-    AND f1.numeric_value IS NOT NULL
-    AND f2.numeric_value IS NOT NULL
-    AND f2.numeric_value != 0;
+    AND f1.metric_value IS NOT NULL
+    AND f2.metric_value IS NOT NULL
+    AND f2.metric_value != 0;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -305,7 +305,7 @@ BEGIN
   SELECT
     mo.ticker,
     mo.fiscal_year,
-    (mo.output_metric_value / f.numeric_value) AS op_cost_margin
+    (mo.metric_value / f.metric_value) AS op_cost_margin
   FROM cissa.metrics_outputs mo
   INNER JOIN cissa.fundamentals f
     ON mo.ticker = f.ticker
@@ -313,11 +313,11 @@ BEGIN
     AND mo.dataset_id = f.dataset_id
   WHERE
     mo.dataset_id = p_dataset_id
-    AND mo.output_metric_name = 'Calc Op Cost'
+    AND mo.metric_name = 'Calc Op Cost'
     AND f.metric_name = 'REVENUE'
-    AND mo.output_metric_value IS NOT NULL
-    AND f.numeric_value IS NOT NULL
-    AND f.numeric_value != 0;
+    AND mo.metric_value IS NOT NULL
+    AND f.metric_value IS NOT NULL
+    AND f.metric_value != 0;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -339,7 +339,7 @@ BEGIN
   SELECT
     mo.ticker,
     mo.fiscal_year,
-    (mo.output_metric_value / f.numeric_value) AS non_op_cost_margin
+    (mo.metric_value / f.metric_value) AS non_op_cost_margin
   FROM cissa.metrics_outputs mo
   INNER JOIN cissa.fundamentals f
     ON mo.ticker = f.ticker
@@ -347,11 +347,11 @@ BEGIN
     AND mo.dataset_id = f.dataset_id
   WHERE
     mo.dataset_id = p_dataset_id
-    AND mo.output_metric_name = 'Calc Non Op Cost'
+    AND mo.metric_name = 'Calc Non Op Cost'
     AND f.metric_name = 'REVENUE'
-    AND mo.output_metric_value IS NOT NULL
-    AND f.numeric_value IS NOT NULL
-    AND f.numeric_value != 0;
+    AND mo.metric_value IS NOT NULL
+    AND f.metric_value IS NOT NULL
+    AND f.metric_value != 0;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -373,7 +373,7 @@ BEGIN
   SELECT
     mo.ticker,
     mo.fiscal_year,
-    (mo.output_metric_value / f.numeric_value) AS eff_tax_rate
+    (mo.metric_value / f.metric_value) AS eff_tax_rate
   FROM cissa.metrics_outputs mo
   INNER JOIN cissa.fundamentals f
     ON mo.ticker = f.ticker
@@ -381,11 +381,11 @@ BEGIN
     AND mo.dataset_id = f.dataset_id
   WHERE
     mo.dataset_id = p_dataset_id
-    AND mo.output_metric_name = 'Calc Tax Cost'
+    AND mo.metric_name = 'Calc Tax Cost'
     AND f.metric_name = 'PBT'
-    AND mo.output_metric_value IS NOT NULL
-    AND f.numeric_value IS NOT NULL
-    AND f.numeric_value != 0;
+    AND mo.metric_value IS NOT NULL
+    AND f.metric_value IS NOT NULL
+    AND f.metric_value != 0;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -407,7 +407,7 @@ BEGIN
   SELECT
     mo.ticker,
     mo.fiscal_year,
-    (mo.output_metric_value / f.numeric_value) AS xo_cost_margin
+    (mo.metric_value / f.metric_value) AS xo_cost_margin
   FROM cissa.metrics_outputs mo
   INNER JOIN cissa.fundamentals f
     ON mo.ticker = f.ticker
@@ -415,11 +415,11 @@ BEGIN
     AND mo.dataset_id = f.dataset_id
   WHERE
     mo.dataset_id = p_dataset_id
-    AND mo.output_metric_name = 'Calc XO Cost'
+    AND mo.metric_name = 'Calc XO Cost'
     AND f.metric_name = 'REVENUE'
-    AND mo.output_metric_value IS NOT NULL
-    AND f.numeric_value IS NOT NULL
-    AND f.numeric_value != 0;
+    AND mo.metric_value IS NOT NULL
+    AND f.metric_value IS NOT NULL
+    AND f.metric_value != 0;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -441,7 +441,7 @@ BEGIN
   SELECT
     f1.ticker,
     f1.fiscal_year,
-    (f1.numeric_value / f2.numeric_value) AS fa_intensity
+    (f1.metric_value / f2.metric_value) AS fa_intensity
   FROM cissa.fundamentals f1
   INNER JOIN cissa.fundamentals f2
     ON f1.ticker = f2.ticker
@@ -451,9 +451,9 @@ BEGIN
     f1.dataset_id = p_dataset_id
     AND f1.metric_name = 'FIXED_ASSETS'
     AND f2.metric_name = 'REVENUE'
-    AND f1.numeric_value IS NOT NULL
-    AND f2.numeric_value IS NOT NULL
-    AND f2.numeric_value != 0;
+    AND f1.metric_value IS NOT NULL
+    AND f2.metric_value IS NOT NULL
+    AND f2.metric_value != 0;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -478,7 +478,7 @@ BEGIN
   SELECT
     f1.ticker,
     f1.fiscal_year,
-    (f1.numeric_value - f2.numeric_value) AS book_equity
+    (f1.metric_value - f2.metric_value) AS book_equity
   FROM cissa.fundamentals f1
   INNER JOIN cissa.fundamentals f2
     ON f1.ticker = f2.ticker
@@ -488,8 +488,8 @@ BEGIN
     f1.dataset_id = p_dataset_id
     AND f1.metric_name = 'TOTAL_EQUITY'
     AND f2.metric_name = 'MINORITY_INTEREST'
-    AND f1.numeric_value IS NOT NULL
-    AND f2.numeric_value IS NOT NULL;
+    AND f1.metric_value IS NOT NULL
+    AND f2.metric_value IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -515,7 +515,7 @@ BEGIN
   SELECT
     mo.ticker,
     mo.fiscal_year,
-    (f.numeric_value / mo.output_metric_value) AS roa
+    (f.metric_value / mo.metric_value) AS roa
   FROM cissa.metrics_outputs mo
   INNER JOIN cissa.fundamentals f
     ON mo.ticker = f.ticker
@@ -523,11 +523,11 @@ BEGIN
     AND mo.dataset_id = f.dataset_id
   WHERE
     mo.dataset_id = p_dataset_id
-    AND mo.output_metric_name = 'Calc Assets'
+    AND mo.metric_name = 'Calc Assets'
     AND f.metric_name = 'PAT'
-    AND mo.output_metric_value IS NOT NULL
-    AND f.numeric_value IS NOT NULL
-    AND mo.output_metric_value != 0;
+    AND mo.metric_value IS NOT NULL
+    AND f.metric_value IS NOT NULL
+    AND mo.metric_value != 0;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
