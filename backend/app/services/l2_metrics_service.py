@@ -52,7 +52,7 @@ class L2MetricsService:
         try:
             logger.info(f"Starting L2 metrics calculation for dataset={dataset_id}, param_set={param_set_id}")
             
-            # Step 1: Fetch L1 metrics from database
+            # Step 1: Fetch L1 metrics from database (these are the calculated metrics)
             logger.info("Fetching L1 metrics from database...")
             l1_metrics_df = await self.repo.get_l1_metrics(dataset_id, param_set_id)
             
@@ -66,7 +66,21 @@ class L2MetricsService:
             
             logger.info(f"Fetched {len(l1_metrics_df)} L1 metric records")
             
-            # Step 2: Fetch fundamentals data from database
+            # Step 2: Fetch L1 metrics pivoted to columns (Calc MC, ROA, Book Equity, etc.)
+            logger.info("Fetching L1 metrics pivoted to columns...")
+            l1_metrics_pivoted = await self._fetch_l1_metrics_pivoted(dataset_id, param_set_id)
+            
+            if l1_metrics_pivoted.empty:
+                logger.warning(f"No L1 metrics found for pivoting")
+                return {
+                    "status": "error",
+                    "results_count": 0,
+                    "message": "No L1 metrics found for pivoting"
+                }
+            
+            logger.info(f"Fetched {len(l1_metrics_pivoted)} L1 metrics (pivoted)")
+            
+            # Step 3: Fetch fundamentals data from database (for raw financial data)
             logger.info("Fetching fundamentals from database...")
             fundamentals_df = await self._fetch_fundamentals(dataset_id)
             
@@ -80,10 +94,10 @@ class L2MetricsService:
             
             logger.info(f"Fetched {len(fundamentals_df)} fundamental records")
             
-            # Step 3: Call pure calculation function
+            # Step 4: Call pure calculation function
             logger.info("Running L2 metrics calculation...")
             results_df = await self._calculate_l2_metrics_pure(
-                l1_metrics_df, 
+                l1_metrics_pivoted,
                 fundamentals_df, 
                 inputs
             )
@@ -98,7 +112,7 @@ class L2MetricsService:
             
             logger.info(f"Calculation produced {len(results_df)} result records")
             
-            # Step 4: Insert results into database
+            # Step 5: Insert results into database
             logger.info("Inserting results into database...")
             inserted_count = await self._insert_l2_results(
                 dataset_id,
@@ -174,9 +188,47 @@ class L2MetricsService:
         
         return df
     
+    async def _fetch_l1_metrics_pivoted(self, dataset_id: UUID, param_set_id: UUID) -> pd.DataFrame:
+        """
+        Fetch L1 metrics and pivot them to columns for use in L2 calculations.
+        
+        Returns DataFrame with columns like "Calc MC", "ROA", "Book Equity", etc.
+        """
+        query = text("""
+            SELECT 
+                ticker,
+                fiscal_year,
+                output_metric_name,
+                output_metric_value
+            FROM cissa.metrics_outputs
+            WHERE dataset_id = :dataset_id
+              AND param_set_id = :param_set_id
+            ORDER BY ticker, fiscal_year, output_metric_name
+        """)
+        
+        result = await self.session.execute(query, {
+            "dataset_id": str(dataset_id),
+            "param_set_id": str(param_set_id)
+        })
+        rows = result.fetchall()
+        
+        df = pd.DataFrame(rows, columns=["ticker", "fiscal_year", "output_metric_name", "output_metric_value"])
+        
+        # Pivot so metric names become columns
+        l1_pivot = df.pivot_table(
+            index=["ticker", "fiscal_year"],
+            columns="output_metric_name",
+            values="output_metric_value",
+            aggfunc="first"
+        ).reset_index()
+        
+        logger.info(f"Fetched L1 metrics: {len(l1_pivot)} rows with columns: {list(l1_pivot.columns)}")
+        
+        return l1_pivot
+    
     async def _calculate_l2_metrics_pure(
         self,
-        l1_metrics_df: pd.DataFrame,
+        l1_metrics_pivoted: pd.DataFrame,
         fundamentals_df: pd.DataFrame,
         inputs: dict
     ) -> pd.DataFrame:
@@ -187,74 +239,99 @@ class L2MetricsService:
         This is business logic extracted from calculation.py - no database access.
         
         Args:
-            l1_metrics_df: L1 metrics with columns [ticker, fiscal_year, output_metric_name, output_metric_value]
-            fundamentals_df: Fundamentals with columns [ticker, fiscal_year, ke_open, ee_open, ...]
-            inputs: Calculation parameters
+            l1_metrics_pivoted: L1 metrics pivoted with columns [ticker, fiscal_year, Calc MC, ROA, Book Equity, ...]
+            fundamentals_df: Fundamentals with columns [ticker, fiscal_year, pat, price, shrouts, ...]
+            inputs: Calculation parameters (country, risk_premium, etc.)
         
         Returns:
             DataFrame with calculated L2 metrics: [ticker, fiscal_year, metric_name, metric_value]
         """
-        # Pivot L1 metrics to get one column per metric
-        l1_pivot = l1_metrics_df.pivot_table(
-            index=["ticker", "fiscal_year"],
-            columns="output_metric_name",
-            values="output_metric_value",
-            aggfunc="first"
-        ).reset_index()
-        
-        # Merge L1 + fundamentals
+        # Merge L1 metrics (pivoted) + fundamentals
         merged_df = pd.merge(
-            l1_pivot,
+            l1_metrics_pivoted,
             fundamentals_df,
             on=["ticker", "fiscal_year"],
             how="inner"
         )
         
         if merged_df.empty:
-            logger.warning("No matching rows after merging L1 and fundamentals")
+            logger.warning("No matching rows after merging L1 metrics and fundamentals")
+            logger.info(f"L1 metrics shape: {l1_metrics_pivoted.shape}, Fundamentals shape: {fundamentals_df.shape}")
             return pd.DataFrame()
         
+        logger.info(f"Merged L1 + fundamentals: {len(merged_df)} rows with columns: {list(merged_df.columns)}")
+        
         # Calculate L2 metrics from merged data
-        # Example: calculated metrics based on ke_open, ee_open, pat, etc.
+        # Using available L1 metrics and fundamentals to create meaningful L2 metrics
         results_records = []
         
         for _, row in merged_df.iterrows():
             ticker = row["ticker"]
-            fiscal_year = row["fiscal_year"]
+            fiscal_year = int(row["fiscal_year"])
             
-            # Example L2 calculations (can be extended)
-            # These are placeholder calculations - real L2 involves complex regressions
+            # L2 metrics are derived from L1 metrics and fundamentals
+            # These create secondary-level analysis metrics
             
-            # ke_exposure = ke_open * ee_open if not null else 0
-            if pd.notna(row.get("ke_open")) and pd.notna(row.get("ee_open")):
-                ke_exposure = row["ke_open"] * row["ee_open"]
+            # 1. ROA (already in L1, but we can use it as L2 base)
+            if pd.notna(row.get("ROA")):
                 results_records.append({
                     "ticker": ticker,
                     "fiscal_year": fiscal_year,
-                    "output_metric_name": "KE_EXPOSURE",
-                    "output_metric_value": ke_exposure,
+                    "output_metric_name": "L2_ROA_BASE",
+                    "output_metric_value": float(row["ROA"]),
                 })
             
-            # economic_profit = pat - (ke_open * ee_open)
-            if pd.notna(row.get("pat")) and pd.notna(row.get("ke_open")) and pd.notna(row.get("ee_open")):
-                economic_profit = row["pat"] - (row["ke_open"] * row["ee_open"])
+            # 2. Asset Efficiency = Calc MC / Calc Assets
+            if pd.notna(row.get("Calc MC")) and pd.notna(row.get("Calc Assets")) and row.get("Calc Assets", 0) != 0:
+                asset_efficiency = float(row["Calc MC"]) / float(row["Calc Assets"])
                 results_records.append({
                     "ticker": ticker,
                     "fiscal_year": fiscal_year,
-                    "output_metric_name": "ECONOMIC_PROFIT",
-                    "output_metric_value": economic_profit,
+                    "output_metric_name": "L2_ASSET_EFFICIENCY",
+                    "output_metric_value": asset_efficiency,
                 })
             
-            # roe = pat / ee_open if ee_open > 0
-            if pd.notna(row.get("pat")) and pd.notna(row.get("ee_open")) and row["ee_open"] != 0:
-                roe = row["pat"] / row["ee_open"]
+            # 3. Operating Leverage = Calc Op Cost / Revenue
+            if pd.notna(row.get("Calc Op Cost")) and pd.notna(row.get("revenue")) and row.get("revenue", 0) != 0:
+                op_leverage = float(row["Calc Op Cost"]) / float(row["revenue"])
                 results_records.append({
                     "ticker": ticker,
                     "fiscal_year": fiscal_year,
-                    "output_metric_name": "ROE",
-                    "output_metric_value": roe,
+                    "output_metric_name": "L2_OPERATING_LEVERAGE",
+                    "output_metric_value": op_leverage,
+                })
+            
+            # 4. Tax Burden = Calc Tax Cost / Profit Before Tax
+            if pd.notna(row.get("Calc Tax Cost")) and pd.notna(row.get("pbt")) and row.get("pbt", 0) != 0:
+                tax_burden = float(row["Calc Tax Cost"]) / float(row["pbt"])
+                results_records.append({
+                    "ticker": ticker,
+                    "fiscal_year": fiscal_year,
+                    "output_metric_name": "L2_TAX_BURDEN",
+                    "output_metric_value": tax_burden,
+                })
+            
+            # 5. Capital Intensity = Book Equity / Calc MC
+            if pd.notna(row.get("Book Equity")) and pd.notna(row.get("Calc MC")) and row.get("Calc MC", 0) != 0:
+                capital_intensity = float(row["Book Equity"]) / float(row["Calc MC"])
+                results_records.append({
+                    "ticker": ticker,
+                    "fiscal_year": fiscal_year,
+                    "output_metric_name": "L2_CAPITAL_INTENSITY",
+                    "output_metric_value": capital_intensity,
+                })
+            
+            # 6. Dividend Payout Ratio = Dividends / PAT
+            if pd.notna(row.get("dividend")) and pd.notna(row.get("pat")) and row.get("pat", 0) != 0:
+                dividend_payout = float(row["dividend"]) / float(row["pat"])
+                results_records.append({
+                    "ticker": ticker,
+                    "fiscal_year": fiscal_year,
+                    "output_metric_name": "L2_DIVIDEND_PAYOUT_RATIO",
+                    "output_metric_value": dividend_payout,
                 })
         
+        logger.info(f"Generated {len(results_records)} L2 metric records")
         return pd.DataFrame(results_records)
     
     async def _insert_l2_results(
