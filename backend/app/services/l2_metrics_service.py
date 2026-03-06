@@ -52,9 +52,9 @@ class L2MetricsService:
         try:
             logger.info(f"Starting L2 metrics calculation for dataset={dataset_id}, param_set={param_set_id}")
             
-            # Step 1: Fetch L1 metrics from database (these are the calculated metrics)
+            # Step 1: Fetch L1 metrics from database using raw SQL (avoids ORM FK validation issues)
             logger.info("Fetching L1 metrics from database...")
-            l1_metrics_df = await self.repo.get_l1_metrics(dataset_id, param_set_id)
+            l1_metrics_df = await self._fetch_l1_metrics_raw(dataset_id, param_set_id)
             
             if l1_metrics_df.empty:
                 logger.warning(f"No L1 metrics found for dataset={dataset_id}, param_set={param_set_id}")
@@ -135,6 +135,37 @@ class L2MetricsService:
                 "results_count": 0,
                 "message": f"Error during calculation: {str(e)}"
             }
+    
+    async def _fetch_l1_metrics_raw(self, dataset_id: UUID, param_set_id: UUID) -> pd.DataFrame:
+        """
+        Fetch L1 metrics using raw SQL (avoids ORM FK validation).
+        
+        Returns DataFrame with columns: ticker, fiscal_year, output_metric_name, output_metric_value
+        """
+        query = text("""
+            SELECT 
+                ticker,
+                fiscal_year,
+                output_metric_name,
+                output_metric_value
+            FROM cissa.metrics_outputs
+            WHERE dataset_id = :dataset_id
+              AND param_set_id = :param_set_id
+            ORDER BY ticker, fiscal_year, output_metric_name
+        """)
+        
+        result = await self.session.execute(query, {
+            "dataset_id": str(dataset_id),
+            "param_set_id": str(param_set_id)
+        })
+        rows = result.fetchall()
+        
+        df = pd.DataFrame(
+            rows,
+            columns=["ticker", "fiscal_year", "output_metric_name", "output_metric_value"]
+        )
+        
+        return df
     
     async def _fetch_fundamentals(self, dataset_id: UUID) -> pd.DataFrame:
         """
