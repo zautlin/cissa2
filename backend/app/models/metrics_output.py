@@ -58,7 +58,7 @@ class MetricsOutput(Base):
     output_metric_value: Mapped[float] = mapped_column(Numeric, nullable=False)
 
     # Metadata: flexible storage for metric-specific attributes
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    metric_metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False, name="metadata")
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
