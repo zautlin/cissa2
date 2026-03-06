@@ -68,7 +68,7 @@ def get_db_manager() -> DatabaseManager:
     global _db_manager
     if _db_manager is None:
         settings = get_settings()
-        _db_manager = DatabaseManager(settings.database_url)
+        _db_manager = DatabaseManager(settings.DATABASE_URL)
     return _db_manager
 
 

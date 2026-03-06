@@ -12,12 +12,13 @@ class Settings(BaseSettings):
     
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent.parent.parent / ".env"),
-        case_sensitive=False,
-        extra='ignore'
+        case_sensitive=True,
+        extra='ignore',
+        env_file_encoding='utf-8'
     )
     
-    # Database
-    database_url: str
+    # Database - read from DATABASE_URL env var
+    DATABASE_URL: str = "postgresql+asyncpg://localhost/rozetta"
     
     # Environment
     fastapi_env: str = "development"

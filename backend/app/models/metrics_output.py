@@ -36,6 +36,7 @@ class MetricsOutput(Base):
         Index("idx_metrics_outputs_dataset", "dataset_id"),
         Index("idx_metrics_outputs_param_set", "param_set_id"),
         Index("idx_metrics_outputs_ticker_fy", "ticker", "fiscal_year"),
+        {"schema": "cissa"},
     )
 
     # Primary key: auto-incrementing BIGINT
@@ -43,11 +44,11 @@ class MetricsOutput(Base):
 
     # Foreign keys
     dataset_id: Mapped[UUID] = mapped_column(
-        ForeignKey("dataset_versions.dataset_id", ondelete="CASCADE"),
+        ForeignKey("cissa.dataset_versions.dataset_id", ondelete="CASCADE"),
         nullable=False,
     )
     param_set_id: Mapped[UUID] = mapped_column(
-        ForeignKey("parameter_sets.param_set_id"),
+        ForeignKey("cissa.parameter_sets.param_set_id"),
         nullable=False,
     )
 
