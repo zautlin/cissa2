@@ -338,19 +338,22 @@ CREATE INDEX idx_metrics_outputs_ticker_fy ON metrics_outputs (ticker, fiscal_ye
 COMMENT ON TABLE metrics_outputs IS 'Computed metric outputs derived from fundamentals + parameter sets. One row per (dataset, param_set, ticker, fiscal_year, metric).';
 
 -- Optimization Outputs: Results from optimization algorithms
--- Stores hierarchical projection results with flexible metadata for run details
--- Each optimization references one metric output for traceability
+-- Stores hierarchical projection results organized by base_year for efficient multi-year charting
+-- One optimization per (dataset_id, param_set_id, ticker) combination
+-- Allows multiple optimizations (re-runs) with different timestamps
 CREATE TABLE optimization_outputs (
   optimization_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dataset_id UUID NOT NULL REFERENCES dataset_versions(dataset_id) ON DELETE CASCADE,
   param_set_id UUID NOT NULL REFERENCES parameter_sets(param_set_id),
-  metrics_output_id BIGINT NOT NULL REFERENCES metrics_outputs(metrics_output_id) ON DELETE CASCADE,
   ticker TEXT NOT NULL,
   
   -- Results: hierarchical structure {base_year: {metric: {projected_year: value}}}
+  -- Example: {"2000": {"ep": {"2001": -0.0004, ...}, "market_value_equity": {...}}, "2001": {...}, ...}
+  -- Enables efficient multi-base-year queries for UI charting
   result_summary JSONB NOT NULL DEFAULT '{}',
   
-  -- Flexible metadata: {optimization_type, status, constraints, solver, errors}
+  -- Metadata: convergence status, iterations, solver info, residuals
+  -- Example: {convergence_status: "converged", iterations: 1247, residual: 2.3e-12, initial_ep: -0.0004, optimal_ep: -0.000387, solver: "scipy.optimize.basinhopping"}
   metadata JSONB NOT NULL DEFAULT '{}',
   
   created_by TEXT NOT NULL DEFAULT 'admin',
@@ -358,11 +361,21 @@ CREATE TABLE optimization_outputs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Access patterns
+-- Natural key index for efficient queries (allows re-optimizations)
+-- Composite index ordered by created_at DESC for "latest optimization" queries
+CREATE INDEX idx_optimization_outputs_natural_key 
+ON optimization_outputs (dataset_id, param_set_id, ticker, created_at DESC);
+
+-- Access patterns for filtering
 CREATE INDEX idx_optimization_outputs_dataset ON optimization_outputs (dataset_id);
 CREATE INDEX idx_optimization_outputs_param_set ON optimization_outputs (param_set_id);
 CREATE INDEX idx_optimization_outputs_ticker ON optimization_outputs (ticker);
-CREATE INDEX idx_optimization_outputs_metrics_output ON optimization_outputs (metrics_output_id);
+
+-- GIN index for JSONB containment queries on result_summary and metadata
+CREATE INDEX idx_optimization_outputs_result_summary_gin 
+USING GIN (result_summary);
+CREATE INDEX idx_optimization_outputs_metadata_gin 
+USING GIN (metadata);
 
 -- Auto-update trigger for optimization_outputs.updated_at
 CREATE OR REPLACE FUNCTION update_optimization_outputs_timestamp()
@@ -378,7 +391,9 @@ BEFORE UPDATE ON optimization_outputs
 FOR EACH ROW
 EXECUTE FUNCTION update_optimization_outputs_timestamp();
 
-COMMENT ON TABLE optimization_outputs IS 'Results from optimization algorithms. Each row references one metric_output. result_summary stores hierarchical projections {base_year:{metric:{year:value}}}. metadata tracks optimization type, status, constraints, solver info. Allows tracing: optimization → metric_output → fundamentals → raw_data.';
+COMMENT ON TABLE optimization_outputs IS 'Results from optimization algorithms. One row per optimization run for (dataset_id, param_set_id, ticker). Allows multiple optimizations (re-runs) with different timestamps. result_summary stores hierarchical projections {base_year:{metric:{year:value}}} for efficient multi-base-year charting. metadata tracks convergence_status, iterations, residual, initial_ep, optimal_ep, and solver info. Enables traceability: optimization → (dataset, param_set) → metrics_outputs → fundamentals → raw_data.';
+COMMENT ON COLUMN optimization_outputs.result_summary IS 'Hierarchical JSONB organized by base_year: {base_year: {metric_name: {projected_year: value, ...}, ...}, ...}. Contains 18 derived metrics (ep, market_value_equity, dividend, pat, return_on_equity, book_value_equity, growth_in_equity, economic_profit, etc.) across all projected years (typically 62 years = convergence_horizon + 2). Optimized for UI charting of multiple base years.';
+COMMENT ON COLUMN optimization_outputs.metadata IS 'Optimization execution metadata: {convergence_status, convergence_horizon, iterations, residual, initial_ep, optimal_ep, observed_market_value, calculated_market_value, solver, errors}. convergence_status: "converged" | "diverged" | "max_iterations_reached".';
 
 -- ============================================================================
 -- OPTIONAL: VALIDATION AUDIT LOG
