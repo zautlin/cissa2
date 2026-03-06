@@ -373,9 +373,9 @@ CREATE INDEX idx_optimization_outputs_ticker ON optimization_outputs (ticker);
 
 -- GIN index for JSONB containment queries on result_summary and metadata
 CREATE INDEX idx_optimization_outputs_result_summary_gin 
-USING GIN (result_summary);
+ON optimization_outputs USING GIN (result_summary);
 CREATE INDEX idx_optimization_outputs_metadata_gin 
-USING GIN (metadata);
+ON optimization_outputs USING GIN (metadata);
 
 -- Auto-update trigger for optimization_outputs.updated_at
 CREATE OR REPLACE FUNCTION update_optimization_outputs_timestamp()
