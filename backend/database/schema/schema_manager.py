@@ -166,25 +166,36 @@ class SchemaManager:
         """Create fresh schema from schema.sql using atomic transaction."""
         print("Creating schema from schema.sql...")
         
-        # Execute schema creation as single transaction (preserves PL/pgSQL syntax)
+        # Execute schema creation as single transaction (preserves PL/pgSQL syntax and constraints)
         if not self._execute_sql_file_transaction("schema.sql", "Schema created successfully"):
             return False
         
         # Verify schema
         try:
             with self.engine.connect() as conn:
+                # Count tables
                 result = conn.execute(text("""
                     SELECT COUNT(*) 
                     FROM information_schema.tables 
                     WHERE table_schema = 'cissa'
                 """))
                 table_count = result.scalar()
+                
+                # Count foreign keys
+                fk_result = conn.execute(text("""
+                    SELECT COUNT(*) 
+                    FROM information_schema.table_constraints 
+                    WHERE table_schema = 'cissa' AND constraint_type = 'FOREIGN KEY'
+                """))
+                fk_count = fk_result.scalar()
             
-            print(f"✓ Schema verification: {table_count} tables created")
-            return table_count >= 11
+            print(f"✓ Schema verification: {table_count} tables created, {fk_count} foreign keys")
+            return table_count >= 11 and fk_count >= 7
         
         except Exception as e:
             print(f"✗ Schema verification failed: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def init_metric_units(self) -> bool:
