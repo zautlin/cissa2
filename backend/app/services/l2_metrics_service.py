@@ -126,24 +126,37 @@ class L2MetricsService:
         """
         Fetch fundamentals for a dataset.
         
-        Returns DataFrame with columns needed for L2 calculation:
-        - ticker, fiscal_year, ke_open, ee_open, etc.
+        Returns DataFrame with columns needed for L2 calculation.
+        Pivots fundamentals table so each metric_name becomes a column.
         """
-        # Query fundamentals table joined with dataset
+        # Query fundamentals table and pivot metrics to columns
         query = text("""
             SELECT 
-                f.ticker,
-                f.fiscal_year,
-                f.ke_open,
-                f.ee_open,
-                f.pat,
-                f.patxo,
-                f.dividend,
-                f.price,
-                f.shrouts
-            FROM cissa.fundamentals f
-            WHERE f.dataset_id = :dataset_id
-            ORDER BY f.ticker, f.fiscal_year
+                ticker,
+                fiscal_year,
+                MAX(CASE WHEN metric_name = 'PROFIT_AFTER_TAX' THEN numeric_value END) as pat,
+                MAX(CASE WHEN metric_name = 'PROFIT_AFTER_TAX_EX' THEN numeric_value END) as patxo,
+                MAX(CASE WHEN metric_name = 'DIVIDENDS' THEN numeric_value END) as dividend,
+                MAX(CASE WHEN metric_name = 'SHARE_PRICE' THEN numeric_value END) as price,
+                MAX(CASE WHEN metric_name = 'SPOT_SHARES' THEN numeric_value END) as shrouts,
+                MAX(CASE WHEN metric_name = 'MARKET_CAP' THEN numeric_value END) as market_cap,
+                MAX(CASE WHEN metric_name = 'TOTAL_ASSETS' THEN numeric_value END) as total_assets,
+                MAX(CASE WHEN metric_name = 'CASH' THEN numeric_value END) as cash,
+                MAX(CASE WHEN metric_name = 'FIXED_ASSETS' THEN numeric_value END) as fixed_assets,
+                MAX(CASE WHEN metric_name = 'GOODWILL' THEN numeric_value END) as goodwill,
+                MAX(CASE WHEN metric_name = 'TOTAL_EQUITY' THEN numeric_value END) as total_equity,
+                MAX(CASE WHEN metric_name = 'MINORITY_INTEREST' THEN numeric_value END) as minority_interest,
+                MAX(CASE WHEN metric_name = 'REVENUE' THEN numeric_value END) as revenue,
+                MAX(CASE WHEN metric_name = 'OPERATING_INCOME' THEN numeric_value END) as operating_income,
+                MAX(CASE WHEN metric_name = 'PROFIT_BEFORE_TAX' THEN numeric_value END) as pbt,
+                MAX(CASE WHEN metric_name = 'FY_TSR' THEN numeric_value END) as fy_tsr,
+                MAX(CASE WHEN metric_name = 'COMPANY_TSR' THEN numeric_value END) as company_tsr,
+                MAX(CASE WHEN metric_name = 'INDEX_TSR' THEN numeric_value END) as index_tsr,
+                MAX(CASE WHEN metric_name = 'RISK_FREE_RATE' THEN numeric_value END) as risk_free_rate
+            FROM cissa.fundamentals
+            WHERE dataset_id = :dataset_id
+            GROUP BY ticker, fiscal_year
+            ORDER BY ticker, fiscal_year
         """)
         
         result = await self.session.execute(query, {"dataset_id": str(dataset_id)})
@@ -152,8 +165,10 @@ class L2MetricsService:
         df = pd.DataFrame(
             rows,
             columns=[
-                "ticker", "fiscal_year", "ke_open", "ee_open", "pat", 
-                "patxo", "dividend", "price", "shrouts"
+                "ticker", "fiscal_year", "pat", "patxo", "dividend", "price", "shrouts",
+                "market_cap", "total_assets", "cash", "fixed_assets", "goodwill",
+                "total_equity", "minority_interest", "revenue", "operating_income", "pbt",
+                "fy_tsr", "company_tsr", "index_tsr", "risk_free_rate"
             ]
         )
         
