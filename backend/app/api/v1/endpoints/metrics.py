@@ -11,10 +11,13 @@ from ....models import (
     CalculateMetricsResponse,
     CalculateL2Request,
     CalculateL2Response,
+    CalculateEnhancedMetricsRequest,
+    CalculateEnhancedMetricsResponse,
     MetricsHealthResponse
 )
 from ....services.metrics_service import MetricsService
 from ....services.l2_metrics_service import L2MetricsService
+from ....services.enhanced_metrics_service import EnhancedMetricsService
 from ....core.config import get_logger
 
 logger = get_logger(__name__)
@@ -170,4 +173,77 @@ async def calculate_l2_metrics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during L2 metrics calculation"
+        )
+
+
+# ============================================================================
+# L3 Enhanced Metrics Endpoints (Phase 3)
+# ============================================================================
+
+@router.post("/calculate-enhanced", response_model=CalculateEnhancedMetricsResponse, status_code=status.HTTP_200_OK)
+async def calculate_enhanced_metrics(
+    request: CalculateEnhancedMetricsRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Calculate enhanced metrics (Phase 3): Beta, Rf, KE, EP, TSR, Financial Ratios.
+    
+    Enhanced metrics are derived calculations that build on L1 metrics:
+    - Beta: Stock beta (currently 1.0 default, future: rolling OLS from returns)
+    - Rf: Risk-free rate (from parameter set)
+    - Calc KE: Cost of Equity = Rf + Beta × Risk Premium
+    - ROA, ROE, Profit Margin: Financial ratios
+    
+    **Prerequisites:**
+    - L1 metrics must be calculated first
+    - dataset_id and param_set_id must exist
+    
+    **Example Request:**
+    ```json
+    {
+        "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+        "param_set_id": "660e8400-e29b-41d4-a716-446655440001"
+    }
+    ```
+    
+    **Response:**
+    - status: 'success' or 'error'
+    - results_count: number of metric records inserted
+    - metrics_calculated: list of metric types calculated
+    """
+    
+    logger.info(f"Processing enhanced metrics: dataset={request.dataset_id}, param_set={request.param_set_id}")
+    
+    try:
+        service = EnhancedMetricsService(db)
+        result = await service.calculate_enhanced_metrics(
+            dataset_id=request.dataset_id,
+            param_set_id=request.param_set_id
+        )
+        
+        if result["status"] == "error":
+            logger.warning(f"Enhanced metrics calculation failed: {result['message']}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+        
+        logger.info(f"Enhanced metrics calculation successful: {result['results_count']} records, metrics={result['metrics_calculated']}")
+        
+        return CalculateEnhancedMetricsResponse(
+            dataset_id=request.dataset_id,
+            param_set_id=request.param_set_id,
+            results_count=result["results_count"],
+            metrics_calculated=result["metrics_calculated"],
+            status="success",
+            message=result["message"]
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during enhanced metrics calculation: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during enhanced metrics calculation"
         )

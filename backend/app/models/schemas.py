@@ -86,3 +86,33 @@ class MetricsOutputResponse(BaseModel):
     output_metric_name: str
     output_metric_value: float
     created_at: datetime
+
+
+# ============================================================================
+# L3 Enhanced Metrics (Phase 3)
+# ============================================================================
+
+class CalculateEnhancedMetricsRequest(BaseModel):
+    """Request to calculate enhanced metrics (Beta, Rf, KE, EP, TSR, ratios)."""
+    dataset_id: UUID = Field(..., description="UUID of the dataset")
+    param_set_id: UUID = Field(..., description="UUID of the parameter set")
+
+
+class EnhancedMetricResultItem(BaseModel):
+    """Single enhanced metric result."""
+    ticker: str
+    fiscal_year: int
+    metric_name: str
+    value: float
+
+
+class CalculateEnhancedMetricsResponse(BaseModel):
+    """Response from enhanced metrics calculation."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    dataset_id: UUID
+    param_set_id: UUID
+    results_count: int
+    metrics_calculated: list[str] = Field(default_factory=list)
+    status: str = Field(default="success")
+    message: Optional[str] = Field(default=None)

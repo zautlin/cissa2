@@ -7,8 +7,11 @@ from .schemas import (
     CalculateMetricsResponse,
     CalculateL2Request,
     CalculateL2Response,
+    CalculateEnhancedMetricsRequest,
+    CalculateEnhancedMetricsResponse,
     MetricResultItem,
     L2MetricResultItem,
+    EnhancedMetricResultItem,
     MetricsHealthResponse,
     MetricsOutputResponse,
 )
@@ -20,8 +23,11 @@ __all__ = [
     "CalculateMetricsResponse",
     "CalculateL2Request",
     "CalculateL2Response",
+    "CalculateEnhancedMetricsRequest",
+    "CalculateEnhancedMetricsResponse",
     "MetricResultItem",
     "L2MetricResultItem",
+    "EnhancedMetricResultItem",
     "MetricsHealthResponse",
     "MetricsOutputResponse",
 ]
