@@ -142,8 +142,8 @@ class MetricsService:
         # Prepare batch insert statement
         insert_query = text("""
             INSERT INTO cissa.metrics_outputs 
-            (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, created_at)
-            VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, now())
+            (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
+            VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata, now())
             ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
             DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
         """)
@@ -161,7 +161,8 @@ class MetricsService:
                     "ticker": item.ticker,
                     "fiscal_year": item.fiscal_year,
                     "output_metric_name": metric_name,
-                    "output_metric_value": item.value
+                    "output_metric_value": item.value,
+                    "metadata": '{"metric_level": "L1"}'
                 }
                 for item in batch
             ]

@@ -145,17 +145,16 @@ class EnhancedMetricsService:
     
     async def _load_parameters_from_db(self, param_set_id: UUID) -> dict:
         """Load parameters from database with proper conversions."""
+        # Step 1: Get base parameters
         query = text("""
             SELECT 
-                p.parameter_name,
-                COALESCE(ps.param_value, p.parameter_value) as value
-            FROM cissa.parameters p
-            LEFT JOIN cissa.parameter_sets ps 
-                ON p.parameter_id = ps.parameter_id 
-                AND ps.param_set_id = :param_set_id
+                parameter_name,
+                default_value as value
+            FROM cissa.parameters
+            ORDER BY parameter_name
         """)
         
-        result = await self.session.execute(query, {"param_set_id": str(param_set_id)})
+        result = await self.session.execute(query)
         rows = result.fetchall()
         
         params = {}
@@ -169,6 +168,27 @@ class EnhancedMetricsService:
                 params[param_name] = float(value) / 100.0
             else:
                 params[param_name] = value
+        
+        # Step 2: Apply overrides from parameter_set if any exist
+        override_query = text("""
+            SELECT param_overrides
+            FROM cissa.parameter_sets
+            WHERE param_set_id = :param_set_id
+        """)
+        
+        override_result = await self.session.execute(override_query, {"param_set_id": str(param_set_id)})
+        override_row = override_result.fetchone()
+        
+        if override_row and override_row[0]:
+            overrides = override_row[0]  # This is the JSONB param_overrides
+            for key, value in overrides.items():
+                # Apply override if parameter exists
+                if key in params:
+                    if key in ["equity_risk_premium", "fixed_benchmark_return_wealth_preservation",
+                              "beta_relative_error_tolerance", "tax_rate_franking_credits", "value_of_franking_credits"]:
+                        params[key] = float(value) / 100.0
+                    else:
+                        params[key] = value
         
         return params
     
@@ -202,7 +222,10 @@ class EnhancedMetricsService:
         return df
     
     async def _fetch_l1_metrics(self, dataset_id: UUID, param_set_id: UUID) -> pd.DataFrame:
-        """Fetch L1 metrics from metrics_outputs."""
+        """Fetch L1 metrics from metrics_outputs.
+        
+        L1 metrics have metric_level='L1' in metadata.
+        """
         query = text("""
             SELECT 
                 ticker,
