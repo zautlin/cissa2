@@ -43,7 +43,7 @@ async def calculate_metric(
     """
     Calculate a metric for a dataset.
     
-    **Example Request:**
+    **Example Request (Simple Metric):**
     ```json
     {
         "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -51,26 +51,28 @@ async def calculate_metric(
     }
     ```
     
-    **Supported Metrics:**
-    - Calc MC (Market Cap = Spot Shares × Share Price)
-    - Calc Assets (Operating Assets = Total Assets - Cash)
-    - Calc OA (Operating Assets Detail)
-    - Calc Op Cost (Operating Cost = Revenue - Op Income)
-    - Calc Non Op Cost (Non-Operating Cost)
-    - Calc Tax Cost (Tax Cost = PBT - PAT XO)
-    - Calc XO Cost (Extraordinary Items Cost)
-    - Profit Margin (PAT / Revenue)
-    - Op Cost Margin % (Op Cost / Revenue)
-    - Non-Op Cost Margin % (Non-Op Cost / Revenue)
-    - Eff Tax Rate (Tax Cost / PBT)
-    - XO Cost Margin % (XO Cost / Revenue)
-    - FA Intensity (Fixed Assets / Revenue)
-    - Book Equity (Total Equity - Minority Interest)
-    - ROA (Return on Operating Assets = PAT / Calc Assets)
+    **Example Request (Parameter-Sensitive Metric):**
+    ```json
+    {
+        "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+        "metric_name": "FY_TSR",
+        "param_set_id": "660e8400-e29b-41d4-a716-446655440001"
+    }
+    ```
+    
+    **Supported L1 Metrics:**
+    - Simple (7): Calc MC, Calc Assets, Calc OA, Calc Op Cost, Calc Non Op Cost, Calc Tax Cost, Calc XO Cost
+    - Temporal (5): ECF, NON_DIV_ECF, EE, FY_TSR (requires param_set_id), FY_TSR_PREL (requires param_set_id)
+    
+    **Note:** FY_TSR and FY_TSR_PREL are parameter-sensitive. If param_set_id is not provided, the default parameter set will be used.
     """
     
     service = MetricsService(db)
-    response = await service.calculate_metric(request.dataset_id, request.metric_name)
+    response = await service.calculate_metric(
+        request.dataset_id, 
+        request.metric_name,
+        request.param_set_id
+    )
     
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.message)
