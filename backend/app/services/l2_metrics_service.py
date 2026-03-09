@@ -308,7 +308,7 @@ class L2MetricsService:
                 results_records.append({
                     "ticker": ticker,
                     "fiscal_year": fiscal_year,
-                    "output_metric_name": "L2_ROA_BASE",
+                    "output_metric_name": "ROA",
                     "output_metric_value": float(row["ROA"]),
                 })
             
@@ -318,7 +318,7 @@ class L2MetricsService:
                 results_records.append({
                     "ticker": ticker,
                     "fiscal_year": fiscal_year,
-                    "output_metric_name": "L2_ASSET_EFFICIENCY",
+                    "output_metric_name": "Asset Efficiency",
                     "output_metric_value": asset_efficiency,
                 })
             
@@ -328,7 +328,7 @@ class L2MetricsService:
                 results_records.append({
                     "ticker": ticker,
                     "fiscal_year": fiscal_year,
-                    "output_metric_name": "L2_OPERATING_LEVERAGE",
+                    "output_metric_name": "Operating Leverage",
                     "output_metric_value": op_leverage,
                 })
             
@@ -338,7 +338,7 @@ class L2MetricsService:
                 results_records.append({
                     "ticker": ticker,
                     "fiscal_year": fiscal_year,
-                    "output_metric_name": "L2_TAX_BURDEN",
+                    "output_metric_name": "Tax Burden",
                     "output_metric_value": tax_burden,
                 })
             
@@ -348,7 +348,7 @@ class L2MetricsService:
                 results_records.append({
                     "ticker": ticker,
                     "fiscal_year": fiscal_year,
-                    "output_metric_name": "L2_CAPITAL_INTENSITY",
+                    "output_metric_name": "Capital Intensity",
                     "output_metric_value": capital_intensity,
                 })
             
@@ -358,7 +358,7 @@ class L2MetricsService:
                 results_records.append({
                     "ticker": ticker,
                     "fiscal_year": fiscal_year,
-                    "output_metric_name": "L2_DIVIDEND_PAYOUT_RATIO",
+                    "output_metric_name": "Dividend Payout Ratio",
                     "output_metric_value": dividend_payout,
                 })
         
