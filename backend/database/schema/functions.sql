@@ -540,22 +540,21 @@ DEPENDENCY: Requires fn_calc_operating_assets() to have been executed first.';
 -- ============================================================================
 -- END OF FUNCTIONS
 -- ============================================================================
+SET search_path TO cissa;
 
--- ============================================================================
--- PHASE 2: TEMPORAL METRIC CALCULATION FUNCTIONS
--- PostgreSQL Stored Functions for Temporal Metrics with Window Functions
--- ============================================================================
--- These functions calculate temporal L1 metrics that require LAG window functions
--- and inception year logic (fiscal_year > companies.begin_year).
--- ============================================================================
+-- Drop old functions if they exist
+DROP FUNCTION IF EXISTS cissa.fn_calc_lag_mc(UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_ecf(UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_non_div_ecf(UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_economic_equity(UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_fy_tsr(UUID, UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_fy_tsr_prel(UUID, UUID) CASCADE;
 
 -- ============================================================================
 -- GROUP 1: LAG_MC (Helper - Previous Year Market Cap)
 -- ============================================================================
 
--- Helper: Calculate LAG(Market Cap) using window function
--- This is not stored as a metric in metrics_outputs, but used internally
-CREATE OR REPLACE FUNCTION fn_calc_lag_mc(p_dataset_id UUID)
+CREATE OR REPLACE FUNCTION cissa.fn_calc_lag_mc(p_dataset_id UUID)
 RETURNS TABLE (
   ticker TEXT,
   fiscal_year INTEGER,
@@ -581,27 +580,22 @@ BEGIN
       AND f2.numeric_value IS NOT NULL
   )
   SELECT
-    ticker,
-    fiscal_year,
-    LAG(calc_mc, 1) OVER (PARTITION BY ticker ORDER BY fiscal_year) AS lag_mc
-  FROM market_caps
-  ORDER BY ticker, fiscal_year;
+    mc.ticker,
+    mc.fiscal_year,
+    LAG(mc.calc_mc, 1) OVER (PARTITION BY mc.ticker ORDER BY mc.fiscal_year) AS lag_mc
+  FROM market_caps mc
+  ORDER BY mc.ticker, mc.fiscal_year;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
-COMMENT ON FUNCTION fn_calc_lag_mc(UUID) IS
-'Calculate LAG(Market Cap) using window function.
-Formula: LAG(C_MC, 1) OVER (PARTITION BY ticker ORDER BY fiscal_year)
-Output: (ticker, fiscal_year, lag_mc)
-Note: Returns NULL for first fiscal year per ticker (no prior year).
-This is a helper function; results not directly stored in metrics_outputs.
-Used internally by ECF, FY_TSR, and other temporal metrics.';
+COMMENT ON FUNCTION cissa.fn_calc_lag_mc(UUID) IS
+'Calculate LAG(Market Cap) using window function. REQ-A1.';
 
 -- ============================================================================
 -- GROUP 2: ECF (Economic Cash Flow) - Temporal Metric
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION fn_calc_ecf(p_dataset_id UUID)
+CREATE OR REPLACE FUNCTION cissa.fn_calc_ecf(p_dataset_id UUID)
 RETURNS TABLE (
   ticker TEXT,
   fiscal_year INTEGER,
@@ -629,12 +623,12 @@ BEGIN
   ),
   lag_mc_calc AS (
     SELECT
-      ticker,
-      fiscal_year,
-      dataset_id,
-      calc_mc,
-      LAG(calc_mc, 1) OVER (PARTITION BY ticker ORDER BY fiscal_year) AS lag_mc
-    FROM market_caps
+      mc.ticker,
+      mc.fiscal_year,
+      mc.dataset_id,
+      mc.calc_mc,
+      LAG(mc.calc_mc, 1) OVER (PARTITION BY mc.ticker ORDER BY mc.fiscal_year) AS lag_mc
+    FROM market_caps mc
   )
   SELECT
     lmc.ticker,
@@ -642,7 +636,7 @@ BEGIN
     CASE
       WHEN c.begin_year IS NULL THEN NULL
       WHEN lmc.fiscal_year > c.begin_year AND lmc.lag_mc IS NOT NULL AND lmc.lag_mc > 0 THEN
-        lmc.lag_mc * (1 + f_tsr.numeric_value / 100.0) - lmc.calc_mc
+        lmc.lag_mc * (1 + COALESCE(f_tsr.numeric_value, 0) / 100.0) - lmc.calc_mc
       ELSE NULL
     END AS ecf
   FROM lag_mc_calc lmc
@@ -656,38 +650,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
-COMMENT ON FUNCTION fn_calc_ecf(UUID) IS
-'Calculate Economic Cash Flow (ECF) using window function and inception logic.
-Formula: IF (fiscal_year > companies.begin_year) THEN ECF = LAG_MC × (1 + fytsr/100) - C_MC ELSE NULL
-Output metric name: Calc ECF
-
-Key features:
-  - Uses LAG window function to access previous year''s market cap
-  - Only calculates when fiscal_year > companies.begin_year (inception logic)
-  - Returns NULL for inception year (no LAG_MC available)
-  - fytsr is INPUT data from Bloomberg fundamentals (not calculated)
-  - Handles division by 100 for percentage conversion
-
-Window Function Pattern:
-  LAG(C_MC, 1) OVER (PARTITION BY ticker ORDER BY fiscal_year)
-  Returns NULL for first year per ticker.
-
-Year Gap Gotcha:
-  LAG is ROW-BASED, not YEAR-BASED. If fiscal years have gaps (e.g., 2015, 2016, 2017, 2020),
-  LAG(2020) will return 2017''s value, not 2019''s. This causes ECF for 2020 to calculate
-  3-year return as 1-year. See GAP_DETECTION.md for mitigation strategy.
-
-Edge Cases:
-  - If LAG_MC IS NULL: ECF = NULL (first year per ticker)
-  - If LAG_MC = 0: ECF = NULL (handled by LAG_MC > 0 check)
-  - If fytsr IS NULL: ECF = NULL (fundamentals join returns NULL)
-  - If begin_year IS NULL: ECF = NULL (conservative handling)';
+COMMENT ON FUNCTION cissa.fn_calc_ecf(UUID) IS
+'Calculate Economic Cash Flow (ECF) with window function. REQ-A2.';
 
 -- ============================================================================
 -- GROUP 3: NON_DIV_ECF (Economic Cash Flow + Dividends) - Temporal Metric
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION fn_calc_non_div_ecf(p_dataset_id UUID)
+CREATE OR REPLACE FUNCTION cissa.fn_calc_non_div_ecf(p_dataset_id UUID)
 RETURNS TABLE (
   ticker TEXT,
   fiscal_year INTEGER,
@@ -698,7 +668,7 @@ BEGIN
   SELECT
     mo.ticker,
     mo.fiscal_year,
-    (mo.output_metric_value + COALESCE(f.numeric_value, 0)) AS non_div_ecf
+    (COALESCE(mo.output_metric_value, 0) + COALESCE(f.numeric_value, 0)) AS non_div_ecf
   FROM cissa.metrics_outputs mo
   LEFT JOIN cissa.fundamentals f
     ON mo.ticker = f.ticker
@@ -712,29 +682,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
-COMMENT ON FUNCTION fn_calc_non_div_ecf(UUID) IS
-'Calculate Non-Dividend Economic Cash Flow (ECF + Dividends).
-Formula: NON_DIV_ECF = ECF + DIVIDENDS
-Output metric name: Calc Non Div ECF
-
-Key features:
-  - Depends on ECF metric being calculated and inserted first
-  - Adds dividend payments to ECF
-  - Inherits NULL behavior from ECF
-  - Uses LEFT JOIN to handle missing dividend data (treats as 0)
-
-Interpretation:
-  NON_DIV_ECF includes full dividend payments in economic cash flow calculation;
-  reflects complete shareholder returns including distributions.
-
-Dependencies:
-  - Requires fn_calc_ecf() to have been executed and results inserted into metrics_outputs';
+COMMENT ON FUNCTION cissa.fn_calc_non_div_ecf(UUID) IS
+'Calculate Non-Dividend ECF (ECF + Dividends). REQ-A3.';
 
 -- ============================================================================
 -- GROUP 4: EE (Economic Equity) - Temporal Cumulative Metric
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION fn_calc_economic_equity(p_dataset_id UUID)
+CREATE OR REPLACE FUNCTION cissa.fn_calc_economic_equity(p_dataset_id UUID)
 RETURNS TABLE (
   ticker TEXT,
   fiscal_year INTEGER,
@@ -776,52 +731,23 @@ BEGIN
       AND f_te.metric_name = 'TOTAL_EQUITY'
   )
   SELECT
-    ticker,
-    fiscal_year,
-    SUM(ee_comp) OVER (PARTITION BY ticker ORDER BY fiscal_year) AS ee_cumsum
-  FROM ee_component
-  WHERE ee_comp IS NOT NULL
-  ORDER BY ticker, fiscal_year;
+    eec.ticker,
+    eec.fiscal_year,
+    SUM(eec.ee_comp) OVER (PARTITION BY eec.ticker ORDER BY eec.fiscal_year) AS ee_cumsum
+  FROM ee_component eec
+  WHERE eec.ee_comp IS NOT NULL
+  ORDER BY eec.ticker, eec.fiscal_year;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
-COMMENT ON FUNCTION fn_calc_economic_equity(UUID) IS
-'Calculate Economic Equity (EE) with cumulative sum and inception logic.
-Formula (component): IF fiscal_year <= begin_year THEN EE = TOTAL_EQUITY - MINORITY_INTEREST
-                      ELSE IF fiscal_year > begin_year THEN EE = PROFIT_AFTER_TAX - ECF
-Formula (cumulative): EE_cumulative = SUM(EE_component) OVER (PARTITION BY ticker ORDER BY fiscal_year)
-Output metric name: Calc EE
-
-Key features:
-  - Two-stage calculation: component-level, then cumulative sum
-  - Inception year logic: Uses equity method for inception year, change method for post-inception
-  - Cumulative sum resets per ticker (PARTITION BY ticker only, not dataset_id)
-  - Uses NUMERIC(18,2) to maintain precision over 60+ years
-  - Filters NULL components to ensure valid cumsum
-
-Window Function Pattern:
-  SUM(...) OVER (PARTITION BY ticker ORDER BY fiscal_year)
-  Accumulates values from first row to current row within each ticker''s history.
-
-Interpretation:
-  EE tracks cumulative economic equity over company''s history.
-  Starting point: book equity (year 0), then accumulates annual changes (profit - ECF).
-
-Edge Cases:
-  - If begin_year IS NULL: Returns NULL (handled in component calculation)
-  - If MINORITY_INTEREST IS NULL: Treated as 0 in equity method
-  - If ECF IS NULL: Returns NULL (post-inception years without ECF)
-  - NUMERIC precision maintained despite 60+ year accumulation
-
-Dependencies:
-  - Requires fn_calc_ecf() to have been executed and results inserted into metrics_outputs
-  - Requires companies.begin_year NOT NULL (add NOT NULL constraint in Task 3)';
+COMMENT ON FUNCTION cissa.fn_calc_economic_equity(UUID) IS
+'Calculate Economic Equity (EE) cumulative. REQ-A4.';
 
 -- ============================================================================
 -- GROUP 5: FY_TSR (Total Shareholder Return) - Parameter-Sensitive Temporal Metric
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION fn_calc_fy_tsr(p_dataset_id UUID, p_param_set_id UUID)
+CREATE OR REPLACE FUNCTION cissa.fn_calc_fy_tsr(p_dataset_id UUID, p_param_set_id UUID)
 RETURNS TABLE (
   ticker TEXT,
   fiscal_year INTEGER,
@@ -849,12 +775,12 @@ BEGIN
   ),
   lag_mc_calc AS (
     SELECT
-      ticker,
-      fiscal_year,
-      dataset_id,
-      calc_mc,
-      LAG(calc_mc, 1) OVER (PARTITION BY ticker ORDER BY fiscal_year) AS lag_mc
-    FROM market_caps
+      mc.ticker,
+      mc.fiscal_year,
+      mc.dataset_id,
+      mc.calc_mc,
+      LAG(mc.calc_mc, 1) OVER (PARTITION BY mc.ticker ORDER BY mc.fiscal_year) AS lag_mc
+    FROM market_caps mc
   ),
   with_params AS (
     SELECT
@@ -863,36 +789,37 @@ BEGIN
       lmc.lag_mc,
       lmc.calc_mc,
       c.begin_year,
-      mo_ecf.output_metric_value AS ecf_val,
-      f_div.numeric_value AS dividend_val,
+      COALESCE(mo_ecf.output_metric_value, 0) AS ecf_val,
+      COALESCE(f_div.numeric_value, 0) AS dividend_val,
       CASE 
         WHEN ps.param_overrides ? 'include_franking_credits_tsr' THEN
           (ps.param_overrides ->> 'include_franking_credits_tsr')::BOOLEAN
         ELSE
-          (p.default_value::BOOLEAN) 
+          (p1.default_value::BOOLEAN) 
       END AS incl_franking,
       CASE 
         WHEN ps.param_overrides ? 'tax_rate_franking_credits' THEN
           (ps.param_overrides ->> 'tax_rate_franking_credits')::NUMERIC / 100.0
         ELSE
-          (p.default_value::NUMERIC / 100.0)
+          (p2.default_value::NUMERIC / 100.0)
       END AS frank_tax_rate,
       CASE 
         WHEN ps.param_overrides ? 'value_of_franking_credits' THEN
           (ps.param_overrides ->> 'value_of_franking_credits')::NUMERIC / 100.0
         ELSE
-          (p.default_value::NUMERIC / 100.0)
+          (p3.default_value::NUMERIC / 100.0)
       END AS value_franking_cr
     FROM lag_mc_calc lmc
     INNER JOIN cissa.companies c ON lmc.ticker = c.ticker
     INNER JOIN cissa.parameter_sets ps ON ps.param_set_id = p_param_set_id
-    LEFT JOIN cissa.parameters p ON p.parameter_name = 'tax_rate_franking_credits'
+    LEFT JOIN cissa.parameters p1 ON p1.parameter_name = 'include_franking_credits_tsr'
+    LEFT JOIN cissa.parameters p2 ON p2.parameter_name = 'tax_rate_franking_credits'
+    LEFT JOIN cissa.parameters p3 ON p3.parameter_name = 'value_of_franking_credits'
     LEFT JOIN cissa.metrics_outputs mo_ecf
       ON lmc.ticker = mo_ecf.ticker
       AND lmc.fiscal_year = mo_ecf.fiscal_year
       AND lmc.dataset_id = mo_ecf.dataset_id
       AND mo_ecf.output_metric_name = 'Calc ECF'
-      AND mo_ecf.param_set_id = p_param_set_id
     LEFT JOIN cissa.fundamentals f_div
       ON lmc.ticker = f_div.ticker
       AND lmc.fiscal_year = f_div.fiscal_year
@@ -900,81 +827,32 @@ BEGIN
       AND f_div.metric_name = 'DIVIDENDS'
   )
   SELECT
-    ticker,
-    fiscal_year,
+    wp.ticker,
+    wp.fiscal_year,
     CASE
-      WHEN begin_year IS NULL THEN NULL
-      WHEN lag_mc IS NULL OR lag_mc <= 0 THEN NULL
-      WHEN fiscal_year <= begin_year THEN NULL
-      WHEN incl_franking = TRUE THEN
-        ((calc_mc - lag_mc + COALESCE(ecf_val, 0) - 
-          COALESCE(dividend_val, 0) / (1 - frank_tax_rate)) * 
-         frank_tax_rate * value_franking_cr) / lag_mc
+      WHEN wp.begin_year IS NULL THEN NULL
+      WHEN wp.lag_mc IS NULL OR wp.lag_mc <= 0 THEN NULL
+      WHEN wp.fiscal_year <= wp.begin_year THEN NULL
+      WHEN wp.incl_franking = TRUE THEN
+        ((wp.calc_mc - wp.lag_mc + wp.ecf_val - 
+          wp.dividend_val / (1 - wp.frank_tax_rate)) * 
+         wp.frank_tax_rate * wp.value_franking_cr) / wp.lag_mc
       ELSE
-        (calc_mc - lag_mc + COALESCE(ecf_val, 0)) / lag_mc
+        (wp.calc_mc - wp.lag_mc + wp.ecf_val) / wp.lag_mc
     END AS fy_tsr
-  FROM with_params
-  ORDER BY ticker, fiscal_year;
+  FROM with_params wp
+  ORDER BY wp.ticker, wp.fiscal_year;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
-COMMENT ON FUNCTION fn_calc_fy_tsr(UUID, UUID) IS
-'Calculate Fiscal Year Total Shareholder Return (FY_TSR) with parameter-sensitive franking.
-Formula: IF LAG_MC > 0 AND fiscal_year > begin_year THEN
-           IF incl_franking = "Yes" THEN
-             adjusted_change = (C_MC - LAG_MC + ECF - dividend/(1 - frank_tax_rate)) × frank_tax_rate × value_franking_cr
-             FY_TSR = adjusted_change / LAG_MC
-           ELSE
-             change_in_cap = C_MC - LAG_MC + ECF
-             FY_TSR = change_in_cap / LAG_MC
-         ELSE NULL
-Output metric name: Calc FY TSR
-
-Parameters:
-  - p_dataset_id: Dataset UUID for metric calculation
-  - p_param_set_id: Parameter set UUID (determines franking parameters)
-
-Key features:
-  - Parameter-sensitive: Same (ticker, fiscal_year) produces different FY_TSR per param_set_id
-  - Requires LAG_MC > 0 (division guard)
-  - Only calculates for fiscal_year > begin_year (inception logic)
-  - Converts franking parameters from database percentages to decimals
-  - Handles missing ECF and DIVIDENDS data gracefully
-
-Parameter Resolution:
-  For each franking parameter:
-    1. Check param_overrides JSONB in parameter_sets row
-    2. If key exists: use override value
-    3. If key missing: use parameter.default_value
-  
-  Parameters (from database):
-    - include_franking_credits_tsr: BOOLEAN (default: false)
-    - tax_rate_franking_credits: NUMERIC % (default: 30.0 = 30%)
-    - value_of_franking_credits: NUMERIC % (default: 75.0 = 75%)
-
-Window Function Pattern:
-  LAG(C_MC, 1) OVER (PARTITION BY ticker ORDER BY fiscal_year)
-
-Interpretation:
-  FY_TSR = total shareholder return (capital appreciation + economic cash flow) / prior year market cap
-  Franking adjustment inflates returns when franking credits are valued.
-
-Edge Cases:
-  - LAG_MC NULL or <= 0: Returns NULL (first year, zero prior value)
-  - ECF NULL: Uses 0 (added to sum)
-  - DIVIDENDS NULL: Uses 0 (added to sum)
-  - (1 - frank_tax_rate) = 0: Potential division error (mitigated by parameter constraints)
-
-Dependencies:
-  - Requires fn_calc_ecf() to have been executed
-  - Requires parameter_sets table configured with franking parameters
-  - parameter_set_id must exist in parameter_sets table';
+COMMENT ON FUNCTION cissa.fn_calc_fy_tsr(UUID, UUID) IS
+'Calculate FY_TSR with parameter franking. REQ-A5.';
 
 -- ============================================================================
 -- GROUP 6: FY_TSR_PREL (Preliminary TSR) - Parameter-Sensitive Temporal Metric
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION fn_calc_fy_tsr_prel(p_dataset_id UUID, p_param_set_id UUID)
+CREATE OR REPLACE FUNCTION cissa.fn_calc_fy_tsr_prel(p_dataset_id UUID, p_param_set_id UUID)
 RETURNS TABLE (
   ticker TEXT,
   fiscal_year INTEGER,
@@ -985,7 +863,7 @@ BEGIN
   SELECT
     mo.ticker,
     mo.fiscal_year,
-    (mo.output_metric_value + 1) AS fy_tsr_prel
+    (COALESCE(mo.output_metric_value, 0) + 1) AS fy_tsr_prel
   FROM cissa.metrics_outputs mo
   WHERE
     mo.dataset_id = p_dataset_id
@@ -995,21 +873,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
-COMMENT ON FUNCTION fn_calc_fy_tsr_prel(UUID, UUID) IS
-'Calculate Preliminary Fiscal Year TSR (FY_TSR + 1).
-Formula: FY_TSR_PREL = FY_TSR + 1 (when FY_TSR is not NULL)
-Output metric name: Calc FY TSR Prel
+COMMENT ON FUNCTION cissa.fn_calc_fy_tsr_prel(UUID, UUID) IS
+'Calculate FY_TSR + 1 (growth factor form). REQ-A6.';
 
-Key features:
-  - Simple arithmetic: adds 1 to FY_TSR
-  - Converts from return format (0.05 = 5% return) to growth factor format (1.05 = value grows to 105%)
-  - Inherits NULL behavior from FY_TSR
-  - Parameter-sensitive: Different results per param_set_id
-
-Dependencies:
-  - Requires fn_calc_fy_tsr() to have been executed and results inserted into metrics_outputs
-  - Requires param_set_id to match the FY_TSR calculation param_set_id';
-
--- ============================================================================
--- END OF TEMPORAL METRIC FUNCTIONS
--- ============================================================================
