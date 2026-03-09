@@ -1,6 +1,15 @@
 #!/bin/bash
 # ============================================================================
-# Test Metrics API - Calculate metrics and view results
+# L1 Basic Metrics Test - Phase 06 Temporal Metrics Support
+# ============================================================================
+# This script tests all 12 Phase 06 L1 metrics:
+#   - 7 Simple Metrics: Calc MC, Calc Assets, Calc OA, Calc Op Cost, 
+#     Calc Non Op Cost, Calc Tax Cost, Calc XO Cost
+#   - 5 Temporal Metrics: ECF, NON_DIV_ECF, EE, FY_TSR, FY_TSR_PREL
+#
+# Usage:
+#   ./run-l1-basic-metrics.sh                    # Uses default parameter set
+#   ./run-l1-basic-metrics.sh --param-set-id <uuid>  # Uses specified parameter set
 # ============================================================================
 
 set -e
@@ -29,8 +38,25 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Parse command-line arguments
+PARAM_SET_ID=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --param-set-id)
+            PARAM_SET_ID="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--param-set-id <uuid>]"
+            exit 1
+            ;;
+    esac
+done
+
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║         CISSA Metrics API - Test & Verification Script         ║${NC}"
+echo -e "${BLUE}║    CISSA L1 Basic Metrics API - Test & Verification Script    ║${NC}"
+echo -e "${BLUE}║              Phase 06: Temporal Metrics Support                ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
 
 # Step 1: Check if API is running
@@ -58,8 +84,27 @@ fi
 
 echo -e "${GREEN}✓ Found dataset_id: $DATASET_ID${NC}"
 
-# Step 3: Calculate all 15 L1 metrics
-echo -e "\n${YELLOW}[3/7] Calculating all 15 L1 metrics...${NC}"
+# Step 3: Resolve parameter set ID
+echo -e "\n${YELLOW}[3/5] Resolving parameter set ID...${NC}"
+if [ -z "$PARAM_SET_ID" ]; then
+    # Use default parameter set (is_default = true)
+    PARAM_SET_ID=$(psql "$DB_URL" -t -c "
+        SELECT param_set_id FROM cissa.parameter_sets 
+        WHERE is_default = true LIMIT 1;
+    " 2>/dev/null | xargs)
+    
+    if [ -z "$PARAM_SET_ID" ]; then
+        echo -e "${YELLOW}⚠ No default parameter set found. Temporal metrics (FY_TSR, FY_TSR_PREL) may fail.${NC}"
+        echo -e "${YELLOW}  Create one with: INSERT INTO cissa.parameter_sets (param_set_name, is_default) VALUES ('base_case', true);${NC}"
+    else
+        echo -e "${GREEN}✓ Using default parameter set: $PARAM_SET_ID${NC}"
+    fi
+else
+    echo -e "${GREEN}✓ Using provided parameter set: $PARAM_SET_ID${NC}"
+fi
+
+# Step 4: Calculate all 12 L1 metrics
+echo -e "\n${YELLOW}[4/5] Calculating all 12 L1 metrics (7 simple + 5 temporal)...${NC}"
 
 METRICS=(
     "Calc MC"
@@ -69,14 +114,11 @@ METRICS=(
     "Calc Non Op Cost"
     "Calc Tax Cost"
     "Calc XO Cost"
-    "Profit Margin"
-    "Op Cost Margin %"
-    "Non-Op Cost Margin %"
-    "Eff Tax Rate"
-    "XO Cost Margin %"
-    "FA Intensity"
-    "Book Equity"
-    "ROA"
+    "ECF"
+    "NON_DIV_ECF"
+    "EE"
+    "FY_TSR"
+    "FY_TSR_PREL"
 )
 
 for i in "${!METRICS[@]}"; do
@@ -85,12 +127,25 @@ for i in "${!METRICS[@]}"; do
     total=${#METRICS[@]}
     echo -e "${YELLOW}  [$current/$total] Calculating $metric...${NC}"
     
+    # Prepare request body
+    REQUEST_BODY="{
+        \"dataset_id\": \"$DATASET_ID\",
+        \"metric_name\": \"$metric\""
+    
+    # Add param_set_id for temporal metrics that require it
+    if [[ "$metric" == "FY_TSR" || "$metric" == "FY_TSR_PREL" ]]; then
+        if [ -n "$PARAM_SET_ID" ]; then
+            REQUEST_BODY="${REQUEST_BODY},
+        \"param_set_id\": \"$PARAM_SET_ID\""
+        fi
+    fi
+    
+    REQUEST_BODY="${REQUEST_BODY}
+    }"
+    
     RESPONSE=$(curl -s -X POST "$API_URL/api/v1/metrics/calculate" \
       -H "Content-Type: application/json" \
-      -d "{
-        \"dataset_id\": \"$DATASET_ID\",
-        \"metric_name\": \"$metric\"
-      }")
+      -d "$REQUEST_BODY")
     
     # Check if response has error status
     if echo "$RESPONSE" | grep -q '"status":"error"'; then
@@ -102,23 +157,22 @@ for i in "${!METRICS[@]}"; do
     fi
 done
 
-# Step 4: Check metrics_outputs table
-echo -e "\n${YELLOW}[4/7] Checking metrics_outputs table (all L1 metrics)...${NC}"
+# Step 5: Check metrics_outputs table and show summary
+echo -e "\n${YELLOW}[5/5] Metrics Summary - metrics_outputs table...${NC}"
 psql "$DB_URL" << EOF
 SELECT 
   output_metric_name,
   COUNT(*) as count,
   MIN(output_metric_value) as min_value,
   MAX(output_metric_value) as max_value,
-  AVG(output_metric_value) as avg_value
+  ROUND(AVG(output_metric_value)::numeric, 4) as avg_value
 FROM cissa.metrics_outputs
 WHERE dataset_id = '$DATASET_ID'
 GROUP BY output_metric_name
 ORDER BY output_metric_name;
 EOF
 
-# Step 5: Show sample data for each metric
-echo -e "\n${YELLOW}[5/7] Sample of inserted metrics_outputs records (first 3 metrics)...${NC}"
+echo -e "\n${YELLOW}Sample of inserted metrics_outputs records (first 30)...${NC}"
 psql "$DB_URL" << EOF
 SELECT 
   ticker,
@@ -132,54 +186,7 @@ ORDER BY output_metric_name, ticker, fiscal_year
 LIMIT 30;
 EOF
 
-# Step 6: Get param_set_id for L2 calculation
-echo -e "\n${YELLOW}[6/7] Getting param_set_id for L2 calculation...${NC}"
-PARAM_SET_ID=$(psql "$DB_URL" -t -c "
-    SELECT param_set_id 
-    FROM cissa.parameter_sets 
-    WHERE param_set_name = 'base_case' 
-    LIMIT 1;
-" 2>/dev/null | xargs)
-
-if [ -z "$PARAM_SET_ID" ]; then
-    echo -e "${RED}❌ No base_case parameter set found${NC}"
-else
-    echo -e "${GREEN}✓ Found param_set_id: $PARAM_SET_ID${NC}"
-    
-    # Step 7: Try to calculate L2 metrics
-    echo -e "\n${YELLOW}[7/7] Attempting L2 metrics calculation...${NC}"
-    L2_RESPONSE=$(curl -s -X POST "$API_URL/api/v1/metrics/calculate-l2" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"dataset_id\": \"$DATASET_ID\",
-        \"param_set_id\": \"$PARAM_SET_ID\"
-      }")
-    
-    echo "$L2_RESPONSE" | python3 -m json.tool
-    
-    # Check if L2 succeeded
-    if echo "$L2_RESPONSE" | grep -q '"status":"success"'; then
-        echo -e "\n${YELLOW}L2 Metrics Results in Database:${NC}"
-        psql "$DB_URL" << EOF
-SELECT 
-  output_metric_name,
-  COUNT(*) as count,
-  MIN(output_metric_value) as min_value,
-  MAX(output_metric_value) as max_value,
-  AVG(output_metric_value) as avg_value
-FROM cissa.metrics_outputs
-WHERE dataset_id = '$DATASET_ID'
-  AND output_metric_name NOT IN ('Calc MC', 'Calc Assets', 'Calc OA', 'Calc Op Cost', 
-                                  'Calc Non Op Cost', 'Calc Tax Cost', 'Calc XO Cost',
-                                  'Profit Margin', 'Op Cost Margin %', 'Non-Op Cost Margin %',
-                                  'Eff Tax Rate', 'XO Cost Margin %', 'FA Intensity', 
-                                  'Book Equity', 'ROA')
-GROUP BY output_metric_name
-ORDER BY output_metric_name;
-EOF
-    fi
-fi
-
 echo -e "\n${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║                    ✓ Test Complete!                            ║${NC}"
+echo -e "${GREEN}║              All 12 Phase 06 L1 metrics verified              ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
