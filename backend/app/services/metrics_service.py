@@ -4,7 +4,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from uuid import UUID
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from ..models import MetricResultItem, CalculateMetricsResponse
 from ..core.config import get_logger
 
@@ -12,22 +12,36 @@ logger = get_logger(__name__)
 
 
 # Mapping of metric names to SQL function names and return column names
+# Format: "Display Name" → (function_name, output_column_name, requires_param_set_id)
+# L1 Metrics (12 total):
+#   - 7 Simple metrics: no parameter_set_id needed
+#   - 5 Temporal metrics: ECF, NON_DIV_ECF, EE (no param), FY_TSR, FY_TSR_PREL (need param)
 METRIC_FUNCTIONS = {
-    "Calc MC": ("fn_calc_market_cap", "calc_mc"),
-    "Calc Assets": ("fn_calc_operating_assets", "calc_assets"),
-    "Calc OA": ("fn_calc_operating_assets_detail", "calc_oa"),
-    "Calc Op Cost": ("fn_calc_operating_cost", "calc_op_cost"),
-    "Calc Non Op Cost": ("fn_calc_non_operating_cost", "calc_non_op_cost"),
-    "Calc Tax Cost": ("fn_calc_tax_cost", "calc_tax_cost"),
-    "Calc XO Cost": ("fn_calc_extraordinary_cost", "calc_xo_cost"),
-    "Profit Margin": ("fn_calc_profit_margin", "profit_margin"),
-    "Op Cost Margin %": ("fn_calc_operating_cost_margin", "op_cost_margin"),
-    "Non-Op Cost Margin %": ("fn_calc_non_operating_cost_margin", "non_op_cost_margin"),
-    "Eff Tax Rate": ("fn_calc_effective_tax_rate", "eff_tax_rate"),
-    "XO Cost Margin %": ("fn_calc_extraordinary_cost_margin", "xo_cost_margin"),
-    "FA Intensity": ("fn_calc_fixed_asset_intensity", "fa_intensity"),
-    "Book Equity": ("fn_calc_book_equity", "book_equity"),
-    "ROA": ("fn_calc_roa", "roa"),
+    # L1 Simple Metrics (7)
+    "Calc MC": ("fn_calc_market_cap", "calc_mc", False),
+    "Calc Assets": ("fn_calc_operating_assets", "calc_assets", False),
+    "Calc OA": ("fn_calc_operating_assets_detail", "calc_oa", False),
+    "Calc Op Cost": ("fn_calc_operating_cost", "calc_op_cost", False),
+    "Calc Non Op Cost": ("fn_calc_non_operating_cost", "calc_non_op_cost", False),
+    "Calc Tax Cost": ("fn_calc_tax_cost", "calc_tax_cost", False),
+    "Calc XO Cost": ("fn_calc_extraordinary_cost", "calc_xo_cost", False),
+    
+    # L1 Temporal Metrics (5)
+    "ECF": ("fn_calc_ecf", "ecf", False),
+    "NON_DIV_ECF": ("fn_calc_non_div_ecf", "non_div_ecf", False),
+    "EE": ("fn_calc_economic_equity", "ee", False),
+    "FY_TSR": ("fn_calc_fy_tsr", "fy_tsr", True),      # Requires param_set_id
+    "FY_TSR_PREL": ("fn_calc_fy_tsr_prel", "fy_tsr_prel", True),  # Requires param_set_id
+    
+    # Legacy L2+ metrics (for backward compatibility)
+    "Profit Margin": ("fn_calc_profit_margin", "profit_margin", False),
+    "Op Cost Margin %": ("fn_calc_operating_cost_margin", "op_cost_margin", False),
+    "Non-Op Cost Margin %": ("fn_calc_non_operating_cost_margin", "non_op_cost_margin", False),
+    "Eff Tax Rate": ("fn_calc_effective_tax_rate", "eff_tax_rate", False),
+    "XO Cost Margin %": ("fn_calc_extraordinary_cost_margin", "xo_cost_margin", False),
+    "FA Intensity": ("fn_calc_fixed_asset_intensity", "fa_intensity", False),
+    "Book Equity": ("fn_calc_book_equity", "book_equity", False),
+    "ROA": ("fn_calc_roa", "roa", False),
 }
 
 
@@ -37,18 +51,42 @@ class MetricsService:
     def __init__(self, session: AsyncSession):
         self.session = session
     
+    async def _get_default_param_set_id(self) -> Optional[UUID]:
+        """
+        Get the default parameter set ID (base_case with is_default=true).
+        
+        Returns:
+            UUID of default param_set, or None if not found
+        """
+        try:
+            param_set_query = text("""
+                SELECT param_set_id FROM cissa.parameter_sets 
+                WHERE is_default = true LIMIT 1
+            """)
+            param_result = await self.session.execute(param_set_query)
+            param_row = param_result.fetchone()
+            
+            if param_row:
+                return param_row[0]
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching default parameter set: {str(e)}")
+            return None
+    
     async def calculate_metric(
         self,
         dataset_id: UUID,
-        metric_name: str
+        metric_name: str,
+        param_set_id: Optional[UUID] = None  # Optional for parameter-sensitive metrics
     ) -> CalculateMetricsResponse:
         """
         Calculate a metric for a dataset.
         
         1. Validate metric name
-        2. Call SQL function to calculate
-        3. Insert results into metrics_outputs
-        4. Return response
+        2. Resolve param_set_id if needed (for FY_TSR, FY_TSR_PREL)
+        3. Call SQL function to calculate
+        4. Insert results into metrics_outputs
+        5. Return response
         """
         
         # Validate metric name
@@ -61,18 +99,41 @@ class MetricsService:
                 message=f"Unknown metric: {metric_name}. Available metrics: {', '.join(METRIC_FUNCTIONS.keys())}"
             )
         
-        function_name, column_name = METRIC_FUNCTIONS[metric_name]
+        function_name, column_name, needs_param_set = METRIC_FUNCTIONS[metric_name]
+        
+        # Resolve param_set_id if needed for parameter-sensitive metrics
+        if needs_param_set:
+            if not param_set_id:
+                param_set_id = await self._get_default_param_set_id()
+                if not param_set_id:
+                    return CalculateMetricsResponse(
+                        dataset_id=dataset_id,
+                        metric_name=metric_name,
+                        results_count=0,
+                        status="error",
+                        message="Metric requires param_set_id, but no default found"
+                    )
         
         try:
             # Call the SQL function to get calculated results
-            logger.info(f"Calling {function_name} for dataset {dataset_id}")
+            logger.info(f"Calling {function_name} for dataset {dataset_id}, param_set_id: {param_set_id}")
             
-            query = text(f"""
-                SELECT ticker, fiscal_year, {column_name} AS value
-                FROM cissa.{function_name}(:dataset_id)
-            """)
+            if needs_param_set:
+                query = text(f"""
+                    SELECT ticker, fiscal_year, {column_name} AS value
+                    FROM cissa.{function_name}(:dataset_id, :param_set_id)
+                """)
+                result = await self.session.execute(
+                    query, 
+                    {"dataset_id": str(dataset_id), "param_set_id": str(param_set_id)}
+                )
+            else:
+                query = text(f"""
+                    SELECT ticker, fiscal_year, {column_name} AS value
+                    FROM cissa.{function_name}(:dataset_id)
+                """)
+                result = await self.session.execute(query, {"dataset_id": str(dataset_id)})
             
-            result = await self.session.execute(query, {"dataset_id": str(dataset_id)})
             rows = result.fetchall()
             
             logger.info(f"Function returned {len(rows)} rows")
@@ -196,7 +257,7 @@ class MetricsService:
             logger.warning(f"Unknown metric: {metric_name}")
             return 0
         
-        function_name, column_name = METRIC_FUNCTIONS[metric_name]
+        function_name, column_name, needs_param_set = METRIC_FUNCTIONS[metric_name]
         
         try:
             # Call the SQL function to get calculated results
