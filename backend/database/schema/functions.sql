@@ -675,10 +675,10 @@ BEGIN
     AND mo.fiscal_year = f.fiscal_year
     AND mo.dataset_id = f.dataset_id
     AND f.metric_name = 'DIVIDENDS'
-  WHERE
-    mo.dataset_id = p_dataset_id
-    AND mo.output_metric_name = 'Calc ECF'
-  ORDER BY mo.ticker, mo.fiscal_year;
+   WHERE
+     mo.dataset_id = p_dataset_id
+     AND mo.output_metric_name = 'ECF'
+   ORDER BY mo.ticker, mo.fiscal_year;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -721,11 +721,11 @@ BEGIN
       AND f_te.fiscal_year = f_pat.fiscal_year
       AND f_te.dataset_id = f_pat.dataset_id
       AND f_pat.metric_name = 'PROFIT_AFTER_TAX'
-    LEFT JOIN cissa.metrics_outputs mo_ecf
-      ON f_te.ticker = mo_ecf.ticker
-      AND f_te.fiscal_year = mo_ecf.fiscal_year
-      AND f_te.dataset_id = mo_ecf.dataset_id
-      AND mo_ecf.output_metric_name = 'Calc ECF'
+     LEFT JOIN cissa.metrics_outputs mo_ecf
+       ON f_te.ticker = mo_ecf.ticker
+       AND f_te.fiscal_year = mo_ecf.fiscal_year
+       AND f_te.dataset_id = mo_ecf.dataset_id
+       AND mo_ecf.output_metric_name = 'ECF'
     WHERE
       f_te.dataset_id = p_dataset_id
       AND f_te.metric_name = 'TOTAL_EQUITY'
@@ -815,11 +815,11 @@ BEGIN
     LEFT JOIN cissa.parameters p1 ON p1.parameter_name = 'include_franking_credits_tsr'
     LEFT JOIN cissa.parameters p2 ON p2.parameter_name = 'tax_rate_franking_credits'
     LEFT JOIN cissa.parameters p3 ON p3.parameter_name = 'value_of_franking_credits'
-    LEFT JOIN cissa.metrics_outputs mo_ecf
-      ON lmc.ticker = mo_ecf.ticker
-      AND lmc.fiscal_year = mo_ecf.fiscal_year
-      AND lmc.dataset_id = mo_ecf.dataset_id
-      AND mo_ecf.output_metric_name = 'Calc ECF'
+     LEFT JOIN cissa.metrics_outputs mo_ecf
+       ON lmc.ticker = mo_ecf.ticker
+       AND lmc.fiscal_year = mo_ecf.fiscal_year
+       AND lmc.dataset_id = mo_ecf.dataset_id
+       AND mo_ecf.output_metric_name = 'ECF'
     LEFT JOIN cissa.fundamentals f_div
       ON lmc.ticker = f_div.ticker
       AND lmc.fiscal_year = f_div.fiscal_year
@@ -865,11 +865,11 @@ BEGIN
     mo.fiscal_year,
     (COALESCE(mo.output_metric_value, 0) + 1) AS fy_tsr_prel
   FROM cissa.metrics_outputs mo
-  WHERE
-    mo.dataset_id = p_dataset_id
-    AND mo.param_set_id = p_param_set_id
-    AND mo.output_metric_name = 'Calc FY TSR'
-  ORDER BY mo.ticker, mo.fiscal_year;
+   WHERE
+     mo.dataset_id = p_dataset_id
+     AND mo.param_set_id = p_param_set_id
+     AND mo.output_metric_name = 'FY_TSR'
+   ORDER BY mo.ticker, mo.fiscal_year;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 

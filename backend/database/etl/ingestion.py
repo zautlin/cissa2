@@ -318,7 +318,7 @@ class Ingester:
                 raw_count = raw_data_check.scalar()
                 print(f"[ASYNC] Raw data rows in async context: {raw_count}")
                 
-                # Create MetricsService and call calculate_all_l1_metrics
+                # Create MetricsService and call calculate_batch_metrics (two-phase execution)
                 metrics_service = MetricsService(session)
                 
                 # Convert string UUID to UUID object if needed
@@ -328,7 +328,10 @@ class Ingester:
                 else:
                     dataset_uuid = dataset_id
                 
-                result = await metrics_service.calculate_all_l1_metrics(dataset_uuid)
+                # Use calculate_batch_metrics with two-phase execution:
+                # PHASE 1: Base metrics (10 metrics reading from fundamentals)
+                # PHASE 2: Derived metrics (2 metrics reading from metrics_outputs after PHASE 1 commits)
+                result = await metrics_service.calculate_batch_metrics(dataset_uuid)
                 return result
         
         finally:

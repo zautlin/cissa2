@@ -27,6 +27,8 @@ METRIC_FUNCTIONS = {
     "Calc XO Cost": ("fn_calc_extraordinary_cost", "calc_xo_cost", False),
     
     # L1 Temporal Metrics (5)
+    # Note: These must match the SQL function lookups for NON_DIV_ECF and FY_TSR_PREL
+    # which query metrics_outputs by output_metric_name
     "ECF": ("fn_calc_ecf", "ecf", False),
     "NON_DIV_ECF": ("fn_calc_non_div_ecf", "non_div_ecf", False),
     "EE": ("fn_calc_economic_equity", "ee", False),
@@ -469,5 +471,160 @@ class MetricsService:
         }
         
         logger.info(f"L1 metrics calculation complete: {calculated}/{len(l1_metrics_order)} successful, {failed} failed")
+        
+        return result
+    
+    async def calculate_batch_metrics(
+        self,
+        dataset_id: UUID,
+        metric_names: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculate a batch of metrics using two-phase execution to handle dependencies.
+        
+        PHASE 1 (Base Metrics): Calculate metrics that read from fundamentals table
+        - All 7 simple L1 metrics
+        - Temporal base metrics: ECF, EE, FY_TSR, LAG_MC (depend on fundamentals only)
+        
+        PHASE 2 (Derived Metrics): Calculate metrics that depend on PHASE 1 results
+        - NON_DIV_ECF: reads ECF from metrics_outputs
+        - FY_TSR_PREL: reads FY_TSR from metrics_outputs
+        
+        Between phases: Database commit ensures PHASE 1 results are persisted before PHASE 2 reads.
+        
+        Args:
+            dataset_id: UUID of the dataset
+            metric_names: Optional list of specific metrics to calculate. If None, calculates all 12 L1 metrics.
+            
+        Returns:
+            Dict with status, calculated count, failed count, metrics breakdown, and errors
+        """
+        logger.info(f"Starting batch metrics calculation (two-phase) for dataset {dataset_id}")
+        
+        # Define all L1 metrics with their phase assignment
+        # Format: metric_name → (phase_number, requires_param_set)
+        L1_METRICS_PHASES = {
+            # PHASE 1: Base metrics (read from fundamentals)
+            "Calc MC": (1, False),
+            "Calc Assets": (1, False),
+            "Calc OA": (1, False),
+            "Calc Op Cost": (1, False),
+            "Calc Non Op Cost": (1, False),
+            "Calc Tax Cost": (1, False),
+            "Calc XO Cost": (1, False),
+            "LAG_MC": (1, False),
+            "ECF": (1, False),
+            "EE": (1, False),
+            "FY_TSR": (1, True),   # Parameter-sensitive but still base
+            
+            # PHASE 2: Derived metrics (read from metrics_outputs)
+            "NON_DIV_ECF": (2, False),     # Depends on ECF being in metrics_outputs
+            "FY_TSR_PREL": (2, True),      # Depends on FY_TSR being in metrics_outputs, param-sensitive
+        }
+        
+        # If specific metrics requested, validate they exist
+        metrics_to_calculate = metric_names if metric_names else list(L1_METRICS_PHASES.keys())
+        
+        # Organize metrics by phase
+        phase1_metrics = []
+        phase2_metrics = []
+        
+        for metric_name in metrics_to_calculate:
+            if metric_name not in L1_METRICS_PHASES:
+                logger.warning(f"Unknown metric: {metric_name}, skipping")
+                continue
+            
+            phase, needs_param = L1_METRICS_PHASES[metric_name]
+            if phase == 1:
+                phase1_metrics.append(metric_name)
+            else:
+                phase2_metrics.append(metric_name)
+        
+        calculated = 0
+        failed = 0
+        errors = []
+        phase1_results = {}
+        phase2_results = {}
+        
+        # ===============================
+        # PHASE 1: Calculate base metrics
+        # ===============================
+        logger.info(f"PHASE 1: Calculating {len(phase1_metrics)} base metrics")
+        
+        for metric_name in phase1_metrics:
+            try:
+                row_count = await self._execute_sql_function(metric_name, dataset_id)
+                phase1_results[metric_name] = row_count
+                if row_count > 0:
+                    calculated += 1
+                    logger.info(f"✓ {metric_name}: {row_count} records")
+                else:
+                    failed += 1
+                    error_msg = f"{metric_name}: 0 rows calculated"
+                    errors.append(error_msg)
+                    logger.warning(f"  {metric_name}: 0 rows")
+            except Exception as e:
+                failed += 1
+                error_msg = f"{metric_name}: {str(e)}"
+                errors.append(error_msg)
+                logger.error(f"  Error in {metric_name}: {str(e)}")
+                phase1_results[metric_name] = 0
+        
+        logger.info(f"PHASE 1 complete: {calculated} successful, {failed} failed")
+        logger.info(f"Database commit after PHASE 1 - metrics_outputs now contains base metric results")
+        
+        # ===============================
+        # PHASE 2: Calculate derived metrics
+        # ===============================
+        if phase2_metrics:
+            logger.info(f"PHASE 2: Calculating {len(phase2_metrics)} derived metrics (now reading from metrics_outputs)")
+            
+            for metric_name in phase2_metrics:
+                try:
+                    row_count = await self._execute_sql_function(metric_name, dataset_id)
+                    phase2_results[metric_name] = row_count
+                    if row_count > 0:
+                        calculated += 1
+                        logger.info(f"✓ {metric_name}: {row_count} records")
+                    else:
+                        failed += 1
+                        error_msg = f"{metric_name}: 0 rows calculated (parent metric may not exist)"
+                        errors.append(error_msg)
+                        logger.warning(f"  {metric_name}: 0 rows")
+                except Exception as e:
+                    failed += 1
+                    error_msg = f"{metric_name}: {str(e)}"
+                    errors.append(error_msg)
+                    logger.error(f"  Error in {metric_name}: {str(e)}")
+                    phase2_results[metric_name] = 0
+            
+            logger.info(f"PHASE 2 complete: derived metrics calculated")
+        
+        # Determine overall status
+        total_metrics = len(phase1_metrics) + len(phase2_metrics)
+        if failed == 0:
+            status = "success"
+        elif calculated > 0:
+            status = "partial"
+        else:
+            status = "error"
+        
+        result = {
+            "status": status,
+            "total_metrics": total_metrics,
+            "calculated": calculated,
+            "failed": failed,
+            "phase1": {
+                "metrics": phase1_metrics,
+                "results": phase1_results
+            },
+            "phase2": {
+                "metrics": phase2_metrics,
+                "results": phase2_results
+            },
+            "errors": errors
+        }
+        
+        logger.info(f"Batch metrics calculation complete: {calculated}/{total_metrics} successful, {failed} failed")
         
         return result

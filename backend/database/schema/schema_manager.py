@@ -163,11 +163,17 @@ class SchemaManager:
         return True
     
     def create(self) -> bool:
-        """Create fresh schema from schema.sql using atomic transaction."""
+        """Create fresh schema from schema.sql and functions.sql using atomic transactions."""
         print("Creating schema from schema.sql...")
         
         # Execute schema creation as single transaction (preserves PL/pgSQL syntax and constraints)
         if not self._execute_sql_file_transaction("schema.sql", "Schema created successfully"):
+            return False
+        
+        print("Creating functions from functions.sql...")
+        
+        # Execute functions as single transaction
+        if not self._execute_sql_file_transaction("functions.sql", "Functions created successfully"):
             return False
         
         # Verify schema
@@ -188,9 +194,17 @@ class SchemaManager:
                     WHERE table_schema = 'cissa' AND constraint_type = 'FOREIGN KEY'
                 """))
                 fk_count = fk_result.scalar()
+                
+                # Count calculation functions
+                fn_result = conn.execute(text("""
+                    SELECT COUNT(*) 
+                    FROM information_schema.routines 
+                    WHERE routine_schema = 'cissa' AND routine_name LIKE 'fn_calc%'
+                """))
+                fn_count = fn_result.scalar()
             
-            print(f"✓ Schema verification: {table_count} tables created, {fk_count} foreign keys")
-            return table_count >= 11 and fk_count >= 7
+            print(f"✓ Schema verification: {table_count} tables, {fk_count} foreign keys, {fn_count} calculation functions")
+            return table_count >= 11 and fk_count >= 7 and fn_count >= 12
         
         except Exception as e:
             print(f"✗ Schema verification failed: {e}")
@@ -344,6 +358,7 @@ class SchemaManager:
         print("  ✓ 11 tables created")
         print("  ✓ 25+ indexes created")
         print("  ✓ 5 auto-update triggers created")
+        print("  ✓ 12+ metric calculation functions created")
         print("  ✓ 13 baseline parameters inserted")
         print("  ✓ Default parameter_set 'base_case' created")
         print("  ✓ 20 metric units initialized")
