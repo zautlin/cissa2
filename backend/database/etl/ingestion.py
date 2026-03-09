@@ -8,8 +8,10 @@ from typing import Dict, Any, Tuple, Optional
 import json
 import hashlib
 import pandas as pd
+import asyncio
 from sqlalchemy.engine import Engine
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 from .validators import validate_numeric
 
@@ -196,6 +198,11 @@ class Ingester:
         # Update dataset_versions with metadata
         self._update_dataset_metadata(dataset_id, result)
         
+        # Auto-trigger L1 metrics calculation
+        print("Auto-calculating L1 metrics...")
+        l1_metrics_result = self._auto_calculate_l1_metrics(dataset_id)
+        result['l1_metrics'] = l1_metrics_result
+        
         return {
             'dataset_id': str(dataset_id),
             'dataset_name': dataset_name,
@@ -207,7 +214,82 @@ class Ingester:
             'duplicate_combinations': result['duplicate_combinations'],
             'unique_rows_in_db': result['unique_rows_in_db'],
             'validation_summary': result['validation_summary'],
+            'l1_metrics': result.get('l1_metrics', {}),
         }
+    
+    def _auto_calculate_l1_metrics(self, dataset_id: str) -> Dict[str, Any]:
+        """
+        Auto-trigger L1 metrics calculation at the end of ingestion.
+        
+        This method bridges the synchronous Ingester context with the async MetricsService
+        by running the async metric calculation in an event loop.
+        
+        Args:
+            dataset_id: UUID of the dataset that was just ingested
+            
+        Returns:
+            Dict with L1 metrics calculation results {status, calculated, failed, errors}
+        """
+        try:
+            # Run the async metric calculation in this thread's event loop
+            result = asyncio.run(self._async_calculate_l1_metrics(dataset_id))
+            return result
+        except Exception as e:
+            print(f"⚠  L1 metrics calculation failed: {str(e)}")
+            return {
+                'status': 'error',
+                'message': str(e),
+                'total_metrics': 15,
+                'calculated': 0,
+                'failed': 15,
+                'errors': [str(e)]
+            }
+    
+    async def _async_calculate_l1_metrics(self, dataset_id: str) -> Dict[str, Any]:
+        """
+        Async implementation of L1 metrics calculation.
+        
+        Creates an async engine and session, calls MetricsService.calculate_all_l1_metrics(),
+        and properly cleans up resources.
+        
+        Args:
+            dataset_id: UUID of the dataset
+            
+        Returns:
+            Dict with calculation results
+        """
+        from ..etl.config import get_db_url
+        from backend.app.services.metrics_service import MetricsService
+        
+        # Create async engine from sync config
+        async_db_url = get_db_url().replace('postgresql://', 'postgresql+asyncpg://')
+        async_engine = create_async_engine(async_db_url, echo=False)
+        
+        try:
+            # Create async session
+            async_session_maker = async_sessionmaker(
+                async_engine,
+                class_=AsyncSession,
+                expire_on_commit=False
+            )
+            
+            async with async_session_maker() as session:
+                # Create MetricsService and call calculate_all_l1_metrics
+                metrics_service = MetricsService(session)
+                
+                # Convert string UUID to UUID object if needed
+                from uuid import UUID
+                if isinstance(dataset_id, str):
+                    dataset_uuid = UUID(dataset_id)
+                else:
+                    dataset_uuid = dataset_id
+                
+                result = await metrics_service.calculate_all_l1_metrics(dataset_uuid)
+                return result
+        
+        finally:
+            # Clean up async engine
+            await async_engine.dispose()
     
     def _check_existing_dataset(self, dataset_name: str, source_file_hash: str) -> Optional[int]:
         """
