@@ -475,7 +475,7 @@ class BetaCalculationService:
                     "fiscal_year": int(row['fiscal_year']),
                     "output_metric_name": "Beta",
                     "output_metric_value": float(row['beta']) if pd.notna(row['beta']) else None,
-                    "metadata": {}
+                    "metadata": {"metric_level": "L1"}
                 }
                 records.append(record)
             
