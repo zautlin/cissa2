@@ -1,7 +1,8 @@
 # CISSA - Financial Data Pipeline
 
 **Status**: ✅ Production Ready  
-**Last Updated**: 2026-03-05
+**Last Updated**: 2026-03-09  
+**Phases Complete**: 04-05 (Auto-trigger L1 metrics, Rename L2 metrics)
 
 ## Overview
 
@@ -10,7 +11,7 @@ CISSA is a comprehensive financial data pipeline that ingests, validates, and pr
 - **Data Ingestion**: Bloomberg Excel data → CSV extraction → numeric validation
 - **Data Processing**: Fiscal year alignment → 7-step imputation cascade → cleaned fundamentals table
 - **Data Quality**: Automatic duplicate detection, validation logging, and audit trails
-- **Downstream Analysis**: Metrics computation and portfolio optimization
+- **Metrics Calculation**: L1 basic metrics, L2 derived metrics (auto-triggered on ingestion)
 
 The legacy repository for this work is located in: `https://github.com/rozettatechnology/basos-ds`
 
@@ -18,7 +19,33 @@ The legacy repository for this work is located in: `https://github.com/rozettate
 
 ## Architecture
 
-### Three-Stage Pipeline
+### Metrics Pipeline
+
+```
+DATA INGESTION
+      ↓
+Phase 04: AUTO-TRIGGER L1 METRICS ✅
+  ├─ 15 SQL functions (auto-calculated)
+  ├─ Core metrics: MC, Op Assets, Costs, Ratios
+  ├─ Stored in: metrics_outputs table
+  └─ Metadata: metric_level = "L1"
+      ↓
+Phase 05: L2 METRICS ✅
+  ├─ 6 derived metrics from L1
+  ├─ Python service (async calculation)
+  ├─ Stored in: metrics_outputs table
+  ├─ Metadata: metric_level = "L2"
+  └─ Names: Asset Efficiency, Operating Leverage, etc. (no L2_ prefix)
+      ↓
+Phase 06+: TO BE PLANNED
+  ├─ Temporal L1 metrics (ECF, EE, FY_TSR, FY_TSR_PREL)
+  ├─ Aggregated ratios (14 metrics × 4 intervals)
+  ├─ Beta calculation (OLS regression)
+  ├─ Risk-free rate & market returns
+  └─ Sector aggregations
+```
+
+### Three-Stage Data Pipeline
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -44,10 +71,12 @@ The legacy repository for this work is located in: `https://github.com/rozettate
 └─────────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────────┐
-│ STAGE 3: DOWNSTREAM CONSUMPTION                         │
+│ STAGE 3: METRICS & DOWNSTREAM CONSUMPTION               │
 ├─────────────────────────────────────────────────────────┤
-│ • Metrics outputs (ROE, ROIC, FCF, valuations)          │
-│ • Portfolio optimization (using CISSA methodology)      │
+│ • Phase 04: L1 metrics auto-triggered                   │
+│ • Phase 05: L2 metrics calculated                       │
+│ • Output: metrics_outputs table                         │
+│ • Future: Portfolio optimization, sector analysis       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -203,10 +232,15 @@ All queries automatically use the `cissa` schema (set via `search_path` in conne
 
 ## Documentation
 
-- **[DEPLOYMENT_GUIDE.md](backend/database/DEPLOYMENT_GUIDE.md)** - Detailed deployment instructions
-- **[CURRENT_SCHEMA.md](backend/database/CURRENT_SCHEMA.md)** - Complete schema reference
-- **[VALIDATION_QUERIES.md](VALIDATION_QUERIES.md)** - Post-ingestion validation SQL
-- **[VALIDATION.md](VALIDATION.md)** - Schema and data validation guide
+**Primary References:**
+- **[.planning/README.md](.planning/README.md)** - Planning documentation index
+- **[.planning/LEGACY_METRICS_COMPLETE.md](.planning/LEGACY_METRICS_COMPLETE.md)** - Complete metrics inventory (for alignment work)
+- **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Developer guide for extending metrics system
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick testing workflow reference
+
+**Technical References:**
+- **[backend/database/DEPLOYMENT_GUIDE.md](backend/database/DEPLOYMENT_GUIDE.md)** - Deployment instructions
+- **[backend/database/CURRENT_SCHEMA.md](backend/database/CURRENT_SCHEMA.md)** - Schema reference
 
 ---
 
