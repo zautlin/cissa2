@@ -198,25 +198,6 @@ class Ingester:
         # Update dataset_versions with metadata
         self._update_dataset_metadata(dataset_id, result)
         
-        # Auto-trigger L1 metrics calculation
-        print("Auto-calculating L1 metrics...")
-        print(f"Dataset ID: {dataset_id}")
-        
-        # Verify raw_data exists and is committed
-        with self.engine.connect() as conn:
-            count_result = conn.execute(text("""
-                SELECT COUNT(*) FROM raw_data WHERE dataset_id = :dataset_id
-            """), {'dataset_id': dataset_id})
-            raw_count = count_result.scalar()
-            print(f"Raw data rows: {raw_count}")
-        
-        # Give the database a moment to ensure visibility
-        import time
-        time.sleep(0.5)
-        
-        l1_metrics_result = self._auto_calculate_l1_metrics(dataset_id)
-        result['l1_metrics'] = l1_metrics_result
-        
         return {
             'dataset_id': str(dataset_id),
             'dataset_name': dataset_name,
@@ -228,7 +209,6 @@ class Ingester:
             'duplicate_combinations': result['duplicate_combinations'],
             'unique_rows_in_db': result['unique_rows_in_db'],
             'validation_summary': result['validation_summary'],
-            'l1_metrics': result.get('l1_metrics', {}),
         }
     
     def _auto_calculate_l1_metrics(self, dataset_id: str) -> Dict[str, Any]:
