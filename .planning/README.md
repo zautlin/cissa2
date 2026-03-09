@@ -1,260 +1,214 @@
-# CISSA System Review - Documentation Index
+# CISSA Planning Documentation
 
-**Date Created:** March 8, 2026  
-**Purpose:** Help you migrate legacy metrics calculation code into the FastAPI backend
+**Last Updated:** March 9, 2026  
+**Current Phase Status:** Phase 04-05 complete, planning alignment with legacy metrics
 
 ---
 
-## 📋 Three Essential Documents
+## 📋 Four Essential Documents
 
-### 1. **SYSTEM_STATE_REVIEW.md** (9.6 KB)
-**Read This First** — Understand the current state of your system
+### 1. **LEGACY_METRICS_COMPLETE.md** ⭐ START HERE
+**Complete inventory of all metrics in the legacy system**
 
 Contains:
-- ✅ What's already done (Phase 1 + Phase 2 metrics)
-- ❌ What still needs migration (Beta, Rates, TSR, Sector)
-- 📊 Migration status matrix (quick reference table)
-- 🏗️ Architecture overview (FastAPI + PostgreSQL)
-- 🗂️ Code organization (backend structure vs. legacy structure)
-- 🛣️ Recommended 4-week migration path
-- ❓ Key questions to answer before starting
+- 📊 Comprehensive metrics inventory (7 tiers)
+- ✅ Tier 1: L1 Basic Metrics (12 implemented, 5 temporal missing)
+- ✅ Tier 2: L2 Derived Metrics (6 implemented)
+- ❌ Tier 3: Aggregated Ratios (14 metrics × 4 intervals = 56 missing)
+- ❌ Tier 4: Beta Calculation (1 missing)
+- ❌ Tier 5: Risk-Free Rate & Market Returns (2 missing)
+- ❌ Tier 6: Sector Aggregations (missing)
+- 🐛 Known bugs in legacy code
 
-**Start here to understand what you have and what needs to be done.**
+**Use this to understand what needs to be migrated and in what priority.**
 
 ---
 
-### 2. **MIGRATION_EXAMPLES.md** (20 KB)
-**Read This Second** — See concrete code examples
+### 2. **SYSTEM_STATE_REVIEW.md**
+**Current state of backend architecture**
 
 Contains:
-- **Example 1: Beta Service Migration**
-  - Legacy code from `executors/beta.py`
-  - Full FastAPI service implementation (copy-paste ready)
-  - API endpoint example
-  - How to handle 4-tier fallback logic
+- ✅ What's already done (Phase 04-05)
+- ❌ What still needs migration (Beta, Rates, TSR, Sector, temporal metrics)
+- 📊 Architecture overview (FastAPI + PostgreSQL)
+- 🗂️ Code organization and file structure
 
-- **Example 2: Risk-Free Rate Service**
-  - Precomputed table lookup pattern
-  - Fallback to default when missing
-  - Lagged calculation
-
-- **Example 3: TSR & Franking Credits**
-  - Complex formula with conditions
-  - Franking credit adjustment
-  - Inception year handling
-
-- **Example 4: Pydantic Schemas**
-  - Request/response schemas for all metrics
-  - Proper Pydantic v2 patterns
-  - Type hints and validation
-
-- **Best Practices**
-  - Separate pure calculation from I/O
-  - Batch operations for performance
-  - Type hints and logging
-
-**Use this as a template for creating each new service.**
+**Reference this to understand current backend capabilities.**
 
 ---
 
-### 3. **PHASE3_NEXT_STEPS.md** (12 KB)
-**Read This Third** — Get step-by-step implementation guide
+### 3. **PROCESS_CHANGES_ANALYSIS.md**
+**Key architectural decisions made in Phase 04-05**
 
 Contains:
-- ❓ Pre-work questions (4 key decisions before you start)
-- 🚀 **Quickstart: First Beta Service (Day 1-2)**
-  - Step 0: Verify prerequisites
-  - Step 1: Create service file
-  - Step 2: Create Pydantic models
-  - Step 3: Create API endpoint
-  - Step 4: Test with curl
-  - Step 5: Compare against legacy
-  
-- 📅 **Full 4-Week Roadmap**
-  - Week 1: Beta Service (3-4 hours)
-  - Week 2: Risk-Free Rate Service (2-3 hours)
-  - Week 3: TSR & Franking Service (3-4 hours)
-  - Week 4: Sector Aggregations (3-4 hours)
+- 🔧 Decision 1: Auto-trigger L1 metrics at ingestion end
+- ♻️ Decision 2: Rename L2 metrics (removed L2_ prefix)
+- 📐 Decision 3: L1 vs L3 ROA difference analysis
 
-- 📚 Documentation to review first
-- 🔧 Key files to keep updated
-- 🛠️ Development workflow for each service
-- 🆘 Troubleshooting guide
-- ✅ Success criteria for Phase 3
-
-**Follow this day-by-day to implement each service.**
+**Reference for understanding recent changes and why they were made.**
 
 ---
 
-## 🎯 Quick Start (Next 30 Minutes)
-
-1. **Read** `SYSTEM_STATE_REVIEW.md` (10 min)
-   - Understand Phase 1, 2, 3 status
-   - See what's already built
-
-2. **Skim** `MIGRATION_EXAMPLES.md` (10 min)
-   - Focus on "Example 1: Beta Service"
-   - Understand the pattern
-
-3. **Answer** 4 questions in `PHASE3_NEXT_STEPS.md` (10 min)
-   - Which metrics are priority?
-   - Do you have data sources?
-   - API or batch mode?
-   - Need result validation?
-
-4. **Pick** one metric to start (suggest: Beta)
-   - Follow "Quickstart: First Beta Service"
+### 4. **README.md** (this file)
+**Documentation index and navigation guide**
 
 ---
 
-## 🏗️ Architecture Summary
+## 🎯 Quick Start: Align Backend with Legacy
 
-Your system has three layers:
+1. **Understand what exists** (5 min)
+   - Read LEGACY_METRICS_COMPLETE.md → Summary section
+   - See what's implemented vs. missing
+
+2. **Choose your priorities** (10 min)
+   - Decide which metrics tier(s) to implement
+   - Reference LEGACY_METRICS_COMPLETE.md → Questions section
+   - Ask yourself: Do I need temporal metrics? Aggregated ratios? Beta? Rates? Sector?
+
+3. **Review current state** (5 min)
+   - Skim SYSTEM_STATE_REVIEW.md to understand backend structure
+   - Skim PROCESS_CHANGES_ANALYSIS.md to understand recent decisions
+
+4. **Plan implementation** (decide next phase)
+   - Wait for user to specify metrics priorities
+   - Create phase plans for chosen metrics
+
+---
+
+## 🏗️ Current Architecture
+
+Your system has multiple metric levels:
 
 ```
 Phase 1 (DONE) ✅
 ├─ 15 SQL functions in PostgreSQL
-├─ Calculate core metrics (MC, Op Assets, Ratios)
-├─ API: POST /api/v1/metrics/calculate
-└─ Store in: metrics_outputs table
+├─ Calculate L1 core metrics (MC, Op Assets, Costs, Ratios)
+├─ Auto-triggered at end of data ingestion
+└─ Stored in: metrics_outputs table
 
 Phase 2 (DONE) ✅
-├─ FastAPI service layer
-├─ Calculate L2 metrics using L1 as input
+├─ L2 metrics (6 metrics)
+├─ Derived from L1 using Python service
 ├─ API: POST /api/v1/metrics/calculate-l2
-└─ CLI: run_l2_metrics.py
+└─ Stored in: metrics_outputs table with metadata
 
-Phase 3 (TO DO) ⏳
-├─ Beta Calculation Service
-├─ Risk-Free Rate Service
-├─ TSR & Franking Service
-├─ Sector Aggregations Service
-└─ 4 new API endpoints + 4 new services
+Phase 3 (PLANNING) 🔄
+├─ Temporal L1 metrics (ECF, EE, FY_TSR, FY_TSR_PREL) ← Missing
+├─ Aggregated ratios (14 metrics × 4 intervals) ← Missing
+├─ Beta calculation ← Missing
+├─ Risk-Free Rate & Market Returns ← Missing
+├─ Sector aggregations ← Missing
+└─ TBD: Which to implement?
 ```
 
 ---
 
-## 📁 File Locations
+## 📁 Documentation Files
 
-**New Documentation:**
-- `.planning/SYSTEM_STATE_REVIEW.md` ← Start here
-- `.planning/MIGRATION_EXAMPLES.md` ← Code templates
-- `.planning/PHASE3_NEXT_STEPS.md` ← Implementation guide
+**In .planning/ directory:**
+- `.planning/README.md` — This file
+- `.planning/LEGACY_METRICS_COMPLETE.md` — Master metrics reference ⭐
+- `.planning/SYSTEM_STATE_REVIEW.md` — Current backend state
+- `.planning/PROCESS_CHANGES_ANALYSIS.md` — Phase 04-05 decisions
 
-**Existing Code:**
-- `backend/app/main.py` — FastAPI app entry point
-- `backend/app/services/metrics_service.py` — Phase 1 service (reference)
-- `backend/app/services/l2_metrics_service.py` — Phase 2 service (reference)
+**Phase directories:**
+- `.planning/phases/04-auto-trigger-l1/` — Phase 04 (completed)
+  - `04-01-PLAN.md` — Phase plan
+  - `04-01-SUMMARY.md` — Execution summary
+  
+- `.planning/phases/05-rename-l2-metrics/` — Phase 05 (completed)
+  - `05-01-PLAN.md` — Phase plan
+  - `05-01-SUMMARY.md` — Execution summary
+
+---
+
+## 💾 Codebase Structure
+
+**Backend Services:**
+- `backend/app/services/metrics_service.py` — L1 metrics calculation (Phase 04-05)
+- `backend/app/services/l2_metrics_service.py` — L2 metrics derivation (Phase 05)
+- `backend/app/services/enhanced_metrics_service.py` — L3 metrics (Beta, Rates, Cost of Equity)
 - `backend/app/api/v1/endpoints/metrics.py` — API endpoints
-- `example-calculations/src/executors/metrics.py` — Legacy source (to migrate)
-- `example-calculations/src/executors/beta.py` — Beta logic (to migrate)
-- `example-calculations/src/executors/rates.py` — Rate logic (to migrate)
-
----
-
-## ✅ What You'll Get
-
-After following these guides and implementing Phase 3:
-
-**API Endpoints:**
-```bash
-POST /api/v1/metrics/calculate-beta      # New in Phase 3
-POST /api/v1/metrics/calculate-rf        # New in Phase 3
-POST /api/v1/metrics/calculate-returns   # New in Phase 3
-POST /api/v1/metrics/calculate-sector    # New in Phase 3
-```
-
-**Services:**
-```
-backend/app/services/beta_service.py      # New
-backend/app/services/rate_service.py      # New
-backend/app/services/returns_service.py   # New
-backend/app/services/sector_service.py    # New
-```
 
 **Database:**
-- All results stored in `cissa.metrics_outputs` table
-- Comparable with legacy output for validation
+- `backend/database/schema/functions.sql` — 15 L1 metric SQL functions
+- `backend/database/schema/schema.sql` — Table definitions
+
+**Legacy Sources (to migrate from):**
+- `example-calculations/src/executors/metrics.py` — L1 metrics (15 basic + temporal)
+- `example-calculations/src/executors/beta.py` — Beta calculation
+- `example-calculations/src/executors/rates.py` — Risk-free rate & market returns
+- `example-calculations/src/generate_sector_metrics.py` — Sector aggregations
+- `example-calculations/src/engine/aggregators.py` — Aggregated ratio metrics
 
 ---
 
-## 📊 Estimated Time
+## ❓ What to Do Next
 
-| Service | Files | Lines | Est. Time |
-|---------|-------|-------|-----------|
-| Beta | 3 | 250 | 3-4 hours |
-| Risk-Free Rate | 3 | 200 | 2-3 hours |
-| TSR & Franking | 3 | 250 | 3-4 hours |
-| Sector Aggregations | 3 | 200 | 3-4 hours |
-| **TOTAL Phase 3** | 12 | 900 | **12-15 hours** |
+**Option 1: Plan Phase 06 (Implement missing metrics)**
+- Decide which metrics from LEGACY_METRICS_COMPLETE.md you need
+- I'll create executable phase plans
+- Execute phases to migrate the metrics
 
-**That's about 3-4 hours per week for a month.**
-
----
-
-## 🔑 Key Concepts
-
-### Service Layer Pattern (Repeat for Each Metric)
-```python
-class [Feature]Service:
-    def __init__(self, session: AsyncSession):
-        self.session = session
-    
-    async def calculate(self, dataset_id: UUID, ...) -> Response:
-        # 1. Fetch data
-        # 2. Calculate
-        # 3. Store results
-        # 4. Return response
-```
-
-### API Endpoint Pattern (Repeat for Each Service)
-```python
-@router.post("/api/v1/metrics/calculate-{feature}")
-async def calculate_{feature}(request, db):
-    service = [Feature]Service(db)
-    return await service.calculate(...)
-```
-
-### Testing Pattern (Same for All)
-```bash
-1. Start API: ./start-api.sh
-2. Call endpoint: curl -X POST http://localhost:8000/api/v1/metrics/calculate-{feature}
-3. Check results: psql -c "SELECT * FROM metrics_outputs WHERE metric_name = '...'"
-4. Compare: legacy output vs. new output
-```
-
-**Once you do the first service (Beta), the others follow the same pattern.**
+**Option 2: Continue with current system**
+- Current Phase 04-05 deliverables are complete
+- L1 basic metrics + L2 derived metrics working
+- Legacy metrics not yet migrated (optional)
 
 ---
 
-## ❓ Common Questions Answered
+## 🧹 Recent Changes
 
-**Q: Which metric should I start with?**  
-A: Beta. It's complex enough to be representative, but doesn't depend on other Phase 3 metrics.
+**March 9, 2026 - Codebase Cleanup**
+- ✅ Removed 10 outdated/superseded documentation files
+- ✅ Kept 4 active reference documents
+- ✅ Created LEGACY_METRICS_COMPLETE.md for comprehensive metrics inventory
+- ✅ Updated README.md to reflect current state
 
-**Q: Do I have to do all 4 services?**  
-A: No. Do whatever's most valuable to your business. We recommend prioritizing based on usage.
-
-**Q: Can I do them in parallel?**  
-A: Not recommended. Do them sequentially so you can reuse patterns and learn as you go.
-
-**Q: How do I validate results?**  
-A: Compare new results against legacy output. See "Comparison" section in PHASE3_NEXT_STEPS.md.
-
-**Q: What if results don't match?**  
-A: Check formula translation, NULL handling, and data types. See troubleshooting guide.
-
-**Q: Do I need to change Phase 1 or Phase 2?**  
-A: No. Phase 3 is purely additive. No breaking changes.
+**Files deleted (outdated):**
+- INVESTIGATION.md, L1_METRICS_VERIFICATION.md, PHASE1_METRICS.md
+- PHASE3_IMPLEMENTATION_SUMMARY.md, PHASE3_MIGRATION_PLAN.md, PHASE3_NEXT_STEPS.md
+- PHASE3_OUTPUT_EXAMPLE.md, STEP_2_RISK_FREE_RATE_ANALYSIS.md
+- PARAMETER_MAPPING.md, MIGRATION_EXAMPLES.md
 
 ---
 
-## 🚀 Ready to Start?
+## ✅ Summary: Completed Work
 
-1. Open `.planning/SYSTEM_STATE_REVIEW.md` and read it
-2. Open `.planning/MIGRATION_EXAMPLES.md` and review the Beta example
-3. Open `.planning/PHASE3_NEXT_STEPS.md` and follow the Quickstart
-4. Create your first service file: `backend/app/services/beta_service.py`
-5. Test it!
+| Phase | Area | Status | Details |
+|-------|------|--------|---------|
+| 04 | L1 Auto-Trigger | ✅ Done | L1 metrics auto-calculate at ingestion end |
+| 05 | L2 Renaming | ✅ Done | Removed L2_ prefix, consistent naming |
+| — | L1 Basic (12) | ✅ Done | 12 L1 metrics in SQL functions |
+| — | L2 Derived (6) | ✅ Done | 6 L2 metrics in Python service |
+| — | L1 Temporal (5) | ❌ Missing | ECF, NON_DIV_ECF, EE, FY_TSR, FY_TSR_PREL |
+| — | Agg Ratios (56) | ❌ Missing | 14 metrics × 4 intervals |
+| — | Beta (1) | ❌ Missing | OLS regression with fallback |
+| — | Rates (2) | ❌ Missing | RF & RM calculation |
+| — | Sector (?) | ❌ Missing | Sector aggregations |
 
-**Good luck! Your system is well-designed and the migration is straightforward.** 🎯
+---
+
+## 🚀 Next Steps
+
+1. **Read LEGACY_METRICS_COMPLETE.md** (15 min)
+   - Understand all metrics tiers and what's missing
+   - Review the 6 critical questions at the end
+
+2. **Decide priorities** (10 min)
+   - Which metrics do you need?
+   - Temporal metrics? Aggregated ratios? Beta? Rates? Sector?
+   - Reference the implementation status table
+
+3. **Specify requirements** (to me)
+   - Tell me which tier(s) from the Legacy Metrics document
+   - I'll create phase plans for implementation
+
+4. **Execute phases**
+   - I'll create executable PLAN.md files
+   - Follow GSD execute-phase workflow
+   - Deploy metric calculations
+
+---
+
+**Need help deciding? Look at LEGACY_METRICS_COMPLETE.md Questions section!** 🎯
