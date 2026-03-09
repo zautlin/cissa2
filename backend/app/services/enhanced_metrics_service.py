@@ -162,10 +162,17 @@ class EnhancedMetricsService:
             param_name = row[0]
             value = row[1]
             
-            # Convert percentages to decimals
+            # Convert percentages to decimals (6 parameters)
             if param_name in ["equity_risk_premium", "fixed_benchmark_return_wealth_preservation",
                              "beta_relative_error_tolerance", "tax_rate_franking_credits", "value_of_franking_credits"]:
                 params[param_name] = float(value) / 100.0
+            # Convert numeric parameters to float
+            elif param_name in ["beta_rounding", "risk_free_rate_rounding", "terminal_year", "last_calendar_year"]:
+                params[param_name] = float(value)
+            # Convert booleans
+            elif param_name in ["include_franking_credits_tsr"]:
+                params[param_name] = value.lower() in ["true", "1", "yes"] if isinstance(value, str) else bool(value)
+            # Keep others as strings (country, currency_notation, cost_of_equity_approach)
             else:
                 params[param_name] = value
         
@@ -187,6 +194,10 @@ class EnhancedMetricsService:
                     if key in ["equity_risk_premium", "fixed_benchmark_return_wealth_preservation",
                               "beta_relative_error_tolerance", "tax_rate_franking_credits", "value_of_franking_credits"]:
                         params[key] = float(value) / 100.0
+                    elif key in ["beta_rounding", "risk_free_rate_rounding", "terminal_year", "last_calendar_year"]:
+                        params[key] = float(value)
+                    elif key in ["include_franking_credits_tsr"]:
+                        params[key] = value.lower() in ["true", "1", "yes"] if isinstance(value, str) else bool(value)
                     else:
                         params[key] = value
         
