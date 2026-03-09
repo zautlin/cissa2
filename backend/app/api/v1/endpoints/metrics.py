@@ -13,11 +13,14 @@ from ....models import (
     CalculateL2Response,
     CalculateEnhancedMetricsRequest,
     CalculateEnhancedMetricsResponse,
+    CalculateBetaRequest,
+    CalculateBetaResponse,
     MetricsHealthResponse
 )
 from ....services.metrics_service import MetricsService
 from ....services.l2_metrics_service import L2MetricsService
 from ....services.enhanced_metrics_service import EnhancedMetricsService
+from ....services.beta_calculation_service import BetaCalculationService
 from ....core.config import get_logger
 
 logger = get_logger(__name__)
@@ -248,4 +251,89 @@ async def calculate_enhanced_metrics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during enhanced metrics calculation"
+        )
+
+
+# ============================================================================
+# Phase 07: Beta Calculation Endpoints
+# ============================================================================
+
+@router.post("/beta/calculate", response_model=CalculateBetaResponse, status_code=status.HTTP_200_OK)
+async def calculate_beta(
+    request: CalculateBetaRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Calculate beta using rolling OLS regression on monthly returns.
+    
+    **Beta Calculation Algorithm:**
+    1. Fetch monthly COMPANY_TSR and INDEX_TSR from fundamentals
+    2. Calculate 60-month rolling OLS slopes
+    3. Transform slopes: adjusted = (slope * 2/3) + 1/3
+    4. Filter by relative error tolerance
+    5. Round by beta_rounding parameter
+    6. Annualize and apply 4-tier fallback logic
+    7. Apply cost_of_equity_approach (FIXED or Floating)
+    8. Store in metrics_outputs
+    
+    **Prerequisites:**
+    - Monthly TSR data must exist in fundamentals table (COMPANY_TSR + INDEX_TSR)
+    - dataset_id must exist in dataset_versions
+    - param_set_id must exist in parameter_sets
+    
+    **Parameters from param_set:**
+    - beta_rounding: Rounding increment (e.g., 0.1)
+    - beta_relative_error_tolerance: Error tolerance as % (e.g., 40.0)
+    - cost_of_equity_approach: "FIXED" or "Floating"
+    
+    **Caching:**
+    - If beta results already exist for this dataset + param_set, returns cached results
+    
+    **Example Request:**
+    ```json
+    {
+        "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+        "param_set_id": "660e8400-e29b-41d4-a716-446655440001"
+    }
+    ```
+    
+    **Response:**
+    - status: 'success', 'error', or 'cached'
+    - results_count: number of beta records calculated
+    - results: array of ticker, fiscal_year, beta value tuples
+    """
+    
+    logger.info(f"Processing beta calculation request: dataset={request.dataset_id}, param_set={request.param_set_id}")
+    
+    try:
+        service = BetaCalculationService(db)
+        result = await service.calculate_beta_async(
+            dataset_id=request.dataset_id,
+            param_set_id=request.param_set_id
+        )
+        
+        if result["status"] == "error":
+            logger.warning(f"Beta calculation failed: {result['message']}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+        
+        logger.info(f"Beta calculation {'cached' if result['status'] == 'cached' else 'successful'}: {result['results_count']} records")
+        
+        return CalculateBetaResponse(
+            dataset_id=request.dataset_id,
+            param_set_id=request.param_set_id,
+            results_count=result["results_count"],
+            status=result["status"],
+            message=result["message"]
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during beta calculation: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during beta calculation"
         )

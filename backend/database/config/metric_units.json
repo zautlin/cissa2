@@ -190,5 +190,11 @@
     "database_name": "FY_TSR_PREL",
     "unit": "dimensionless",
     "is_output_metric": true
+  },
+  {
+    "metric_name": "Beta",
+    "database_name": "BETA",
+    "unit": "%",
+    "is_output_metric": true
   }
 ]

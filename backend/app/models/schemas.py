@@ -117,3 +117,35 @@ class CalculateEnhancedMetricsResponse(BaseModel):
     metrics_calculated: list[str] = Field(default_factory=list)
     status: str = Field(default="success")
     message: Optional[str] = Field(default=None)
+
+
+# ============================================================================
+# Phase 07: Beta Calculation (Phase 07)
+# ============================================================================
+
+class CalculateBetaRequest(BaseModel):
+    """Request to calculate beta for a dataset and parameter set."""
+    dataset_id: UUID = Field(..., description="UUID of the dataset to calculate beta for")
+    param_set_id: UUID = Field(
+        ..., 
+        description="UUID of the parameter set (defines beta calculation parameters)"
+    )
+
+
+class BetaResultItem(BaseModel):
+    """Single beta result (ticker, fiscal_year, value)."""
+    ticker: str
+    fiscal_year: int
+    value: float
+
+
+class CalculateBetaResponse(BaseModel):
+    """Response from beta calculation."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    dataset_id: UUID
+    param_set_id: UUID
+    results_count: int
+    results: list[BetaResultItem] = Field(default_factory=list)
+    status: str = Field(default="success", description="Status: 'success', 'error', or 'cached'")
+    message: Optional[str] = Field(default=None, description="Message or error detail")
