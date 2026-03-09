@@ -149,3 +149,36 @@ class CalculateBetaResponse(BaseModel):
     results: list[BetaResultItem] = Field(default_factory=list)
     status: str = Field(default="success", description="Status: 'success', 'error', or 'cached'")
     message: Optional[str] = Field(default=None, description="Message or error detail")
+
+
+# ============================================================================
+# Quick Task 01: Risk-Free Rate Calculation
+# ============================================================================
+
+class CalculateRiskFreeRateRequest(BaseModel):
+    """Request to calculate risk-free rate (Rf, Rf_1Y, Rf_1Y_Raw) for a dataset and parameter set."""
+    dataset_id: UUID = Field(..., description="UUID of the dataset to calculate risk-free rate for")
+    param_set_id: UUID = Field(
+        ..., 
+        description="UUID of the parameter set (defines bond index, rounding, approach, etc.)"
+    )
+
+
+class RiskFreeRateResultItem(BaseModel):
+    """Single risk-free rate result (ticker, fiscal_year, metric_name, value)."""
+    ticker: str
+    fiscal_year: int
+    metric_name: str  # 'Rf', 'Rf_1Y', or 'Rf_1Y_Raw'
+    value: float
+
+
+class CalculateRiskFreeRateResponse(BaseModel):
+    """Response from risk-free rate calculation."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    dataset_id: UUID
+    param_set_id: UUID
+    results_count: int
+    results: list[RiskFreeRateResultItem] = Field(default_factory=list)
+    status: str = Field(default="success", description="Status: 'success', 'error', or 'cached'")
+    message: Optional[str] = Field(default=None, description="Message or error detail")
