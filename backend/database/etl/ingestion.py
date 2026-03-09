@@ -200,6 +200,20 @@ class Ingester:
         
         # Auto-trigger L1 metrics calculation
         print("Auto-calculating L1 metrics...")
+        print(f"Dataset ID: {dataset_id}")
+        
+        # Verify raw_data exists and is committed
+        with self.engine.connect() as conn:
+            count_result = conn.execute(text("""
+                SELECT COUNT(*) FROM raw_data WHERE dataset_id = :dataset_id
+            """), {'dataset_id': dataset_id})
+            raw_count = count_result.scalar()
+            print(f"Raw data rows: {raw_count}")
+        
+        # Give the database a moment to ensure visibility
+        import time
+        time.sleep(0.5)
+        
         l1_metrics_result = self._auto_calculate_l1_metrics(dataset_id)
         result['l1_metrics'] = l1_metrics_result
         
@@ -231,18 +245,22 @@ class Ingester:
             Dict with L1 metrics calculation results {status, calculated, failed, errors}
         """
         try:
-            # Run the async metric calculation in this thread's event loop
+            # Use asyncio.run() directly - it handles event loop setup/teardown
             result = asyncio.run(self._async_calculate_l1_metrics(dataset_id))
+            print(f"L1 metrics result: {result}")
             return result
         except Exception as e:
-            print(f"⚠  L1 metrics calculation failed: {str(e)}")
+            error_str = str(e) if str(e) else repr(e)
+            print(f"⚠  L1 metrics calculation failed: {error_str}")
+            import traceback
+            traceback.print_exc()
             return {
                 'status': 'error',
-                'message': str(e),
+                'message': error_str,
                 'total_metrics': 15,
                 'calculated': 0,
                 'failed': 15,
-                'errors': [str(e)]
+                'errors': [error_str]
             }
     
     async def _async_calculate_l1_metrics(self, dataset_id: str) -> Dict[str, Any]:
@@ -258,12 +276,45 @@ class Ingester:
         Returns:
             Dict with calculation results
         """
-        from ..etl.config import get_db_url
-        from backend.app.services.metrics_service import MetricsService
+        # Import inside function to avoid import issues
+        import sys
+        import os
+        from pathlib import Path
+        
+        # Get the directory structure right
+        # File is at: /backend/database/etl/ingestion.py
+        # Need to import from /backend/app/services/metrics_service
+        etl_dir = Path(__file__).parent  # /backend/database/etl
+        database_dir = etl_dir.parent  # /backend/database
+        backend_dir = database_dir.parent  # /backend
+        
+        # Add both to path to enable proper imports
+        if str(backend_dir) not in sys.path:
+            sys.path.insert(0, str(backend_dir))
+        if str(database_dir) not in sys.path:
+            sys.path.insert(0, str(database_dir))
+        
+        # Now imports should work
+        from app.services.metrics_service import MetricsService
+        from etl.config import get_db_url
         
         # Create async engine from sync config
-        async_db_url = get_db_url().replace('postgresql://', 'postgresql+asyncpg://')
-        async_engine = create_async_engine(async_db_url, echo=False)
+        # The sync config includes ?options=-c search_path=cissa which asyncpg doesn't handle
+        # So we need to strip it and handle search_path differently
+        sync_url = get_db_url()
+        # Remove the options parameter which asyncpg doesn't support
+        async_url = sync_url.split('?options')[0] if '?options' in sync_url else sync_url
+        async_db_url = async_url.replace('postgresql://', 'postgresql+asyncpg://')
+        
+        async_engine = create_async_engine(
+            async_db_url, 
+            echo=False,
+            connect_args={
+                "timeout": 10,
+                "command_timeout": 60,
+                "server_settings": {"search_path": "cissa"}
+            }
+        )
         
         try:
             # Create async session
@@ -274,6 +325,19 @@ class Ingester:
             )
             
             async with async_session_maker() as session:
+                # Verify we're in the right schema
+                from sqlalchemy import text as sql_text
+                schema_check = await session.execute(sql_text("SELECT current_schema()"))
+                schema_name = schema_check.scalar()
+                print(f"[ASYNC] Current schema: {schema_name}")
+                
+                # Check if raw_data table is accessible
+                raw_data_check = await session.execute(sql_text(f"""
+                    SELECT COUNT(*) FROM raw_data WHERE dataset_id = '{dataset_id}'
+                """))
+                raw_count = raw_data_check.scalar()
+                print(f"[ASYNC] Raw data rows in async context: {raw_count}")
+                
                 # Create MetricsService and call calculate_all_l1_metrics
                 metrics_service = MetricsService(session)
                 

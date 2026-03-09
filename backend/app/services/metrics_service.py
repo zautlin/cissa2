@@ -207,10 +207,16 @@ class MetricsService:
                 FROM cissa.{function_name}(:dataset_id)
             """)
             
+            logger.info(f"Query: {query}")
+            logger.info(f"Dataset ID param: {dataset_id}")
+            
             result = await self.session.execute(query, {"dataset_id": str(dataset_id)})
             rows = result.fetchall()
             
             logger.info(f"Function {function_name} returned {len(rows)} rows")
+            
+            if len(rows) == 0:
+                logger.warning(f"No rows returned from {function_name} for dataset {dataset_id}")
             
             # Convert rows to MetricResultItem objects
             results = [
