@@ -385,8 +385,8 @@ class FVECFService:
                 AND ke.fiscal_year = ke_lagged.fiscal_year + 1
                 AND ke.dataset_id = ke_lagged.dataset_id
                 AND ke.param_set_id = ke_lagged.param_set_id
-            WHERE ke.output_metric_name = 'CALC_KE'
-              AND ke_lagged.output_metric_name = 'CALC_KE'
+            WHERE ke.output_metric_name = 'Calc KE'
+              AND ke_lagged.output_metric_name = 'Calc KE'
               AND ke.dataset_id = :dataset_id
               AND ke.param_set_id = :param_set_id
             ORDER BY ke.ticker, ke.fiscal_year
