@@ -30,9 +30,9 @@ def to_float(value):
     return float(value)
 
 
-class Phase09CostOfEquityService:
+class CostOfEquityService:
     """
-    Phase 09: Cost of Equity Calculation
+    Cost of Equity Calculation Service (Phase 09)
     
     Calculates: KE = Rf + Beta × RiskPremium
     
@@ -312,7 +312,7 @@ class Phase09CostOfEquityService:
             DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value, created_at = now()
         """)
         
-        metadata = json.dumps({"metric_level": "L1", "calculation_source": "phase09_cost_of_equity_service"})
+        metadata = json.dumps({"metric_level": "L1", "calculation_source": "cost_of_equity_service"})
         
         for i in range(0, len(ke_df), batch_size):
             batch = ke_df.iloc[i:i+batch_size]

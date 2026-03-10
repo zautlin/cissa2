@@ -197,10 +197,42 @@
     "unit": "%",
     "is_output_metric": true
   },
-  {
-    "metric_name": "Calc KE",
-    "database_name": "CALC_KE",
-    "unit": "%",
-    "is_output_metric": true
-  }
-]
+   {
+     "metric_name": "Calc KE",
+     "database_name": "CALC_KE",
+     "unit": "%",
+     "is_output_metric": true
+   },
+   {
+     "metric_name": "EP",
+     "database_name": "EP",
+     "unit": "millions",
+     "is_output_metric": true,
+     "metric_level": "L2",
+     "description": "Economic Profit: pat - (ke_open × ee_open)"
+   },
+   {
+     "metric_name": "PAT_EX",
+     "database_name": "PAT_EX",
+     "unit": "millions",
+     "is_output_metric": true,
+     "metric_level": "L2",
+     "description": "Adjusted Profit: (ep / |ee_open + ke_open|) × ee_open"
+   },
+   {
+     "metric_name": "XO_COST_EX",
+     "database_name": "XO_COST_EX",
+     "unit": "millions",
+     "is_output_metric": true,
+     "metric_level": "L2",
+     "description": "Adjusted XO Cost: patxo - pat_ex"
+   },
+   {
+     "metric_name": "FC",
+     "database_name": "FC",
+     "unit": "millions",
+     "is_output_metric": true,
+     "metric_level": "L2",
+     "description": "Franking Credit: conditionally based on incl_franking parameter"
+   }
+ ]

@@ -11,8 +11,6 @@ from ....models import (
     CalculateMetricsResponse,
     CalculateL2Request,
     CalculateL2Response,
-    CalculateEnhancedMetricsRequest,
-    CalculateEnhancedMetricsResponse,
     CalculateBetaRequest,
     CalculateBetaResponse,
     CalculateRiskFreeRateRequest,
@@ -21,7 +19,6 @@ from ....models import (
 )
 from ....services.metrics_service import MetricsService
 from ....services.l2_metrics_service import L2MetricsService
-from ....services.enhanced_metrics_service import EnhancedMetricsService
 from ....services.beta_calculation_service import BetaCalculationService
 from ....services.risk_free_rate_service import RiskFreeRateCalculationService
 from ....core.config import get_logger
@@ -181,79 +178,6 @@ async def calculate_l2_metrics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during L2 metrics calculation"
-        )
-
-
-# ============================================================================
-# L3 Enhanced Metrics Endpoints (Phase 3)
-# ============================================================================
-
-@router.post("/calculate-enhanced", response_model=CalculateEnhancedMetricsResponse, status_code=status.HTTP_200_OK)
-async def calculate_enhanced_metrics(
-    request: CalculateEnhancedMetricsRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Calculate enhanced metrics (Phase 3): Beta, Rf, KE, EP, TSR, Financial Ratios.
-    
-    Enhanced metrics are derived calculations that build on L1 metrics:
-    - Beta: Stock beta (currently 1.0 default, future: rolling OLS from returns)
-    - Rf: Risk-free rate (from parameter set)
-    - Calc KE: Cost of Equity = Rf + Beta × Risk Premium
-    - ROA, ROE, Profit Margin: Financial ratios
-    
-    **Prerequisites:**
-    - L1 metrics must be calculated first
-    - dataset_id and param_set_id must exist
-    
-    **Example Request:**
-    ```json
-    {
-        "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
-        "param_set_id": "660e8400-e29b-41d4-a716-446655440001"
-    }
-    ```
-    
-    **Response:**
-    - status: 'success' or 'error'
-    - results_count: number of metric records inserted
-    - metrics_calculated: list of metric types calculated
-    """
-    
-    logger.info(f"Processing enhanced metrics: dataset={request.dataset_id}, param_set={request.param_set_id}")
-    
-    try:
-        service = EnhancedMetricsService(db)
-        result = await service.calculate_enhanced_metrics(
-            dataset_id=request.dataset_id,
-            param_set_id=request.param_set_id
-        )
-        
-        if result["status"] == "error":
-            logger.warning(f"Enhanced metrics calculation failed: {result['message']}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result["message"]
-            )
-        
-        logger.info(f"Enhanced metrics calculation successful: {result['results_count']} records, metrics={result['metrics_calculated']}")
-        
-        return CalculateEnhancedMetricsResponse(
-            dataset_id=request.dataset_id,
-            param_set_id=request.param_set_id,
-            results_count=result["results_count"],
-            metrics_calculated=result["metrics_calculated"],
-            status="success",
-            message=result["message"]
-        )
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error during enhanced metrics calculation: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error during enhanced metrics calculation"
         )
 
 
@@ -468,17 +392,17 @@ async def calculate_cost_of_equity(
     - results_count: number of KE records inserted
     - metrics_calculated: ['Calc KE']
     """
-    
-    logger.info(f"Phase 09: Calculating Cost of Equity (dataset={request.dataset_id}, param_set={request.param_set_id})")
-    
-    try:
-        from ....services.phase09_cost_of_equity_service import Phase09CostOfEquityService
-        
-        service = Phase09CostOfEquityService(db)
-        result = await service.calculate_cost_of_equity(
-            dataset_id=request.dataset_id,
-            param_set_id=request.param_set_id
-        )
+     
+     logger.info(f"Phase 09: Calculating Cost of Equity (dataset={request.dataset_id}, param_set={request.param_set_id})")
+     
+     try:
+         from ....services.cost_of_equity_service import CostOfEquityService
+         
+         service = CostOfEquityService(db)
+         result = await service.calculate_cost_of_equity(
+             dataset_id=request.dataset_id,
+             param_set_id=request.param_set_id
+         )
         
         if result["status"] == "error":
             logger.warning(f"Phase 09 calculation failed: {result['message']}")
@@ -506,3 +430,93 @@ async def calculate_cost_of_equity(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Cost of Equity calculation failed: {str(e)}"
         )
+
+
+# ============================================================================
+# Phase 10a: Core L2 Metrics Calculation Endpoint
+# ============================================================================
+
+@router.post("/l2-core/calculate", response_model=CalculateEnhancedMetricsResponse, status_code=status.HTTP_200_OK)
+async def calculate_core_l2_metrics(
+    request: CalculateEnhancedMetricsRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Calculate Phase 10a Core L2 Metrics: EP, PAT_EX, XO_COST_EX, FC
+    
+    This endpoint efficiently calculates core Level 2 metrics using:
+    - Phase 06 L1 Basic Metrics (pat, patxo, ee)
+    - Phase 09 Cost of Equity (ke)
+    - Lagged/opened versions (prior fiscal year values)
+    
+    **Metrics Calculated:**
+    - EP: Economic Profit = pat - (ke_open × ee_open)
+    - PAT_EX: Adjusted Profit = (ep / |ee_open + ke_open|) × ee_open
+    - XO_COST_EX: Adjusted XO Cost = patxo - pat_ex
+    - FC: Franking Credit = conditionally based on incl_franking parameter
+    
+    **Prerequisites:**
+    - Phase 06 (L1 Basic Metrics) must be calculated first
+    - Phase 09 (Cost of Equity) must be calculated first
+    
+    **Data Handling:**
+    - Creates lagged versions via LEFT JOIN (preserves NaN for missing prior years)
+    - NaN rows are retained in output (matches legacy approach)
+    
+    **Parameters from param_set:**
+    - incl_franking: "Yes" or "No"
+    - frank_tax_rate: Franking tax rate (e.g., 0.30)
+    - value_franking_cr: Franking credit value (e.g., 0.75)
+    
+    **Example Request:**
+    ```json
+    {
+        "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+        "param_set_id": "660e8400-e29b-41d4-a716-446655440001"
+    }
+    ```
+    
+    **Response:**
+    - status: 'success' or 'error'
+    - results_count: number of records calculated (per metric)
+    - metrics_calculated: ['EP', 'PAT_EX', 'XO_COST_EX', 'FC']
+    """
+    
+     logger.info(f"Phase 10a: Calculating Core L2 metrics (dataset={request.dataset_id}, param_set={request.param_set_id})")
+     
+     try:
+         from ....services.economic_profit_service import EconomicProfitService
+         
+         service = EconomicProfitService(db)
+         result = await service.calculate_core_l2_metrics(
+             dataset_id=request.dataset_id,
+             param_set_id=request.param_set_id
+         )
+        
+        if result["status"] == "error":
+            logger.warning(f"Phase 10a calculation failed: {result['message']}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+        
+        logger.info(f"Phase 10a calculation successful: {result['records_inserted']} L2 metric records inserted")
+        
+        return CalculateEnhancedMetricsResponse(
+            dataset_id=request.dataset_id,
+            param_set_id=request.param_set_id,
+            results_count=result["records_calculated"],
+            metrics_calculated=["EP", "PAT_EX", "XO_COST_EX", "FC"],
+            status="success",
+            message=result["message"]
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Phase 10a error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Core L2 metrics calculation failed: {str(e)}"
+        )
+
