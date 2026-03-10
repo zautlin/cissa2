@@ -731,13 +731,25 @@ async def get_metrics(
         if metric_name:
             filters_applied["metric_name"] = metric_name
         
-        # Warn if no results found
+        # Build appropriate message based on results
         message = None
+        filter_desc = []
+        if ticker:
+            filter_desc.append(f"ticker={ticker}")
+        if metric_name:
+            filter_desc.append(f"metric_name={metric_name}")
+        
         if len(records) == 0:
             message = f"No metrics found for dataset {dataset_id} and parameter_set {parameter_set_id}"
-            if ticker or metric_name:
-                message += f" with filters: ticker={ticker}, metric_name={metric_name}"
+            if filter_desc:
+                message += f" with filters: {', '.join(filter_desc)}"
             logger.warning(message)
+        else:
+            # Provide success message with result count
+            if filter_desc:
+                message = f"Retrieved {len(records)} metrics with filters: {', '.join(filter_desc)}"
+            else:
+                message = f"Retrieved {len(records)} metrics"
         
         # Build response
         return GetMetricsResponse(
