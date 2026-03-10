@@ -13,9 +13,10 @@ logger = get_logger(__name__)
 
 # Mapping of metric names to SQL function names and return column names
 # Format: "Display Name" → (function_name, output_column_name, requires_param_set_id)
-# L1 Metrics (12 total):
+# L1 Metrics (14 total):
 #   - 7 Simple metrics: no parameter_set_id needed
 #   - 5 Temporal metrics: ECF, NON_DIV_ECF, EE (no param), FY_TSR, FY_TSR_PREL (need param)
+#   - 2 Derived metrics (used by L2): Book Equity, ROA
 METRIC_FUNCTIONS = {
     # L1 Simple Metrics (7)
     "Calc MC": ("fn_calc_market_cap", "calc_mc", False),
@@ -35,13 +36,8 @@ METRIC_FUNCTIONS = {
     "FY_TSR": ("fn_calc_fy_tsr", "fy_tsr", True),      # Requires param_set_id
     "FY_TSR_PREL": ("fn_calc_fy_tsr_prel", "fy_tsr_prel", True),  # Requires param_set_id
     
-    # Legacy L2+ metrics (for backward compatibility)
-    "Profit Margin": ("fn_calc_profit_margin", "profit_margin", False),
-    "Op Cost Margin %": ("fn_calc_operating_cost_margin", "op_cost_margin", False),
-    "Non-Op Cost Margin %": ("fn_calc_non_operating_cost_margin", "non_op_cost_margin", False),
-    "Eff Tax Rate": ("fn_calc_effective_tax_rate", "eff_tax_rate", False),
-    "XO Cost Margin %": ("fn_calc_extraordinary_cost_margin", "xo_cost_margin", False),
-    "FA Intensity": ("fn_calc_fixed_asset_intensity", "fa_intensity", False),
+    # L1 Derived Metrics (2)
+    # These are calculated from other L1 metrics and used by L2 service
     "Book Equity": ("fn_calc_book_equity", "book_equity", False),
     "ROA": ("fn_calc_roa", "roa", False),
 }
@@ -385,7 +381,7 @@ class MetricsService:
         dataset_id: UUID
     ) -> Dict[str, Any]:
         """
-        Calculate all 15 L1 metrics for a dataset in dependency order.
+        Calculate all L1 metrics for a dataset in dependency order.
         
         L1 metrics are fundamental calculations that form the foundation for higher-level metrics.
         This method executes them in the correct dependency order to ensure data availability.
@@ -398,14 +394,13 @@ class MetricsService:
         5. Calc Non Op Cost (base)
         6. Calc Tax Cost (base)
         7. Calc XO Cost (base)
-        8. Profit Margin (base)
-        9. Op Cost Margin % (base)
-        10. Non-Op Cost Margin % (base)
-        11. Eff Tax Rate (base)
-        12. XO Cost Margin % (base)
-        13. FA Intensity (base)
-        14. Book Equity (base)
-        15. ROA (depends on Calc Assets)
+        8. ECF (temporal base)
+        9. NON_DIV_ECF (depends on ECF)
+        10. EE (temporal, optionally depends on ECF)
+        11. FY_TSR (temporal, parameter-sensitive)
+        12. FY_TSR_PREL (depends on FY_TSR)
+        13. Book Equity (used by L2 metrics)
+        14. ROA (depends on Calc Assets, used by L2 metrics)
         
         Args:
             dataset_id: UUID of the dataset
@@ -424,12 +419,11 @@ class MetricsService:
             "Calc Non Op Cost",
             "Calc Tax Cost",
             "Calc XO Cost",
-            "Profit Margin",
-            "Op Cost Margin %",
-            "Non-Op Cost Margin %",
-            "Eff Tax Rate",
-            "XO Cost Margin %",
-            "FA Intensity",
+            "ECF",
+            "NON_DIV_ECF",
+            "EE",
+            "FY_TSR",
+            "FY_TSR_PREL",
             "Book Equity",
             "ROA",
         ]
