@@ -429,3 +429,80 @@ async def calculate_risk_free_rate(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during risk-free rate calculation"
         )
+
+
+# ============================================================================
+# Phase 09: Cost of Equity Calculation Endpoint
+# ============================================================================
+
+@router.post("/cost-of-equity/calculate", response_model=CalculateEnhancedMetricsResponse, status_code=status.HTTP_200_OK)
+async def calculate_cost_of_equity(
+    request: CalculateEnhancedMetricsRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Calculate Cost of Equity (Phase 09): KE = Rf + Beta × RiskPremium
+    
+    This endpoint efficiently calculates Cost of Equity using existing:
+    - Phase 07 Beta results
+    - Phase 08 Risk-Free Rate (Rf_1Y) results
+    
+    **Prerequisites:**
+    - Phase 07 (Beta) must be calculated first
+    - Phase 08 (Risk-Free Rate) must be calculated first
+    
+    **Approach Parameter:**
+    - FIXED: Rf = benchmark - risk_premium (deterministic)
+    - FLOATING: Rf = Rf_1Y (from Phase 08, recommended)
+    
+    **Example Request:**
+    ```json
+    {
+        "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+        "param_set_id": "660e8400-e29b-41d4-a716-446655440001"
+    }
+    ```
+    
+    **Response:**
+    - status: 'success' or 'error'
+    - results_count: number of KE records inserted
+    - metrics_calculated: ['Calc KE']
+    """
+    
+    logger.info(f"Phase 09: Calculating Cost of Equity (dataset={request.dataset_id}, param_set={request.param_set_id})")
+    
+    try:
+        from ....services.phase09_cost_of_equity_service import Phase09CostOfEquityService
+        
+        service = Phase09CostOfEquityService(db)
+        result = await service.calculate_cost_of_equity(
+            dataset_id=request.dataset_id,
+            param_set_id=request.param_set_id
+        )
+        
+        if result["status"] == "error":
+            logger.warning(f"Phase 09 calculation failed: {result['message']}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+        
+        logger.info(f"Phase 09 calculation successful: {result['records_inserted']} KE records")
+        
+        return CalculateEnhancedMetricsResponse(
+            dataset_id=request.dataset_id,
+            param_set_id=request.param_set_id,
+            results_count=result["records_inserted"],
+            metrics_calculated=["Calc KE"],
+            status="success",
+            message=result["message"]
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Phase 09 error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Cost of Equity calculation failed: {str(e)}"
+        )
