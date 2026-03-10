@@ -227,12 +227,44 @@
      "metric_level": "L2",
      "description": "Adjusted XO Cost: patxo - pat_ex"
    },
-   {
-     "metric_name": "FC",
-     "database_name": "FC",
-     "unit": "millions",
-     "is_output_metric": true,
-     "metric_level": "L2",
-     "description": "Franking Credit: conditionally based on incl_franking parameter"
-   }
- ]
+    {
+      "metric_name": "FC",
+      "database_name": "FC",
+      "unit": "millions",
+      "is_output_metric": true,
+      "metric_level": "L2",
+      "description": "Franking Credit: conditionally based on incl_franking parameter"
+    },
+    {
+      "metric_name": "FV_ECF_1Y",
+      "database_name": "FV_ECF_1Y",
+      "unit": "millions",
+      "is_output_metric": true,
+      "metric_level": "L2",
+      "description": "Future Value Economic Cash Flow (1-Year)"
+    },
+    {
+      "metric_name": "FV_ECF_3Y",
+      "database_name": "FV_ECF_3Y",
+      "unit": "millions",
+      "is_output_metric": true,
+      "metric_level": "L2",
+      "description": "Future Value Economic Cash Flow (3-Year)"
+    },
+    {
+      "metric_name": "FV_ECF_5Y",
+      "database_name": "FV_ECF_5Y",
+      "unit": "millions",
+      "is_output_metric": true,
+      "metric_level": "L2",
+      "description": "Future Value Economic Cash Flow (5-Year)"
+    },
+    {
+      "metric_name": "FV_ECF_10Y",
+      "database_name": "FV_ECF_10Y",
+      "unit": "millions",
+      "is_output_metric": true,
+      "metric_level": "L2",
+      "description": "Future Value Economic Cash Flow (10-Year)"
+    }
+  ]

@@ -390,19 +390,19 @@ async def calculate_cost_of_equity(
     **Response:**
     - status: 'success' or 'error'
     - results_count: number of KE records inserted
-    - metrics_calculated: ['Calc KE']
-    """
-     
-     logger.info(f"Phase 09: Calculating Cost of Equity (dataset={request.dataset_id}, param_set={request.param_set_id})")
-     
-     try:
-         from ....services.cost_of_equity_service import CostOfEquityService
-         
-         service = CostOfEquityService(db)
-         result = await service.calculate_cost_of_equity(
-             dataset_id=request.dataset_id,
-             param_set_id=request.param_set_id
-         )
+     - metrics_calculated: ['Calc KE']
+     """
+    
+    logger.info(f"Phase 09: Calculating Cost of Equity (dataset={request.dataset_id}, param_set={request.param_set_id})")
+    
+    try:
+        from ....services.cost_of_equity_service import CostOfEquityService
+        
+        service = CostOfEquityService(db)
+        result = await service.calculate_cost_of_equity(
+            dataset_id=request.dataset_id,
+            param_set_id=request.param_set_id
+        )
         
         if result["status"] == "error":
             logger.warning(f"Phase 09 calculation failed: {result['message']}")
@@ -479,19 +479,19 @@ async def calculate_core_l2_metrics(
     **Response:**
     - status: 'success' or 'error'
     - results_count: number of records calculated (per metric)
-    - metrics_calculated: ['EP', 'PAT_EX', 'XO_COST_EX', 'FC']
+     - metrics_calculated: ['EP', 'PAT_EX', 'XO_COST_EX', 'FC']
     """
     
-     logger.info(f"Phase 10a: Calculating Core L2 metrics (dataset={request.dataset_id}, param_set={request.param_set_id})")
-     
-     try:
-         from ....services.economic_profit_service import EconomicProfitService
-         
-         service = EconomicProfitService(db)
-         result = await service.calculate_core_l2_metrics(
-             dataset_id=request.dataset_id,
-             param_set_id=request.param_set_id
-         )
+    logger.info(f"Phase 10a: Calculating Core L2 metrics (dataset={request.dataset_id}, param_set={request.param_set_id})")
+    
+    try:
+        from ....services.economic_profit_service import EconomicProfitService
+        
+        service = EconomicProfitService(db)
+        result = await service.calculate_core_l2_metrics(
+            dataset_id=request.dataset_id,
+            param_set_id=request.param_set_id
+        )
         
         if result["status"] == "error":
             logger.warning(f"Phase 10a calculation failed: {result['message']}")
@@ -518,5 +518,102 @@ async def calculate_core_l2_metrics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Core L2 metrics calculation failed: {str(e)}"
+        )
+
+
+# ============================================================================
+# Phase 10b: Future Value Economic Cash Flow (FV_ECF) Metrics Endpoint
+# ============================================================================
+
+@router.post("/l2-fv-ecf/calculate", status_code=status.HTTP_200_OK)
+async def calculate_fv_ecf_metrics(
+    dataset_id: UUID,
+    param_set_id: UUID,
+    incl_franking: str = "Yes",
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Calculate Phase 10b Future Value Economic Cash Flow (FV_ECF) Metrics
+    
+    This endpoint efficiently calculates FV_ECF metrics using:
+    - Phase 06 L1 Basic Metrics (DIVIDENDS, FRANKING, NON_DIV_ECF from fundamentals)
+    - Phase 10a Cost of Equity (CALC_KE lagged by 1 fiscal year)
+    
+    **Metrics Calculated:**
+    - FV_ECF_1Y: 1-year future value economic cash flow
+    - FV_ECF_3Y: 3-year future value economic cash flow
+    - FV_ECF_5Y: 5-year future value economic cash flow
+    - FV_ECF_10Y: 10-year future value economic cash flow
+    
+    These are L2 metrics used in DCF valuation models.
+    
+    **Prerequisites:**
+    - Phase 06 (L1 Basic Metrics) must be calculated first
+    - Phase 09 (Cost of Equity) must be calculated first
+    
+    **Algorithm:**
+    - Creates scale_by flag (1 if KE > 0, else 0) to handle negative KE
+    - For each interval, uses vectorized Pandas operations with shifting
+    - Sums across interval periods with optional franking adjustments
+    - Applies final shift to align fiscal year reporting
+    
+    **Parameters:**
+    - incl_franking: "Yes" (include franking credit adjustments) or "No" (exclude)
+    - frank_tax_rate: Franking tax rate (from parameter_sets)
+    - value_franking_cr: Franking credit value (from parameter_sets)
+    
+    **Example Request:**
+    ```
+    POST /api/v1/metrics/l2-fv-ecf/calculate?dataset_id=...&param_set_id=...&incl_franking=Yes
+    ```
+    
+    **Response:**
+    ```json
+    {
+        "status": "success",
+        "total_calculated": 9189,
+        "total_inserted": 36756,
+        "intervals_summary": {
+            "1Y": 9189,
+            "3Y": 9189,
+            "5Y": 9189,
+            "10Y": 9189
+        },
+        "duration_seconds": 12.34,
+        "message": "Calculated and stored 36756 FV_ECF metric values"
+    }
+    ```
+    """
+    
+    logger.info(f"Phase 10b: Calculating FV_ECF metrics (dataset={dataset_id}, param_set={param_set_id}, incl_franking={incl_franking})")
+    
+    try:
+        from ....services.fv_ecf_service import FVECFService
+        
+        service = FVECFService(db)
+        result = await service.calculate_fv_ecf_metrics(
+            dataset_id=dataset_id,
+            param_set_id=param_set_id,
+            incl_franking=incl_franking
+        )
+        
+        if result["status"] == "error":
+            logger.warning(f"Phase 10b calculation failed: {result['message']}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+        
+        logger.info(f"Phase 10b calculation successful: {result['total_inserted']} FV_ECF metric records inserted")
+        
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Phase 10b error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"FV_ECF metrics calculation failed: {str(e)}"
         )
 
