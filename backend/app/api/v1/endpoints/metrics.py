@@ -12,6 +12,8 @@ from ....models import (
     CalculateMetricsResponse,
     CalculateL2Request,
     CalculateL2Response,
+    CalculateEnhancedMetricsRequest,
+    CalculateEnhancedMetricsResponse,
     CalculateBetaRequest,
     CalculateBetaResponse,
     CalculateRiskFreeRateRequest,
