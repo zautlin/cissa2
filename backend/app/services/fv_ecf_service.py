@@ -499,7 +499,8 @@ class FVECFService:
                     )
                 
                 # Handle NaN values with np.where to prevent NumPy NaN arithmetic bug
-                temp_col = np.where(pd.isna(temp_col), np.nan, temp_col)
+                # Convert to Series for concatenation
+                temp_col = pd.Series(np.where(pd.isna(temp_col), np.nan, temp_col), index=group.index)
                 temp_columns.append(temp_col)
             
             # Sum all TEMP columns
