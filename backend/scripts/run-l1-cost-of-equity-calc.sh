@@ -165,9 +165,9 @@ EOF
 
 # Step 6: Calculate Cost of Equity
 echo -e "\n${YELLOW}[6/8] Calculating Cost of Equity (Phase 09 - KE = Rf + Beta × RP)...${NC}"
-echo -e "${CYAN}Calling: POST /api/v1/metrics/calculate-enhanced${NC}"
+echo -e "${CYAN}Calling: POST /api/v1/metrics/cost-of-equity/calculate${NC}"
 
-KE_RESPONSE=$(curl -s -X POST "$API_URL/api/v1/metrics/calculate-enhanced" \
+KE_RESPONSE=$(curl -s -X POST "$API_URL/api/v1/metrics/cost-of-equity/calculate" \
   -H "Content-Type: application/json" \
   -d "{
     \"dataset_id\": \"$DATASET_ID\",
