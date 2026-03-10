@@ -119,9 +119,9 @@ EOF
 
 # Step 5: Calculate Beta
 echo -e "\n${YELLOW}[5/6] Calculating Beta (Phase 07 - Rolling OLS Regression)...${NC}"
-echo -e "${CYAN}Calling: POST /api/v1/metrics/calculate-beta${NC}"
+echo -e "${CYAN}Calling: POST /api/v1/metrics/beta/calculate${NC}"
 
-BETA_RESPONSE=$(curl -s -X POST "$API_URL/api/v1/metrics/calculate-beta" \
+BETA_RESPONSE=$(curl -s -X POST "$API_URL/api/v1/metrics/beta/calculate" \
   -H "Content-Type: application/json" \
   -d "{
     \"dataset_id\": \"$DATASET_ID\",

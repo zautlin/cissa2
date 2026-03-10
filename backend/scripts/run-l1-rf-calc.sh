@@ -121,9 +121,9 @@ EOF
 
 # Step 5: Calculate Risk-Free Rate
 echo -e "\n${YELLOW}[5/6] Calculating Risk-Free Rate (Phase 08 - Rolling Geometric Mean)...${NC}"
-echo -e "${CYAN}Calling: POST /api/v1/metrics/calculate-rf${NC}"
+echo -e "${CYAN}Calling: POST /api/v1/metrics/rates/calculate${NC}"
 
-RF_RESPONSE=$(curl -s -X POST "$API_URL/api/v1/metrics/calculate-rf" \
+RF_RESPONSE=$(curl -s -X POST "$API_URL/api/v1/metrics/rates/calculate" \
   -H "Content-Type: application/json" \
   -d "{
     \"dataset_id\": \"$DATASET_ID\",
