@@ -2,7 +2,7 @@
 # Enhanced Metrics Service (Phase 3)
 # ============================================================================
 # Calculates: Beta, Risk-Free Rate, Cost of Equity, Economic Profit, TSR, Ratios
-# Stores results in cissa.metrics_outputs table with metric_level=L3
+# Stores results in cissa.metrics_outputs table with metric_level=L1
 # ============================================================================
 
 import pandas as pd
@@ -22,7 +22,7 @@ class EnhancedMetricsService:
     Service for Phase 3 metrics calculation.
     
     Calculates: Beta, Rf, KE, EP, TSR, Financial Ratios
-    All results stored in metrics_outputs with metadata: {"metric_level": "L3"}
+    All results stored in metrics_outputs with metadata: {"metric_level": "L1"}
     """
     
     def __init__(self, session: AsyncSession):
@@ -415,7 +415,7 @@ class EnhancedMetricsService:
                     "fiscal_year": int(row["fiscal_year"]),
                     "output_metric_name": str(row["metric_name"]),
                     "output_metric_value": value,
-                    "metadata": '{"metric_level": "L3", "calculation_source": "enhanced_metrics_service"}',
+                    "metadata": '{"metric_level": "L1", "calculation_source": "enhanced_metrics_service"}',
                 })
                 inserted_count += 1
             except Exception as e:
