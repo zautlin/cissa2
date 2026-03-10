@@ -182,3 +182,38 @@ class CalculateRiskFreeRateResponse(BaseModel):
     results: list[RiskFreeRateResultItem] = Field(default_factory=list)
     status: str = Field(default="success", description="Status: 'success', 'error', or 'cached'")
     message: Optional[str] = Field(default=None, description="Message or error detail")
+
+
+# ============================================================================
+# Metrics Query/Retrieval
+# ============================================================================
+
+class MetricRecord(BaseModel):
+    """
+    Single metric record returned from metrics query endpoint.
+    
+    Represents one row from metrics_outputs with unit information joined from metric_units.
+    Formatted as a flat array for easy filtering and charting in the UI.
+    """
+    model_config = ConfigDict(from_attributes=True)
+    
+    dataset_id: UUID
+    parameter_set_id: UUID
+    ticker: str
+    fiscal_year: int
+    metric_name: str
+    value: float
+    unit: Optional[str] = Field(None, description="Unit of measurement (e.g., 'USD', '%', 'dimensionless'). None if not defined in metric_units table.")
+
+
+class GetMetricsResponse(BaseModel):
+    """Response from metrics query endpoint (/api/v1/metrics/get_metrics/)."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    dataset_id: UUID
+    parameter_set_id: UUID
+    results_count: int
+    results: list[MetricRecord] = Field(default_factory=list)
+    filters_applied: dict = Field(default_factory=dict, description="Summary of filters applied to the query")
+    status: str = Field(default="success", description="Status: 'success' or 'error'")
+    message: Optional[str] = Field(default=None, description="Message or warning detail")

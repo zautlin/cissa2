@@ -20,6 +20,8 @@ from .schemas import (
     RiskFreeRateResultItem,
     MetricsHealthResponse,
     MetricsOutputResponse,
+    MetricRecord,
+    GetMetricsResponse,
 )
 
 __all__ = [
@@ -42,4 +44,6 @@ __all__ = [
     "RiskFreeRateResultItem",
     "MetricsHealthResponse",
     "MetricsOutputResponse",
+    "MetricRecord",
+    "GetMetricsResponse",
 ]

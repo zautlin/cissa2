@@ -1,9 +1,10 @@
 # ============================================================================
 # Metrics API Endpoints
 # ============================================================================
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
+from typing import Optional
 
 from ....core.database import get_db
 from ....models import (
@@ -15,12 +16,14 @@ from ....models import (
     CalculateBetaResponse,
     CalculateRiskFreeRateRequest,
     CalculateRiskFreeRateResponse,
-    MetricsHealthResponse
+    MetricsHealthResponse,
+    GetMetricsResponse,
 )
 from ....services.metrics_service import MetricsService
 from ....services.l2_metrics_service import L2MetricsService
 from ....services.beta_calculation_service import BetaCalculationService
 from ....services.risk_free_rate_service import RiskFreeRateCalculationService
+from ....repositories.metrics_query_repository import MetricsQueryRepository
 from ....core.config import get_logger
 
 logger = get_logger(__name__)
@@ -615,5 +618,140 @@ async def calculate_fv_ecf_metrics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"FV_ECF metrics calculation failed: {str(e)}"
+        )
+
+
+# ============================================================================
+# Metrics Query/Retrieval Endpoint
+# ============================================================================
+
+@router.get("/get_metrics/", response_model=GetMetricsResponse)
+async def get_metrics(
+    dataset_id: UUID = Query(..., description="UUID of the dataset to retrieve metrics for"),
+    parameter_set_id: UUID = Query(..., description="UUID of the parameter set"),
+    ticker: Optional[str] = Query(None, description="Optional: filter by ticker (case-insensitive)"),
+    metric_name: Optional[str] = Query(None, description="Optional: filter by metric name (case-insensitive)"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Query metrics from the database with flexible filtering.
+    
+    Returns a flat array of metric records with unit information, suitable for charting and filtering in the UI.
+    
+    **Parameters:**
+    - `dataset_id` (required): UUID of the dataset
+    - `parameter_set_id` (required): UUID of the parameter set
+    - `ticker` (optional): Filter by ticker symbol (case-insensitive, e.g., "AAPL")
+    - `metric_name` (optional): Filter by metric name (case-insensitive, e.g., "ECF", "Beta")
+    
+    **Example Requests:**
+    
+    Get all metrics for a dataset and parameter set:
+    ```
+    GET /api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001
+    ```
+    
+    Get all metrics for a specific ticker:
+    ```
+    GET /api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&ticker=AAPL
+    ```
+    
+    Get a specific metric for all tickers:
+    ```
+    GET /api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&metric_name=ECF
+    ```
+    
+    Get a specific metric for a specific ticker:
+    ```
+    GET /api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&ticker=AAPL&metric_name=ECF
+    ```
+    
+    **Response:**
+    Returns a flat array of metric records, ordered by ticker, fiscal_year, and metric_name:
+    ```json
+    {
+        "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+        "parameter_set_id": "660e8400-e29b-41d4-a716-446655440001",
+        "results_count": 125,
+        "results": [
+            {
+                "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+                "parameter_set_id": "660e8400-e29b-41d4-a716-446655440001",
+                "ticker": "AAPL",
+                "fiscal_year": 2020,
+                "metric_name": "Beta",
+                "value": 1.25,
+                "unit": "dimensionless"
+            },
+            {
+                "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+                "parameter_set_id": "660e8400-e29b-41d4-a716-446655440001",
+                "ticker": "AAPL",
+                "fiscal_year": 2020,
+                "metric_name": "ECF",
+                "value": 1250000000.0,
+                "unit": "USD"
+            }
+        ],
+        "filters_applied": {
+            "ticker": "AAPL"
+        },
+        "status": "success",
+        "message": null
+    }
+    ```
+    
+    **Note:** If no metrics are found for the given criteria, an empty array is returned with a warning message.
+    Metric units come from the `metric_units` table and may be null for metrics without defined units.
+    """
+    try:
+        # Initialize repository
+        repo = MetricsQueryRepository(db)
+        
+        # Query metrics
+        records = await repo.get_metrics(
+            dataset_id=dataset_id,
+            parameter_set_id=parameter_set_id,
+            ticker=ticker,
+            metric_name=metric_name,
+        )
+        
+        # Log results
+        logger.info(
+            f"Retrieved {len(records)} metrics for dataset {dataset_id}, "
+            f"param_set {parameter_set_id}, ticker={ticker}, metric_name={metric_name}"
+        )
+        
+        # Build filters_applied summary
+        filters_applied = {}
+        if ticker:
+            filters_applied["ticker"] = ticker
+        if metric_name:
+            filters_applied["metric_name"] = metric_name
+        
+        # Warn if no results found
+        message = None
+        if len(records) == 0:
+            message = f"No metrics found for dataset {dataset_id} and parameter_set {parameter_set_id}"
+            if ticker or metric_name:
+                message += f" with filters: ticker={ticker}, metric_name={metric_name}"
+            logger.warning(message)
+        
+        # Build response
+        return GetMetricsResponse(
+            dataset_id=dataset_id,
+            parameter_set_id=parameter_set_id,
+            results_count=len(records),
+            results=records,
+            filters_applied=filters_applied,
+            status="success",
+            message=message,
+        )
+    
+    except Exception as e:
+        logger.error(f"Error retrieving metrics: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve metrics: {str(e)}"
         )
 
