@@ -495,12 +495,14 @@ BEGIN
       f_te.ticker,
       f_te.fiscal_year,
       f_te.dataset_id,
+      c.begin_year,
       CASE
         WHEN c.begin_year IS NULL THEN NULL
-        WHEN f_te.fiscal_year <= c.begin_year THEN 
-          (f_te.numeric_value - COALESCE(f_mi.numeric_value, 0))
-        ELSE
-          (COALESCE(f_pat.numeric_value, 0) - COALESCE(mo_ecf.output_metric_value, 0))
+        WHEN f_te.fiscal_year = c.begin_year THEN 
+          (f_te.numeric_value - f_mi.numeric_value)
+        WHEN f_te.fiscal_year > c.begin_year THEN
+          (f_pat.numeric_value - mo_ecf.output_metric_value)
+        ELSE NULL
       END AS ee_comp
     FROM cissa.fundamentals f_te
     INNER JOIN cissa.companies c ON f_te.ticker = c.ticker
@@ -514,11 +516,11 @@ BEGIN
       AND f_te.fiscal_year = f_pat.fiscal_year
       AND f_te.dataset_id = f_pat.dataset_id
       AND f_pat.metric_name = 'PROFIT_AFTER_TAX'
-     LEFT JOIN cissa.metrics_outputs mo_ecf
-       ON f_te.ticker = mo_ecf.ticker
-       AND f_te.fiscal_year = mo_ecf.fiscal_year
-       AND f_te.dataset_id = mo_ecf.dataset_id
-       AND mo_ecf.output_metric_name = 'ECF'
+    LEFT JOIN cissa.metrics_outputs mo_ecf
+      ON f_te.ticker = mo_ecf.ticker
+      AND f_te.fiscal_year = mo_ecf.fiscal_year
+      AND f_te.dataset_id = mo_ecf.dataset_id
+      AND mo_ecf.output_metric_name = 'ECF'
     WHERE
       f_te.dataset_id = p_dataset_id
       AND f_te.metric_name = 'TOTAL_EQUITY'
@@ -529,12 +531,19 @@ BEGIN
     SUM(eec.ee_comp) OVER (PARTITION BY eec.ticker ORDER BY eec.fiscal_year) AS ee_cumsum
   FROM ee_component eec
   WHERE eec.ee_comp IS NOT NULL
+    AND eec.fiscal_year >= eec.begin_year
   ORDER BY eec.ticker, eec.fiscal_year;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 COMMENT ON FUNCTION cissa.fn_calc_economic_equity(UUID) IS
-'Calculate Economic Equity (EE) cumulative. REQ-A4.';
+'Calculate Economic Equity (EE) cumulative sum with inception year logic.
+For inception year (fiscal_year = begin_year): EE = TOTAL_EQUITY - MINORITY_INTEREST
+For post-inception years (fiscal_year > begin_year): EE = PAT - ECF (then cumsum)
+For pre-inception years: Returns NULL (invalid data).
+NULL values in any component return NULL for that year (no COALESCE).
+Cumulative sum is calculated per ticker in fiscal_year order.
+REQ-A4.';
 
 -- ============================================================================
 -- GROUP 5: FY_TSR (Total Shareholder Return) - Parameter-Sensitive Temporal Metric
