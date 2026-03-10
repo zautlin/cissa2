@@ -44,14 +44,15 @@ class FVECFService:
     These are L2 metrics used in DCF valuation models.
     
     Key optimizations:
-    - Fetches fundamentals (DIVIDENDS, FRANKING, NON_DIV_ECF) from fundamentals table
+    - Fetches DIVIDENDS, FRANKING from fundamentals table
+    - Fetches NON_DIV_ECF from metrics_outputs table
     - Fetches lagged KE (fiscal_year-1) via SQL subquery from metrics_outputs
     - Vectorized Pandas operations (no row-by-row iteration)
     - Batch database inserts (1000 records per batch)
     - 4 intervals × ~9,189 records = ~36,756 total inserts
     
     Prerequisites:
-    - Phase 06 L1 Basic Metrics (DIVIDENDS, FRANKING, NON_DIV_ECF in fundamentals)
+    - Phase 06 L1 Basic Metrics (DIVIDENDS, FRANKING in fundamentals; NON_DIV_ECF in metrics_outputs)
     - Phase 10a Core L2 Metrics (CALC_KE in metrics_outputs)
     
     Algorithm (from legacy code):
@@ -304,22 +305,23 @@ class FVECFService:
     
     async def _fetch_fundamentals_data(self, dataset_id: UUID) -> pd.DataFrame:
         """
-        Fetch DIVIDENDS, FRANKING, NON_DIV_ECF from fundamentals table.
+        Fetch DIVIDENDS, FRANKING from fundamentals table,
+        and NON_DIV_ECF from metrics_outputs table.
         
         Returns DataFrame with columns:
         - ticker, fiscal_year
         - non_div_ecf, dividend, franking
         """
+        # Fetch DIVIDENDS and FRANKING from fundamentals
         query = text("""
             SELECT 
                 ticker,
                 fiscal_year,
-                MAX(CASE WHEN metric_name = 'NON_DIV_ECF' THEN numeric_value END) AS non_div_ecf,
                 MAX(CASE WHEN metric_name = 'DIVIDENDS' THEN numeric_value END) AS dividend,
                 MAX(CASE WHEN metric_name = 'FRANKING' THEN numeric_value END) AS franking
             FROM cissa.fundamentals
             WHERE dataset_id = :dataset_id
-              AND metric_name IN ('NON_DIV_ECF', 'DIVIDENDS', 'FRANKING')
+              AND metric_name IN ('DIVIDENDS', 'FRANKING')
               AND period_type = 'FISCAL'
             GROUP BY ticker, fiscal_year
             ORDER BY ticker, fiscal_year
@@ -331,7 +333,28 @@ class FVECFService:
         if not rows:
             return pd.DataFrame()
         
-        df = pd.DataFrame(rows, columns=["ticker", "fiscal_year", "non_div_ecf", "dividend", "franking"])
+        df = pd.DataFrame(rows, columns=["ticker", "fiscal_year", "dividend", "franking"])
+        
+        # Fetch NON_DIV_ECF from metrics_outputs
+        non_div_ecf_query = text("""
+            SELECT 
+                ticker,
+                fiscal_year,
+                output_metric_value AS non_div_ecf
+            FROM cissa.metrics_outputs
+            WHERE dataset_id = :dataset_id
+              AND output_metric_name = 'NON_DIV_ECF'
+            ORDER BY ticker, fiscal_year
+        """)
+        
+        non_div_result = await self.session.execute(non_div_ecf_query, {"dataset_id": str(dataset_id)})
+        non_div_rows = non_div_result.fetchall()
+        
+        if non_div_rows:
+            non_div_df = pd.DataFrame(non_div_rows, columns=["ticker", "fiscal_year", "non_div_ecf"])
+            df = df.merge(non_div_df, how='left', on=['ticker', 'fiscal_year'])
+        else:
+            df['non_div_ecf'] = None
         
         # Convert Decimal to float
         for col in ["non_div_ecf", "dividend", "franking"]:
