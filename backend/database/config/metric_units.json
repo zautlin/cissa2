@@ -196,5 +196,11 @@
     "database_name": "BETA",
     "unit": "%",
     "is_output_metric": true
+  },
+  {
+    "metric_name": "Calc KE",
+    "database_name": "CALC_KE",
+    "unit": "%",
+    "is_output_metric": true
   }
 ]

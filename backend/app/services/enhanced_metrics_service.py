@@ -301,15 +301,34 @@ class EnhancedMetricsService:
         return pd.DataFrame(results)
     
     def _calculate_cost_of_equity(self, df: pd.DataFrame, params: dict) -> pd.DataFrame:
-        """Calculate KE = Rf + Beta * Risk Premium."""
+        """Calculate KE = Rf + Beta * Risk Premium (supports FIXED and Floating approaches).
+        
+        FIXED approach: Rf = benchmark - risk_premium (deterministic)
+        FLOATING approach: Rf = Rf_1Y (1-year rolling geometric mean from Phase 08)
+        
+        Formula (both approaches): KE = Rf + Beta * RiskPremium
+        """
         results = []
+        
+        # Determine which approach and risk premium to use
+        approach = params.get("cost_of_equity_approach", "Floating").upper()
+        risk_premium = params.get("equity_risk_premium", 0.05)
         
         for _, row in df.iterrows():
             beta = row.get("Beta")
-            rf = row.get("Calc Rf")
             
+            # Determine Rf based on approach
+            if approach == "FIXED":
+                # For FIXED: Rf = benchmark - risk_premium
+                benchmark = params.get("fixed_benchmark_return_wealth_preservation", 0.075)
+                rf = benchmark - risk_premium
+            else:  # FLOATING (default)
+                # For FLOATING: Use Rf_1Y (1-year rolling geometric mean from Phase 08)
+                rf = row.get("Rf_1Y")
+            
+            # Calculate KE only if both inputs are valid
             if pd.notna(beta) and pd.notna(rf):
-                ke = rf + beta * params.get("equity_risk_premium", 0.05)
+                ke = rf + beta * risk_premium
                 
                 results.append({
                     "ticker": row["ticker"],
