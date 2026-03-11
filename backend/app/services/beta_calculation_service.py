@@ -364,7 +364,7 @@ class BetaCalculationService:
             df['rel_std_err'] = np.abs(df['std_err']) / (np.abs(df['slope_transformed']) + 1e-10)
             
             df['adjusted_slope'] = df.apply(
-                lambda x: np.round((x['slope_transformed'] / beta_rounding), 4) * beta_rounding
+                lambda x: np.round((x['slope_transformed'] / beta_rounding), 0) * beta_rounding
                 if error_tolerance >= x['rel_std_err']
                 else np.nan,
                 axis=1
@@ -443,14 +443,14 @@ class BetaCalculationService:
             
             if approach_to_ke == 'FIXED':
                 spot_betas['beta'] = spot_betas.apply(
-                    lambda x: np.round(x['ticker_avg'] / beta_rounding, 4) * beta_rounding
+                    lambda x: np.round(x['ticker_avg'] / beta_rounding, 0) * beta_rounding
                     if pd.notna(x['ticker_avg'])
                     else np.nan,
                     axis=1
                 )
             else:
                 spot_betas['beta'] = spot_betas.apply(
-                    lambda x: np.round(x['spot_slope'] / beta_rounding, 4) * beta_rounding
+                    lambda x: np.round(x['spot_slope'] / beta_rounding, 0) * beta_rounding
                     if pd.notna(x['spot_slope'])
                     else np.nan,
                     axis=1
