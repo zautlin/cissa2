@@ -340,6 +340,7 @@ DROP FUNCTION IF EXISTS cissa.fn_calc_lag_mc(UUID) CASCADE;
 DROP FUNCTION IF EXISTS cissa.fn_calc_ecf(UUID) CASCADE;
 DROP FUNCTION IF EXISTS cissa.fn_calc_non_div_ecf(UUID) CASCADE;
 DROP FUNCTION IF EXISTS cissa.fn_calc_economic_equity(UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_economic_equity(UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS cissa.fn_calc_fy_tsr(UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS cissa.fn_calc_fy_tsr_prel(UUID, UUID) CASCADE;
 
@@ -482,7 +483,7 @@ COMMENT ON FUNCTION cissa.fn_calc_non_div_ecf(UUID) IS
 -- GROUP 4: EE (Economic Equity) - Temporal Cumulative Metric
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION cissa.fn_calc_economic_equity(p_dataset_id UUID)
+CREATE OR REPLACE FUNCTION cissa.fn_calc_economic_equity(p_dataset_id UUID, p_param_set_id UUID)
 RETURNS TABLE (
   ticker TEXT,
   fiscal_year INTEGER,
@@ -520,6 +521,7 @@ BEGIN
       ON f_te.ticker = mo_ecf.ticker
       AND f_te.fiscal_year = mo_ecf.fiscal_year
       AND f_te.dataset_id = mo_ecf.dataset_id
+      AND mo_ecf.param_set_id = p_param_set_id
       AND mo_ecf.output_metric_name = 'Calc ECF'
     WHERE
       f_te.dataset_id = p_dataset_id
@@ -536,13 +538,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
-COMMENT ON FUNCTION cissa.fn_calc_economic_equity(UUID) IS
+COMMENT ON FUNCTION cissa.fn_calc_economic_equity(UUID, UUID) IS
 'Calculate Economic Equity (EE) cumulative sum with inception year logic.
 For inception year (fiscal_year = begin_year): EE = TOTAL_EQUITY - MINORITY_INTEREST
 For post-inception years (fiscal_year > begin_year): EE = PAT - ECF (then cumsum)
 For pre-inception years: Returns NULL (invalid data).
 NULL values in any component return NULL for that year (no COALESCE).
 Cumulative sum is calculated per ticker in fiscal_year order.
+Parameter-sensitive: uses param_set_id to match ECF values from metrics_outputs.
 REQ-A4.';
 
 -- ============================================================================

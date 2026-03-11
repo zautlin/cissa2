@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 # Format: "Display Name" → (function_name, output_column_name, requires_param_set_id)
 # L1 Metrics (14 total):
 #   - 7 Simple metrics: no parameter_set_id needed
-#   - 5 Temporal metrics: Calc ECF, Non Div ECF, Calc EE (no param), Calc FY TSR, Calc FY TSR PREL (need param)
+#   - 5 Temporal metrics: Calc ECF, Non Div ECF (base), Calc EE, Calc FY TSR, Calc FY TSR PREL (3 need param)
 #   - 2 Derived metrics (used by L2): Book Equity, ROA
 METRIC_FUNCTIONS = {
     # L1 Simple Metrics (7)
@@ -32,7 +32,7 @@ METRIC_FUNCTIONS = {
     # which query metrics_outputs by output_metric_name
     "Calc ECF": ("fn_calc_ecf", "ecf", False),
     "Non Div ECF": ("fn_calc_non_div_ecf", "non_div_ecf", False),
-    "Calc EE": ("fn_calc_economic_equity", "ee", False),
+    "Calc EE": ("fn_calc_economic_equity", "ee", True),       # Requires param_set_id for ECF lookup
     "Calc FY TSR": ("fn_calc_fy_tsr", "fy_tsr", True),      # Requires param_set_id
     "Calc FY TSR PREL": ("fn_calc_fy_tsr_prel", "fy_tsr_prel", True),  # Requires param_set_id
     
