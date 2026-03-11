@@ -298,53 +298,67 @@ class BetaCalculationService:
             return {}
     
     def _calculate_rolling_ols(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate rolling OLS slopes for each ticker."""
+        """Calculate rolling OLS slopes for each ticker using scipy.stats.linregress.
+        
+        Uses 60-month rolling window for each month to match Excel SLOPE() function.
+        Stores all 12 monthly slopes per fiscal year for annualization step.
+        """
         try:
-            from statsmodels.regression.rolling import RollingOLS
+            from scipy import stats
             
             results = []
             
             for ticker, ticker_group in df.groupby('ticker'):
                 ticker_group = ticker_group.sort_values(['fiscal_year', 'fiscal_month']).reset_index(drop=True)
                 
-                # Convert TSR % to growth factors
+                # Convert TSR % to growth factors (PREL format)
                 x = ticker_group['index_tsr'] / 100.0 + 1.0
                 y = ticker_group['company_tsr'] / 100.0 + 1.0
                 
-                # Dynamic window
-                window = min(60, len(x))
-                
-                if window < 2:
+                if len(x) < 2:
                     self.logger.warning(f"Ticker {ticker} has <2 months of data, skipping")
                     continue
                 
-                try:
-                    model = RollingOLS(y, x, window=window)
-                    result = model.fit()
+                slopes = []
+                stderrs = []
+                fiscal_years = []
+                fiscal_months = []
+                
+                # Calculate slope for each month using 60-month rolling window
+                for i in range(len(x)):
+                    # Get up to 60-month window ending at month i
+                    window_size = min(60, i + 1)
+                    start_idx = i - window_size + 1
                     
-                    # Extract results
-                    slopes = result.params.values
-                    stderrs = result.bse.values
+                    window_x = x.iloc[start_idx:i+1].values
+                    window_y = y.iloc[start_idx:i+1].values
                     
-                    # Handle dimension
-                    if slopes.ndim > 1:
-                        slopes = slopes[:, 0]
-                    if stderrs.ndim > 1:
-                        stderrs = stderrs[:, 0]
+                    if len(window_x) < 2:
+                        slopes.append(np.nan)
+                        stderrs.append(np.nan)
+                    else:
+                        try:
+                            # Use scipy.stats.linregress to match Excel SLOPE() function
+                            result = stats.linregress(window_x, window_y)
+                            slopes.append(result.slope)
+                            stderrs.append(result.stderr)
+                        except Exception as e:
+                            self.logger.debug(f"linregress failed for {ticker} at index {i}: {e}")
+                            slopes.append(np.nan)
+                            stderrs.append(np.nan)
                     
-                    rolling_result = pd.DataFrame({
-                        'ticker': ticker,
-                        'fiscal_year': ticker_group['fiscal_year'].values[-len(slopes):],
-                        'fiscal_month': ticker_group['fiscal_month'].values[-len(slopes):],
-                        'slope': slopes,
-                        'std_err': stderrs
-                    })
-                    
-                    results.append(rolling_result)
-                    
-                except Exception as e:
-                    self.logger.warning(f"OLS regression failed for {ticker}: {e}")
-                    continue
+                    fiscal_years.append(ticker_group['fiscal_year'].iloc[i])
+                    fiscal_months.append(ticker_group['fiscal_month'].iloc[i])
+                
+                rolling_result = pd.DataFrame({
+                    'ticker': ticker,
+                    'fiscal_year': fiscal_years,
+                    'fiscal_month': fiscal_months,
+                    'slope': slopes,
+                    'std_err': stderrs
+                })
+                
+                results.append(rolling_result)
             
             if results:
                 return pd.concat(results, ignore_index=True)
@@ -377,8 +391,21 @@ class BetaCalculationService:
             raise
     
     def _annualize_slopes(self, beta_df: pd.DataFrame, sector_map: dict) -> pd.DataFrame:
-        """Annualize slopes by taking last month of each fiscal year."""
+        """Annualize slopes by taking last month of each fiscal year.
+        
+        Also collects all 12 monthly raw slopes for metadata storage.
+        """
         try:
+            # Collect all 12 monthly raw slopes per fiscal year before annualization
+            monthly_slopes_by_fy = (
+                beta_df
+                .groupby(['ticker', 'fiscal_year'])
+                .apply(lambda group: group['slope'].tolist(), include_groups=False)
+                .reset_index()
+                .rename(columns={0: 'monthly_raw_slopes'})
+            )
+            
+            # Select last month per fiscal year for annualization
             annual_beta = (
                 beta_df
                 .sort_values(['ticker', 'fiscal_year', 'fiscal_month'])
@@ -388,7 +415,14 @@ class BetaCalculationService:
             # Add sector information
             annual_beta['sector'] = annual_beta['ticker'].map(sector_map)
             
-            return annual_beta[['ticker', 'fiscal_year', 'sector', 'adjusted_slope', 'slope', 'std_err', 'rel_std_err']]
+            # Merge in monthly slopes for metadata storage
+            annual_beta = annual_beta.merge(
+                monthly_slopes_by_fy,
+                on=['ticker', 'fiscal_year'],
+                how='left'
+            )
+            
+            return annual_beta[['ticker', 'fiscal_year', 'sector', 'adjusted_slope', 'slope', 'std_err', 'rel_std_err', 'monthly_raw_slopes']]
             
         except Exception as e:
             self.logger.error(f"Failed to annualize slopes: {e}")
@@ -456,7 +490,11 @@ class BetaCalculationService:
                     axis=1
                 )
             
-            return spot_betas[['ticker', 'fiscal_year', 'beta']]
+            # Preserve monthly_raw_slopes if it exists, otherwise create empty list
+            if 'monthly_raw_slopes' not in spot_betas.columns:
+                spot_betas['monthly_raw_slopes'] = None
+            
+            return spot_betas[['ticker', 'fiscal_year', 'beta', 'monthly_raw_slopes']]
             
         except Exception as e:
             self.logger.error(f"Failed to apply approach_to_ke: {e}")
@@ -468,6 +506,15 @@ class BetaCalculationService:
             records = []
             
             for _, row in final_betas.iterrows():
+                metadata = {"metric_level": "L1"}
+                
+                # Add monthly raw slopes if available
+                if pd.notna(row.get('monthly_raw_slopes')):
+                    monthly_slopes = row['monthly_raw_slopes']
+                    # Convert NaN values to None for JSON serialization
+                    monthly_slopes = [float(s) if pd.notna(s) else None for s in monthly_slopes]
+                    metadata['monthly_raw_slopes'] = monthly_slopes
+                
                 record = {
                     "dataset_id": dataset_id,
                     "param_set_id": param_set_id,
@@ -475,7 +522,7 @@ class BetaCalculationService:
                     "fiscal_year": int(row['fiscal_year']),
                     "output_metric_name": "Beta",
                     "output_metric_value": float(row['beta']) if pd.notna(row['beta']) else None,
-                    "metadata": {"metric_level": "L1"}
+                    "metadata": metadata
                 }
                 records.append(record)
             
