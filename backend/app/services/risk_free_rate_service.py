@@ -132,17 +132,18 @@ class RiskFreeRateCalculationService:
             rf_yearly_df = self._extract_december_values(rf_monthly_final_df)
             self.logger.info(f"Extracted {len(rf_yearly_df)} yearly values (December only)")
             
-            # 8. Build metadata with all 12 monthly values
-            self.logger.info("Building metadata with all 12 monthly values...")
-            rf_yearly_with_metadata = self._build_yearly_with_metadata(
+            # 8. Build yearly data (metadata will be built per-metric during formatting)
+            self.logger.info("Building yearly data...")
+            rf_yearly_df, rf_monthly_final_df = self._build_yearly_with_metadata(
                 rf_yearly_df,
                 rf_monthly_final_df
             )
             
-            # 9. Format and store results
+            # 9. Format and store results (with metric-specific metadata)
             self.logger.info("Storing results in metrics_outputs...")
             results_to_store = self._format_results_for_storage(
-                rf_yearly_with_metadata,
+                rf_yearly_df,
+                rf_monthly_final_df,
                 bond_ticker,
                 dataset_id,
                 param_set_id
@@ -426,19 +427,15 @@ class RiskFreeRateCalculationService:
         self,
         rf_yearly_df: pd.DataFrame,
         rf_monthly_df: pd.DataFrame
-    ) -> pd.DataFrame:
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Build yearly dataframe with metadata containing all 12 monthly values.
+        Prepare yearly dataframe (without metadata) and return with monthly data.
         
-        Metadata structure:
-        {
-            "metric_level": "L1",
-            "monthly_values": [
-                {"month": 1, "rf_1y_raw": 0.0589, "rf_1y": 0.060, "rf": 0.100},
-                ...
-                {"month": 12, "rf_1y_raw": 0.0612, "rf_1y": 0.061, "rf": 0.100}
-            ]
-        }
+        Metadata will be built per-metric during formatting to avoid redundancy.
+        
+        Returns:
+            Tuple of (yearly_df, monthly_df) where yearly_df contains only
+            fiscal_year and the three December Rf values.
         """
         try:
             result_records = []
@@ -446,46 +443,27 @@ class RiskFreeRateCalculationService:
             for _, yearly_row in rf_yearly_df.iterrows():
                 fiscal_year = int(yearly_row['fiscal_year'])
                 
-                # Get all 12 months for this year
-                yearly_monthly = rf_monthly_df[rf_monthly_df['fiscal_year'] == fiscal_year]
-                
-                # Build monthly values array
-                monthly_values = []
-                for _, monthly_row in yearly_monthly.iterrows():
-                    monthly_values.append({
-                        "month": int(monthly_row['fiscal_month']),
-                        "rf_1y_raw": round(float(monthly_row['rf_1y_raw']), 4),
-                        "rf_1y": round(float(monthly_row['rf_1y']), 4),
-                        "rf": round(float(monthly_row['rf']), 4)
-                    })
-                
-                # Build metadata
-                metadata = {
-                    "metric_level": "L1",
-                    "monthly_values": monthly_values
-                }
-                
-                # Create record with metadata
+                # Create record with just December values (no metadata)
                 result_records.append({
                     "fiscal_year": fiscal_year,
                     "rf_1y_raw": round(float(yearly_row['rf_1y_raw']), 4),
                     "rf_1y": round(float(yearly_row['rf_1y']), 4),
-                    "rf": round(float(yearly_row['rf']), 4),
-                    "metadata": metadata
+                    "rf": round(float(yearly_row['rf']), 4)
                 })
             
             result_df = pd.DataFrame(result_records)
-            self.logger.info(f"Built metadata for {len(result_df)} yearly records")
+            self.logger.info(f"Prepared yearly records for {len(result_df)} years")
             
-            return result_df
+            return result_df, rf_monthly_df
             
         except Exception as e:
-            self.logger.error(f"Failed to build yearly metadata: {e}")
+            self.logger.error(f"Failed to build yearly data: {e}")
             raise
     
     def _format_results_for_storage(
         self,
         rf_df: pd.DataFrame,
+        rf_monthly_df: pd.DataFrame,
         bond_ticker: str,
         dataset_id: UUID,
         param_set_id: UUID
@@ -494,16 +472,40 @@ class RiskFreeRateCalculationService:
         Format results for storage in metrics_outputs table.
         
         Creates 3 rows per fiscal year: Rf_1Y_Raw, Rf_1Y, Rf
-        Each row includes the metadata with all 12 monthly values.
+        Each row includes METRIC-SPECIFIC metadata with only the 12 monthly values for that metric.
+        
+        Metadata structure per metric:
+        {
+            "metric_level": "L1",
+            "monthly_values": [
+                {"month": 1, "value": 0.0589},
+                ...
+                {"month": 12, "value": 0.0612}
+            ]
+        }
         """
         try:
             records = []
             
             for _, row in rf_df.iterrows():
                 fiscal_year = int(row['fiscal_year'])
-                metadata = row['metadata']
                 
-                # Rf_1Y_Raw
+                # Get all 12 months for this year
+                yearly_monthly = rf_monthly_df[rf_monthly_df['fiscal_year'] == fiscal_year]
+                
+                # === Rf_1Y_Raw record ===
+                rf_1y_raw_monthly_values = []
+                for _, monthly_row in yearly_monthly.iterrows():
+                    rf_1y_raw_monthly_values.append({
+                        "month": int(monthly_row['fiscal_month']),
+                        "value": round(float(monthly_row['rf_1y_raw']), 4)
+                    })
+                
+                rf_1y_raw_metadata = {
+                    "metric_level": "L1",
+                    "monthly_values": rf_1y_raw_monthly_values
+                }
+                
                 records.append({
                     "dataset_id": dataset_id,
                     "param_set_id": param_set_id,
@@ -511,10 +513,22 @@ class RiskFreeRateCalculationService:
                     "fiscal_year": fiscal_year,
                     "output_metric_name": "Rf_1Y_Raw",
                     "output_metric_value": float(row['rf_1y_raw']) if pd.notna(row['rf_1y_raw']) else None,
-                    "metadata": metadata
+                    "metadata": rf_1y_raw_metadata
                 })
                 
-                # Rf_1Y
+                # === Rf_1Y record ===
+                rf_1y_monthly_values = []
+                for _, monthly_row in yearly_monthly.iterrows():
+                    rf_1y_monthly_values.append({
+                        "month": int(monthly_row['fiscal_month']),
+                        "value": round(float(monthly_row['rf_1y']), 4)
+                    })
+                
+                rf_1y_metadata = {
+                    "metric_level": "L1",
+                    "monthly_values": rf_1y_monthly_values
+                }
+                
                 records.append({
                     "dataset_id": dataset_id,
                     "param_set_id": param_set_id,
@@ -522,10 +536,22 @@ class RiskFreeRateCalculationService:
                     "fiscal_year": fiscal_year,
                     "output_metric_name": "Rf_1Y",
                     "output_metric_value": float(row['rf_1y']) if pd.notna(row['rf_1y']) else None,
-                    "metadata": metadata
+                    "metadata": rf_1y_metadata
                 })
                 
-                # Rf
+                # === Rf record ===
+                rf_monthly_values = []
+                for _, monthly_row in yearly_monthly.iterrows():
+                    rf_monthly_values.append({
+                        "month": int(monthly_row['fiscal_month']),
+                        "value": round(float(monthly_row['rf']), 4)
+                    })
+                
+                rf_metadata = {
+                    "metric_level": "L1",
+                    "monthly_values": rf_monthly_values
+                }
+                
                 records.append({
                     "dataset_id": dataset_id,
                     "param_set_id": param_set_id,
@@ -533,10 +559,10 @@ class RiskFreeRateCalculationService:
                     "fiscal_year": fiscal_year,
                     "output_metric_name": "Rf",
                     "output_metric_value": float(row['rf']) if pd.notna(row['rf']) else None,
-                    "metadata": metadata
+                    "metadata": rf_metadata
                 })
             
-            self.logger.info(f"Formatted {len(records)} records for storage ({len(rf_df)} years × 3 metrics)")
+            self.logger.info(f"Formatted {len(records)} records for storage ({len(rf_df)} years × 3 metrics, metric-specific metadata)")
             
             return records
             
