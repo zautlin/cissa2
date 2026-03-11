@@ -347,8 +347,8 @@ class RiskFreeRateCalculationService:
             
             self.logger.info(f"Rolling geometric mean calculated: {df['rf_1y_raw'].min():.6f} to {df['rf_1y_raw'].max():.6f}")
             
-            # Keep only necessary columns
-            result_df = df[["fiscal_year", "fiscal_month", "rf_1y_raw"]].copy()
+            # Keep necessary columns including rf_prel for later use
+            result_df = df[["fiscal_year", "fiscal_month", "rf_prel", "rf_1y_raw"]].copy()
             
             return result_df
             
@@ -367,33 +367,25 @@ class RiskFreeRateCalculationService:
         """
         Apply rounding and approach logic to Rf_1Y_Raw values.
         
-        Rounding formula: Rf_1Y = ROUND(Rf_1Y_Raw / beta_rounding, 0) * beta_rounding
+        Calculates three metrics:
+        - Rf: December Rf_PREL value (growth rate format, e.g., 1.0517)
+        - Rf_1Y: Rounded 12-month geometric mean (decimal percentage, e.g., 0.060)
+        - Rf_1Y_Raw: Unrounded 12-month geometric mean (decimal percentage, e.g., 0.0586)
         
-        Approach:
-        - FIXED: Rf = benchmark - risk_premium
-        - FLOATING: Rf = Rf_1Y (market-based)
+        Rounding formula for Rf_1Y: ROUND(Rf_1Y_Raw / beta_rounding, 0) * beta_rounding
         """
         try:
             df = rf_monthly_df.copy()
             
-            # Apply rounding
+            # Apply rounding to Rf_1Y_Raw
             df["rf_1y"] = np.round(df["rf_1y_raw"] / beta_rounding, 0) * beta_rounding
             
-            # Apply approach
-            if cost_of_equity_approach == "FIXED":
-                df["rf"] = benchmark - risk_premium
-                self.logger.info(f"Applied FIXED approach: Rf = {benchmark} - {risk_premium} = {df['rf'].iloc[0]}")
-            else:  # FLOATING (default)
-                df["rf"] = df["rf_1y"]
-                self.logger.info(f"Applied FLOATING approach: Rf = Rf_1Y (market-based)")
+            # Rf is the December Rf_PREL (growth rate format)
+            # For non-December months, we'll fill this in during the yearly extraction
+            df["rf"] = df["rf_prel"]
             
-            # Ensure reasonable bounds (0-1 or 0-100% range)
-            # If values are in percentage form (0-100), cap at 100%; if decimal (0-1), cap at 1
-            max_val = df[["rf_1y", "rf"]].max().max()
-            if max_val > 1:
-                # Values are in percentage form, cap at 100%
-                df["rf"] = df["rf"].clip(upper=1.0)
-                df["rf_1y"] = df["rf_1y"].clip(upper=1.0)
+            self.logger.info(f"Applied rounding (beta_rounding={beta_rounding})")
+            self.logger.info(f"Rf_PREL values calculated (growth rate format)")
             
             return df
             
@@ -405,7 +397,10 @@ class RiskFreeRateCalculationService:
         """
         Extract December (month 12) values for each fiscal year.
         
-        Returns one row per year containing the December Rf values.
+        Returns one row per year containing:
+        - rf_1y_raw: unrounded 12-month geometric mean (decimal %)
+        - rf_1y: rounded 12-month geometric mean (decimal %)
+        - rf: December Rf_PREL (growth rate format, e.g., 1.0517)
         """
         try:
             # Filter for December only (fiscal_month = 12)
@@ -415,8 +410,8 @@ class RiskFreeRateCalculationService:
                 self.logger.warning("No December data found in monthly Rf data")
                 return pd.DataFrame()
             
-            # Group by fiscal_year and keep December values
-            result_df = december_df[["fiscal_year", "rf_1y_raw", "rf_1y", "rf"]].copy()
+            # Group by fiscal_year and keep December values (including rf_prel)
+            result_df = december_df[["fiscal_year", "rf_prel", "rf_1y_raw", "rf_1y", "rf"]].copy()
             result_df = result_df.sort_values("fiscal_year").reset_index(drop=True)
             
             self.logger.info(f"Extracted {len(result_df)} December values (fiscal years {result_df['fiscal_year'].min()}-{result_df['fiscal_year'].max()})")
