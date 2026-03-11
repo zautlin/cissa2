@@ -5,7 +5,7 @@
 # This script tests all 12 Phase 06 L1 metrics:
 #   - 7 Simple Metrics: Calc MC, Calc Assets, Calc OA, Calc Op Cost, 
 #     Calc Non Op Cost, Calc Tax Cost, Calc XO Cost
-#   - 5 Temporal Metrics: ECF, NON_DIV_ECF, EE, FY_TSR, FY_TSR_PREL
+#   - 5 Temporal Metrics: Calc ECF, Non Div ECF, Calc EE, Calc FY TSR, Calc FY TSR PREL
 #
 # Usage:
 #   ./run-l1-basic-metrics.sh                    # Uses default parameter set
@@ -94,11 +94,11 @@ if [ -z "$PARAM_SET_ID" ]; then
     " 2>/dev/null | xargs)
     
     if [ -z "$PARAM_SET_ID" ]; then
-        echo -e "${YELLOW}⚠ No default parameter set found. Temporal metrics (FY_TSR, FY_TSR_PREL) may fail.${NC}"
-        echo -e "${YELLOW}  Create one with: INSERT INTO cissa.parameter_sets (param_set_name, is_default) VALUES ('base_case', true);${NC}"
-    else
-        echo -e "${GREEN}✓ Using default parameter set: $PARAM_SET_ID${NC}"
-    fi
+         echo -e "${YELLOW}⚠ No default parameter set found. Temporal metrics (Calc FY TSR, Calc FY TSR PREL) may fail.${NC}"
+         echo -e "${YELLOW}  Create one with: INSERT INTO cissa.parameter_sets (param_set_name, is_default) VALUES ('base_case', true);${NC}"
+     else
+         echo -e "${GREEN}✓ Using default parameter set: $PARAM_SET_ID${NC}"
+     fi
 else
     echo -e "${GREEN}✓ Using provided parameter set: $PARAM_SET_ID${NC}"
 fi
@@ -114,11 +114,11 @@ METRICS=(
     "Calc Non Op Cost"
     "Calc Tax Cost"
     "Calc XO Cost"
-    "ECF"
-    "NON_DIV_ECF"
-    "EE"
-    "FY_TSR"
-    "FY_TSR_PREL"
+    "Calc ECF"
+    "Non Div ECF"
+    "Calc EE"
+    "Calc FY TSR"
+    "Calc FY TSR PREL"
 )
 
 for i in "${!METRICS[@]}"; do
@@ -133,7 +133,7 @@ for i in "${!METRICS[@]}"; do
         \"metric_name\": \"$metric\""
     
     # Add param_set_id for temporal metrics that require it
-    if [[ "$metric" == "FY_TSR" || "$metric" == "FY_TSR_PREL" ]]; then
+    if [[ "$metric" == "Calc FY TSR" || "$metric" == "Calc FY TSR PREL" ]]; then
         if [ -n "$PARAM_SET_ID" ]; then
             REQUEST_BODY="${REQUEST_BODY},
         \"param_set_id\": \"$PARAM_SET_ID\""

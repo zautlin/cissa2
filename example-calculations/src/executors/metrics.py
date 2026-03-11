@@ -17,10 +17,10 @@ def generate_l1_metrics_async(df, inputs):
 
         # Wait for all threads to complete and get results
         results = pd.concat([pool.result() for pool in pools])
-        results = pd.DataFrame(results)[
-            ['fy_year', 'ticker', 'fx_currency', 'C_MC', 'C_ASSETS',
-             'OA', 'OP_COST', 'NON_OP_COST', 'TAX_COST', 'XO_COST',
-             'ECF', 'NON_DIV_ECF', 'EE', 'FY_TSR', 'FY_TSR_PREL']]
+         results = pd.DataFrame(results)[
+             ['fy_year', 'ticker', 'fx_currency', 'C_MC', 'C_ASSETS',
+              'OA', 'OP_COST', 'NON_OP_COST', 'TAX_COST', 'XO_COST',
+              'ECF', 'NON_DIV_ECF', 'EE', 'FY_TSR', 'FY_TSR_PREL']]
         logger.info("Calculate Metrics Async: Successfully Created!!")
         return results
 

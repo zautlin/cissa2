@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 # Format: "Display Name" → (function_name, output_column_name, requires_param_set_id)
 # L1 Metrics (14 total):
 #   - 7 Simple metrics: no parameter_set_id needed
-#   - 5 Temporal metrics: ECF, NON_DIV_ECF, EE (no param), FY_TSR, FY_TSR_PREL (need param)
+#   - 5 Temporal metrics: Calc ECF, Non Div ECF, Calc EE (no param), Calc FY TSR, Calc FY TSR PREL (need param)
 #   - 2 Derived metrics (used by L2): Book Equity, ROA
 METRIC_FUNCTIONS = {
     # L1 Simple Metrics (7)
@@ -28,13 +28,13 @@ METRIC_FUNCTIONS = {
     "Calc XO Cost": ("fn_calc_extraordinary_cost", "calc_xo_cost", False),
     
     # L1 Temporal Metrics (5)
-    # Note: These must match the SQL function lookups for NON_DIV_ECF and FY_TSR_PREL
+    # Note: These must match the SQL function lookups for Non Div ECF and Calc FY TSR PREL
     # which query metrics_outputs by output_metric_name
-    "ECF": ("fn_calc_ecf", "ecf", False),
-    "NON_DIV_ECF": ("fn_calc_non_div_ecf", "non_div_ecf", False),
-    "EE": ("fn_calc_economic_equity", "ee", False),
-    "FY_TSR": ("fn_calc_fy_tsr", "fy_tsr", True),      # Requires param_set_id
-    "FY_TSR_PREL": ("fn_calc_fy_tsr_prel", "fy_tsr_prel", True),  # Requires param_set_id
+    "Calc ECF": ("fn_calc_ecf", "ecf", False),
+    "Non Div ECF": ("fn_calc_non_div_ecf", "non_div_ecf", False),
+    "Calc EE": ("fn_calc_economic_equity", "ee", False),
+    "Calc FY TSR": ("fn_calc_fy_tsr", "fy_tsr", True),      # Requires param_set_id
+    "Calc FY TSR PREL": ("fn_calc_fy_tsr_prel", "fy_tsr_prel", True),  # Requires param_set_id
     
     # L1 Derived Metrics (2)
     # These are calculated from other L1 metrics and used by L2 service
@@ -81,7 +81,7 @@ class MetricsService:
         Calculate a metric for a dataset.
         
         1. Validate metric name
-        2. Resolve param_set_id if needed (for FY_TSR, FY_TSR_PREL)
+        2. Resolve param_set_id if needed (for Calc FY TSR, Calc FY TSR PREL)
         3. Call SQL function to calculate
         4. Insert results into metrics_outputs
         5. Return response
@@ -394,11 +394,11 @@ class MetricsService:
         5. Calc Non Op Cost (base)
         6. Calc Tax Cost (base)
         7. Calc XO Cost (base)
-        8. ECF (temporal base)
-        9. NON_DIV_ECF (depends on ECF)
-        10. EE (temporal, optionally depends on ECF)
-        11. FY_TSR (temporal, parameter-sensitive)
-        12. FY_TSR_PREL (depends on FY_TSR)
+        8. Calc ECF (temporal base)
+        9. Non Div ECF (depends on Calc ECF)
+        10. Calc EE (temporal, optionally depends on Calc ECF)
+        11. Calc FY TSR (temporal, parameter-sensitive)
+        12. Calc FY TSR PREL (depends on Calc FY TSR)
         13. Book Equity (used by L2 metrics)
         14. ROA (depends on Calc Assets, used by L2 metrics)
         
@@ -419,11 +419,11 @@ class MetricsService:
             "Calc Non Op Cost",
             "Calc Tax Cost",
             "Calc XO Cost",
-            "ECF",
-            "NON_DIV_ECF",
-            "EE",
-            "FY_TSR",
-            "FY_TSR_PREL",
+            "Calc ECF",
+            "Non Div ECF",
+            "Calc EE",
+            "Calc FY TSR",
+            "Calc FY TSR PREL",
             "Book Equity",
             "ROA",
         ]
@@ -478,11 +478,11 @@ class MetricsService:
         
         PHASE 1 (Base Metrics): Calculate metrics that read from fundamentals table
         - All 7 simple L1 metrics
-        - Temporal base metrics: ECF, EE, FY_TSR, LAG_MC (depend on fundamentals only)
+        - Temporal base metrics: Calc ECF, Calc EE, Calc FY TSR, LAG_MC (depend on fundamentals only)
         
         PHASE 2 (Derived Metrics): Calculate metrics that depend on PHASE 1 results
-        - NON_DIV_ECF: reads ECF from metrics_outputs
-        - FY_TSR_PREL: reads FY_TSR from metrics_outputs
+        - Non Div ECF: reads Calc ECF from metrics_outputs
+        - Calc FY TSR PREL: reads Calc FY TSR from metrics_outputs
         
         Between phases: Database commit ensures PHASE 1 results are persisted before PHASE 2 reads.
         
@@ -507,13 +507,13 @@ class MetricsService:
             "Calc Tax Cost": (1, False),
             "Calc XO Cost": (1, False),
             "LAG_MC": (1, False),
-            "ECF": (1, False),
-            "EE": (1, False),
-            "FY_TSR": (1, True),   # Parameter-sensitive but still base
+            "Calc ECF": (1, False),
+            "Calc EE": (1, False),
+            "Calc FY TSR": (1, True),   # Parameter-sensitive but still base
             
             # PHASE 2: Derived metrics (read from metrics_outputs)
-            "NON_DIV_ECF": (2, False),     # Depends on ECF being in metrics_outputs
-            "FY_TSR_PREL": (2, True),      # Depends on FY_TSR being in metrics_outputs, param-sensitive
+            "Non Div ECF": (2, False),     # Depends on Calc ECF being in metrics_outputs
+            "Calc FY TSR PREL": (2, True),      # Depends on Calc FY TSR being in metrics_outputs, param-sensitive
         }
         
         # If specific metrics requested, validate they exist

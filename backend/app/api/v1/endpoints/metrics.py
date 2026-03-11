@@ -63,16 +63,16 @@ async def calculate_metric(
     ```json
     {
         "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
-        "metric_name": "FY_TSR",
+        "metric_name": "Calc FY TSR",
         "param_set_id": "660e8400-e29b-41d4-a716-446655440001"
     }
     ```
     
     **Supported L1 Metrics:**
     - Simple (7): Calc MC, Calc Assets, Calc OA, Calc Op Cost, Calc Non Op Cost, Calc Tax Cost, Calc XO Cost
-    - Temporal (5): ECF, NON_DIV_ECF, EE, FY_TSR (requires param_set_id), FY_TSR_PREL (requires param_set_id)
+    - Temporal (5): Calc ECF, Non Div ECF, Calc EE, Calc FY TSR (requires param_set_id), Calc FY TSR PREL (requires param_set_id)
     
-    **Note:** FY_TSR and FY_TSR_PREL are parameter-sensitive. If param_set_id is not provided, the default parameter set will be used.
+    **Note:** Calc FY TSR and Calc FY TSR PREL are parameter-sensitive. If param_set_id is not provided, the default parameter set will be used.
     """
     
     service = MetricsService(db)
@@ -541,7 +541,7 @@ async def calculate_fv_ecf_metrics(
     Calculate Phase 10b Future Value Economic Cash Flow (FV_ECF) Metrics
     
     This endpoint efficiently calculates FV_ECF metrics using:
-    - Phase 06 L1 Basic Metrics (DIVIDENDS, FRANKING, NON_DIV_ECF from fundamentals)
+    - Phase 06 L1 Basic Metrics (DIVIDENDS, FRANKING, Non Div ECF from fundamentals)
     - Phase 10a Cost of Equity (CALC_KE lagged by 1 fiscal year)
     
     **Metrics Calculated:**
@@ -644,7 +644,7 @@ async def get_metrics(
     - `dataset_id` (required): UUID of the dataset
     - `parameter_set_id` (required): UUID of the parameter set
     - `ticker` (optional): Filter by ticker symbol (case-insensitive, e.g., "AAPL")
-    - `metric_name` (optional): Filter by metric name (case-insensitive, e.g., "ECF", "Beta")
+     - `metric_name` (optional): Filter by metric name (case-insensitive, e.g., "Calc ECF", "Beta")
     
     **Example Requests:**
     
@@ -660,12 +660,12 @@ async def get_metrics(
     
     Get a specific metric for all tickers:
     ```
-    GET /api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&metric_name=ECF
+    GET /api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&metric_name=Calc ECF
     ```
     
     Get a specific metric for a specific ticker:
     ```
-    GET /api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&ticker=AAPL&metric_name=ECF
+    GET /api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&ticker=AAPL&metric_name=Calc ECF
     ```
     
     **Response:**
@@ -690,7 +690,7 @@ async def get_metrics(
                 "parameter_set_id": "660e8400-e29b-41d4-a716-446655440001",
                 "ticker": "AAPL",
                 "fiscal_year": 2020,
-                "metric_name": "ECF",
+                "metric_name": "Calc ECF",
                 "value": 1250000000.0,
                 "unit": "USD"
             }

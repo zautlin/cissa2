@@ -14,8 +14,8 @@ from datetime import datetime
 class CalculateMetricsRequest(BaseModel):
     """Request to calculate a metric"""
     dataset_id: UUID = Field(..., description="UUID of the dataset to calculate metrics for")
-    metric_name: str = Field(..., description="Name of the metric to calculate (e.g., 'Calc MC', 'ECF', 'FY_TSR')")
-    param_set_id: Optional[UUID] = Field(None, description="Optional parameter set ID for parameter-sensitive metrics (FY_TSR, FY_TSR_PREL). If not provided, uses default.")
+    metric_name: str = Field(..., description="Name of the metric to calculate (e.g., 'Calc MC', 'Calc ECF', 'Calc FY TSR')")
+    param_set_id: Optional[UUID] = Field(None, description="Optional parameter set ID for parameter-sensitive metrics (Calc FY TSR, Calc FY TSR PREL). If not provided, uses default.")
 
 
 class MetricResultItem(BaseModel):

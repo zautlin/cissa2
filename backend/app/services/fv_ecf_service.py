@@ -45,14 +45,14 @@ class FVECFService:
     
     Key optimizations:
     - Fetches DIVIDENDS, FRANKING from fundamentals table
-    - Fetches NON_DIV_ECF from metrics_outputs table
+    - Fetches Non Div ECF from metrics_outputs table
     - Fetches lagged KE (fiscal_year-1) via SQL subquery from metrics_outputs
     - Vectorized Pandas operations (no row-by-row iteration)
     - Batch database inserts (1000 records per batch)
     - 4 intervals × ~9,189 records = ~36,756 total inserts
     
     Prerequisites:
-    - Phase 06 L1 Basic Metrics (DIVIDENDS, FRANKING in fundamentals; NON_DIV_ECF in metrics_outputs)
+    - Phase 06 L1 Basic Metrics (DIVIDENDS, FRANKING in fundamentals; Non Div ECF in metrics_outputs)
     - Phase 10a Core L2 Metrics (CALC_KE in metrics_outputs)
     
     Algorithm (from legacy code):
@@ -126,7 +126,7 @@ class FVECFService:
             logger.info(f"    - Franking tax rate: {params.get('frank_tax_rate', 0.3):.4f}")
             logger.info(f"    - Value franking CR: {params.get('value_franking_cr', 0.75):.4f}")
             
-            # Fetch fundamentals data (DIVIDENDS, FRANKING, NON_DIV_ECF)
+            # Fetch fundamentals data (DIVIDENDS, FRANKING, Non Div ECF)
             logger.info("  Fetching fundamentals data...")
             fundamentals_df = await self._fetch_fundamentals_data(dataset_id)
             
@@ -306,7 +306,7 @@ class FVECFService:
     async def _fetch_fundamentals_data(self, dataset_id: UUID) -> pd.DataFrame:
         """
         Fetch DIVIDENDS, FRANKING from fundamentals table,
-        and NON_DIV_ECF from metrics_outputs table.
+        and Non Div ECF from metrics_outputs table.
         
         Returns DataFrame with columns:
         - ticker, fiscal_year
@@ -335,7 +335,7 @@ class FVECFService:
         
         df = pd.DataFrame(rows, columns=["ticker", "fiscal_year", "dividend", "franking"])
         
-        # Fetch NON_DIV_ECF from metrics_outputs
+        # Fetch Non Div ECF from metrics_outputs
         non_div_ecf_query = text("""
             SELECT 
                 ticker,
@@ -343,7 +343,7 @@ class FVECFService:
                 output_metric_value AS non_div_ecf
             FROM cissa.metrics_outputs
             WHERE dataset_id = :dataset_id
-              AND output_metric_name = 'NON_DIV_ECF'
+              AND output_metric_name = 'Non Div ECF'
             ORDER BY ticker, fiscal_year
         """)
         

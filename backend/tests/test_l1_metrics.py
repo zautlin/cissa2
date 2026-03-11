@@ -4,12 +4,12 @@
 """
 Comprehensive test suite for all 12 L1 metrics:
 - 7 Simple metrics: C_MC, C_ASSETS, OA, OP_COST, NON_OP_COST, TAX_COST, XO_COST
-- 5 Temporal metrics: ECF, NON_DIV_ECF, EE, FY_TSR, FY_TSR_PREL
+- 5 Temporal metrics: Calc ECF, Non Div ECF, Calc EE, Calc FY TSR, Calc FY TSR PREL
 
 Tests verify:
 1. All metrics are defined in METRIC_FUNCTIONS mapping
 2. Service layer correctly routes to SQL functions
-3. Parameter set resolution works (especially for FY_TSR, FY_TSR_PREL)
+3. Parameter set resolution works (especially for Calc FY TSR, Calc FY TSR PREL)
 4. Results inserted into metrics_outputs with correct UNIQUE constraint
 5. Results match legacy Python implementation (spot-check)
 """
@@ -36,11 +36,11 @@ class TestMetricFunctionsMappingCompletion:
             "Calc Tax Cost",
             "Calc XO Cost",
             # 5 Temporal metrics
-            "ECF",
-            "NON_DIV_ECF",
-            "EE",
-            "FY_TSR",
-            "FY_TSR_PREL",
+            "Calc ECF",
+            "Non Div ECF",
+            "Calc EE",
+            "Calc FY TSR",
+            "Calc FY TSR PREL",
         }
         
         actual_metrics = set(METRIC_FUNCTIONS.keys())
@@ -59,16 +59,16 @@ class TestMetricFunctionsMappingCompletion:
             assert isinstance(needs_param, bool), f"needs_param_set for {metric_name} is not bool"
     
     def test_parameter_sensitive_metrics_marked_correctly(self):
-        """Verify FY_TSR and FY_TSR_PREL are marked as requiring param_set_id"""
-        _, _, fytsr_needs_param = METRIC_FUNCTIONS["FY_TSR"]
-        _, _, fytsr_prel_needs_param = METRIC_FUNCTIONS["FY_TSR_PREL"]
+        """Verify Calc FY TSR and Calc FY TSR PREL are marked as requiring param_set_id"""
+        _, _, fytsr_needs_param = METRIC_FUNCTIONS["Calc FY TSR"]
+        _, _, fytsr_prel_needs_param = METRIC_FUNCTIONS["Calc FY TSR PREL"]
         
-        assert fytsr_needs_param is True, "FY_TSR should require param_set_id"
-        assert fytsr_prel_needs_param is True, "FY_TSR_PREL should require param_set_id"
+        assert fytsr_needs_param is True, "Calc FY TSR should require param_set_id"
+        assert fytsr_prel_needs_param is True, "Calc FY TSR PREL should require param_set_id"
     
     def test_non_parameter_sensitive_metrics_unmarked(self):
         """Verify simple and non-TSR temporal metrics don't require param_set_id"""
-        non_param_metrics = ["Calc MC", "Calc Assets", "ECF", "NON_DIV_ECF", "EE"]
+        non_param_metrics = ["Calc MC", "Calc Assets", "Calc ECF", "Non Div ECF", "Calc EE"]
         
         for metric in non_param_metrics:
             _, _, needs_param = METRIC_FUNCTIONS[metric]
@@ -110,7 +110,7 @@ class TestMetricsServiceParameterResolution:
     
     @pytest.mark.asyncio
     async def test_calculate_metric_fytsr_with_param_set(self):
-        """Test calculate_metric calls FY_TSR with param_set_id"""
+        """Test calculate_metric calls Calc FY TSR with param_set_id"""
         mock_session = AsyncMock()
         
         # Mock parameter set query result
@@ -130,7 +130,7 @@ class TestMetricsServiceParameterResolution:
         
         response = await service.calculate_metric(
             dataset_id=dataset_uuid,
-            metric_name="FY_TSR",
+            metric_name="Calc FY TSR",
             param_set_id=test_param_uuid
         )
         
@@ -197,7 +197,7 @@ class TestMetricsServiceErrorHandling:
         
         response = await service.calculate_metric(
             dataset_id=uuid4(),
-            metric_name="FY_TSR",
+            metric_name="Calc FY TSR",
             param_set_id=None
         )
         
@@ -257,11 +257,11 @@ class TestL1MetricFormulas:
     def test_temporal_metrics_formulas_documented(self):
         """Verify temporal metrics have expected SQL functions"""
         expected_functions = {
-            "ECF": "fn_calc_ecf",  # LAG_MC × (1 + fytsr/100) - C_MC
-            "NON_DIV_ECF": "fn_calc_non_div_ecf",  # ECF + DIVIDENDS
-            "EE": "fn_calc_economic_equity",  # SUM(...) OVER cumulative
-            "FY_TSR": "fn_calc_fy_tsr",  # Complex with parameters
-            "FY_TSR_PREL": "fn_calc_fy_tsr_prel",  # FY_TSR + 1
+            "Calc ECF": "fn_calc_ecf",  # LAG_MC × (1 + fytsr/100) - C_MC
+            "Non Div ECF": "fn_calc_non_div_ecf",  # Calc ECF + DIVIDENDS
+            "Calc EE": "fn_calc_economic_equity",  # SUM(...) OVER cumulative
+            "Calc FY TSR": "fn_calc_fy_tsr",  # Complex with parameters
+            "Calc FY TSR PREL": "fn_calc_fy_tsr_prel",  # Calc FY TSR + 1
         }
         
         for metric_name, expected_fn in expected_functions.items():

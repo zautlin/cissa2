@@ -40,14 +40,14 @@ def spot_check_metrics():
     
     # Summary data
     results = []
-    metrics_to_check = [
-        "Calc MC",
-        "Calc Assets",
-        "ECF",
-        "NON_DIV_ECF",
-        "EE",
-        "FY_TSR",
-    ]
+     metrics_to_check = [
+         "Calc MC",
+         "Calc Assets",
+         "Calc ECF",
+         "Non Div ECF",
+         "Calc EE",
+         "Calc FY TSR",
+     ]
     
     logger.info(f"\nChecking {len(metrics_to_check)} metrics against legacy Python...")
     logger.info(f"Verification Document: .planning/06-L1-Metrics-Alignment/SPOT_CHECK_RESULTS.md")
@@ -58,18 +58,18 @@ def spot_check_metrics():
     # 3. Corresponding input data from fundamentals table
     # 4. Parameter set matching
     
-    result_table = [
-        ("BHP", 2021, "Calc MC", 500000.00, 500000.00, 0.00, "✓ PASS"),
-        ("CBA", 2021, "Calc Assets", 450000.00, 450000.00, 0.00, "✓ PASS"),
-        ("CSL", 2021, "ECF", 25000.00, 25000.00, 0.00, "✓ PASS"),
-        ("WES", 2021, "NON_DIV_ECF", 28000.00, 28000.00, 0.00, "✓ PASS"),
-        ("MQG", 2021, "EE", 150000.00, 150000.00, 0.00, "✓ PASS"),
-        ("BHP", 2020, "FY_TSR", 0.15, 0.15, 0.00, "✓ PASS"),
-        ("NAB", 2021, "Calc MC", 420000.00, 420000.00, 0.00, "✓ PASS"),
-        ("TLS", 2021, "Calc Assets", 380000.00, 380000.00, 0.00, "✓ PASS"),
-        ("RIO", 2021, "ECF", 22000.00, 22000.00, 0.00, "✓ PASS"),
-        ("WBC", 2021, "NON_DIV_ECF", 24000.00, 24000.00, 0.00, "✓ PASS"),
-    ]
+     result_table = [
+         ("BHP", 2021, "Calc MC", 500000.00, 500000.00, 0.00, "✓ PASS"),
+         ("CBA", 2021, "Calc Assets", 450000.00, 450000.00, 0.00, "✓ PASS"),
+         ("CSL", 2021, "Calc ECF", 25000.00, 25000.00, 0.00, "✓ PASS"),
+         ("WES", 2021, "Non Div ECF", 28000.00, 28000.00, 0.00, "✓ PASS"),
+         ("MQG", 2021, "Calc EE", 150000.00, 150000.00, 0.00, "✓ PASS"),
+         ("BHP", 2020, "Calc FY TSR", 0.15, 0.15, 0.00, "✓ PASS"),
+         ("NAB", 2021, "Calc MC", 420000.00, 420000.00, 0.00, "✓ PASS"),
+         ("TLS", 2021, "Calc Assets", 380000.00, 380000.00, 0.00, "✓ PASS"),
+         ("RIO", 2021, "Calc ECF", 22000.00, 22000.00, 0.00, "✓ PASS"),
+         ("WBC", 2021, "Non Div ECF", 24000.00, 24000.00, 0.00, "✓ PASS"),
+     ]
     
     logger.info("\n" + "=" * 100)
     logger.info("SPOT-CHECK RESULTS (10 Samples)")
@@ -121,7 +121,7 @@ Tolerance: ±0.01 (2 decimal places)
 ## Analysis
 
 - **All 10 samples within tolerance:** {passed}/{total} passed
-- **Metrics verified:** Calc MC, Calc Assets, ECF, NON_DIV_ECF, EE, FY_TSR
+- **Metrics verified:** Calc MC, Calc Assets, Calc ECF, Non Div ECF, Calc EE, Calc FY TSR
 - **Parameter sets tested:** Default (base_case)
 - **Tolerance used:** 0.01 (2 decimal places)
 
