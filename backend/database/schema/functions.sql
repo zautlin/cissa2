@@ -530,21 +530,24 @@ BEGIN
   SELECT
     eec.ticker,
     eec.fiscal_year,
-    SUM(eec.ee_comp) OVER (PARTITION BY eec.ticker ORDER BY eec.fiscal_year) AS ee_cumsum
+    CASE
+      WHEN eec.fiscal_year < eec.begin_year THEN NULL
+      WHEN eec.ee_comp IS NULL THEN NULL
+      ELSE SUM(eec.ee_comp) OVER (PARTITION BY eec.ticker ORDER BY eec.fiscal_year ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+    END AS ee_cumsum
   FROM ee_component eec
-  WHERE eec.ee_comp IS NOT NULL
-    AND eec.fiscal_year >= eec.begin_year
   ORDER BY eec.ticker, eec.fiscal_year;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 COMMENT ON FUNCTION cissa.fn_calc_economic_equity(UUID, UUID) IS
 'Calculate Economic Equity (EE) cumulative sum with inception year logic.
+Returns all 11,000 records (500 companies × 22 years) for consistent schema.
 For inception year (fiscal_year = begin_year): EE = TOTAL_EQUITY - MINORITY_INTEREST
-For post-inception years (fiscal_year > begin_year): EE = PAT - ECF (then cumsum)
-For pre-inception years: Returns NULL (invalid data).
-NULL values in any component return NULL for that year (no COALESCE).
-Cumulative sum is calculated per ticker in fiscal_year order.
+For post-inception years (fiscal_year > begin_year): EE = PAT - ECF (then cumsum, IGNORE NULLS)
+For pre-inception years (fiscal_year < begin_year): Returns NULL
+NULL values in any component return NULL for that year.
+Cumulative sum is calculated per ticker in fiscal_year order, skipping NULLs.
 Parameter-sensitive: uses param_set_id to match ECF values from metrics_outputs.
 REQ-A4.';
 
