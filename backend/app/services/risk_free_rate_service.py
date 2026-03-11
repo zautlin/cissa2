@@ -1,17 +1,17 @@
 # ============================================================================
-# Risk-Free Rate Calculation Service (Quick Task 01)
+# Risk-Free Rate Calculation Service (Phase 08)
 # ============================================================================
-# Calculates: Risk-free rate (Rf, Rf_1Y, Rf_1Y_Raw) using geometric mean
-#             of monthly bond yields from GACGB10 Index (Australian 10-year bonds)
+# Calculates: Risk-free rate (Rf, Rf_1Y, Rf_1Y_Raw) using ROLLING 12-MONTH 
+#             geometric mean of monthly bond yields from bond index
 # Stores results in cissa.metrics_outputs table
-# Replicates legacy rates.py algorithm with async/await patterns
+# Implements legacy rates.py algorithm with rolling window calculation
 # ============================================================================
 
 import pandas as pd
 import numpy as np
 import json
 from uuid import UUID
-from decimal import Decimal
+from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
@@ -22,235 +22,260 @@ logger = get_logger(__name__)
 
 class RiskFreeRateCalculationService:
     """
-    Service for Quick Task 01 risk-free rate calculation.
+    Service for Phase 08 risk-free rate calculation.
     
-    Calculates risk-free rate using geometric mean of 12 monthly bond yields.
-    Replicates legacy rates.py algorithm exactly.
+    Calculates risk-free rate using ROLLING 12-MONTH geometric mean of monthly bond yields.
+    Implements legacy rates.py algorithm with per-calendar-month rolling window.
+    
+    Key features:
+    - Calculates Rf ONLY for the bond index (e.g., GACGB10 Index for Australia)
+    - Each calendar month gets a 12-month rolling geometric mean
+    - Jan 2002 uses Feb 2001 - Jan 2002 (prior 12 months including current)
+    - Stores only December value for each year in metrics_outputs
+    - Stores all 12 monthly values in metadata for reference
     
     Algorithm:
-    1. Fetch monthly RISK_FREE_RATE for bond index (GACGB10 Index)
-    2. Group by fiscal_year (12 months per year)
-    3. Calculate geometric mean: Rf_1Y_Raw = (∏monthly_rates)^(1/12) - 1
-    4. Apply rounding: Rf_1Y = round((Rf_1Y_Raw / beta_rounding), 0) * beta_rounding
-    5. Apply approach:
-       - If FIXED: Rf = benchmark - risk_premium
-       - If Floating: Rf = Rf_1Y
-    6. Store 3 metrics in metrics_outputs: Rf_1Y_Raw, Rf_1Y, Rf
+    1. Fetch monthly RISK_FREE_RATE for bond index - full history
+    2. For each calendar month in the data:
+       - Calculate rolling 12-month geometric mean: (∏rf_prel)^(1/12) - 1
+       - Apply rounding: round((result / beta_rounding), 0) * beta_rounding
+    3. Extract December value for each year
+    4. Store with metadata containing all 12 monthly values
+    5. Create 3 metrics per year: Rf_1Y_Raw, Rf_1Y, Rf
     """
     
     def __init__(self, session: AsyncSession):
         self.session = session
         self.logger = get_logger(__name__)
+        self.fiscal_year_definitions = {
+            'AU': (7, 6),   # Australia: Jul-Jun fiscal year
+            'US': (1, 12),  # US: Jan-Dec fiscal year
+        }
     
     async def calculate_risk_free_rate_async(
         self,
         dataset_id: UUID,
         param_set_id: UUID,
+        country_code: str = 'AU',
     ) -> dict:
         """
         Main orchestration method for risk-free rate calculation.
         
+        Uses ROLLING 12-MONTH geometric mean approach for accurate monthly Rf values.
+        Stores only December values for each year.
+        
         Args:
             dataset_id: Dataset ID for the calculation
             param_set_id: Parameter set ID (defines rf parameters)
+            country_code: Country code for fiscal year definition (default: 'AU')
         
         Returns:
             {
-                "status": "success|error|cached",
+                "status": "success|error",
                 "results_count": N,
                 "message": "..."
             }
         """
         try:
-            self.logger.info(f"Starting risk-free rate calculation: dataset={dataset_id}, param_set={param_set_id}")
+            self.logger.info(f"Starting risk-free rate calculation (Phase 08): dataset={dataset_id}, param_set={param_set_id}, country={country_code}")
             
             # 1. Load parameters
             self.logger.info("Loading parameters...")
             params = await self._load_parameters_from_db(param_set_id)
-            self.logger.info(f"Parameters loaded: bond_index={params['bond_ticker']}, "
+            self.logger.info(f"Parameters loaded: bond_ticker={params['bond_ticker']}, "
                            f"rounding={params['beta_rounding']}, approach={params['cost_of_equity_approach']}")
             
-            # 2. Check if results already exist (upsert logic)
-            existing_count = await self._count_existing_rf_results(dataset_id, param_set_id)
-            if existing_count > 0:
-                self.logger.info(f"Risk-free rate results already exist ({existing_count} records) - returning cached")
-                return {
-                    "status": "cached",
-                    "results_count": existing_count,
-                    "message": f"Using cached results for dataset={dataset_id}, param_set={param_set_id}"
-                }
+            # 2. Get bond index ticker from dataset
+            self.logger.info("Fetching bond index ticker from dataset...")
+            bond_ticker = await self._get_bond_ticker_from_dataset(dataset_id)
+            if not bond_ticker:
+                bond_ticker = params['bond_ticker']
+            self.logger.info(f"Using bond ticker: {bond_ticker}")
             
-            # 3. Fetch monthly bond yields
-            self.logger.info(f"Fetching monthly bond yields for {params['bond_ticker']}...")
-            monthly_rf_df = await self._fetch_monthly_bond_yields(dataset_id, params['bond_ticker'])
+            # 3. Check if results already exist and clear them
+            existing_count = await self._count_existing_rf_results(bond_ticker, param_set_id)
+            if existing_count > 0:
+                self.logger.info(f"Risk-free rate results already exist ({existing_count} records) - clearing")
+                await self._clear_existing_rf_results(bond_ticker, param_set_id)
+            
+            # 4. Fetch monthly bond yields (full history)
+            self.logger.info(f"Fetching monthly bond yields for {bond_ticker}...")
+            monthly_rf_df = await self._fetch_monthly_bond_yields(bond_ticker)
             
             if monthly_rf_df.empty:
-                self.logger.warning(f"No monthly bond yield data found for {params['bond_ticker']}")
+                self.logger.warning(f"No monthly bond yield data found for {bond_ticker}")
                 return {
                     "status": "error",
                     "results_count": 0,
-                    "message": f"No monthly bond yield data found for {params['bond_ticker']}"
+                    "message": f"No monthly bond yield data found for {bond_ticker}"
                 }
             
             self.logger.info(f"Fetched {len(monthly_rf_df)} monthly bond yield records")
             
-            # 4. Get all unique tickers that need Rf calculation
-            self.logger.info("Fetching list of tickers from metrics_outputs (L1 metrics)...")
-            company_tickers = await self._fetch_company_tickers(dataset_id, param_set_id)
-            self.logger.info(f"Found {len(company_tickers)} unique tickers for Rf calculation")
-            
-            # 5. Calculate geometric mean for each fiscal year
-            self.logger.info("Calculating geometric mean (Rf_1Y_Raw)...")
-            rf_raw_df = self._calculate_geometric_mean(monthly_rf_df)
-            self.logger.info(f"Calculated geometric mean for {len(rf_raw_df)} fiscal years")
+            # 5. Calculate ROLLING 12-month geometric mean for each calendar month
+            self.logger.info("Calculating rolling 12-month geometric mean (Rf_1Y_Raw)...")
+            rf_monthly_df = self._calculate_rolling_geometric_mean(monthly_rf_df)
+            self.logger.info(f"Calculated rolling geometric mean for {len(rf_monthly_df)} calendar months")
             
             # 6. Apply rounding and approach logic
             self.logger.info(f"Applying rounding (beta_rounding={params['beta_rounding']}) and approach ({params['cost_of_equity_approach']})...")
-            rf_final_df = self._apply_rounding_and_approach(
-                rf_raw_df,
+            rf_monthly_final_df = self._apply_rounding_and_approach(
+                rf_monthly_df,
                 params['beta_rounding'],
                 params['cost_of_equity_approach'],
                 params['benchmark'],
                 params['risk_premium']
             )
             
-            self.logger.info(f"Risk-free rate calculation complete: {len(rf_final_df)} fiscal years processed")
+            # 7. Extract December values for each year
+            self.logger.info("Extracting December values for each year...")
+            rf_yearly_df = self._extract_december_values(rf_monthly_final_df)
+            self.logger.info(f"Extracted {len(rf_yearly_df)} yearly values (December only)")
             
-            # 7. Expand to all companies × fiscal years
-            self.logger.info("Expanding Rf to all companies...")
-            rf_expanded_df = self._expand_to_all_companies(rf_final_df, company_tickers)
-            self.logger.info(f"Expanded to {len(rf_expanded_df)} company-fiscal year combinations")
+            # 8. Build metadata with all 12 monthly values
+            self.logger.info("Building metadata with all 12 monthly values...")
+            rf_yearly_with_metadata = self._build_yearly_with_metadata(
+                rf_yearly_df,
+                rf_monthly_final_df
+            )
             
-            # 8. Format and store results
+            # 9. Format and store results
             self.logger.info("Storing results in metrics_outputs...")
             results_to_store = self._format_results_for_storage(
-                rf_expanded_df,
+                rf_yearly_with_metadata,
+                bond_ticker,
                 dataset_id,
                 param_set_id
             )
             
-            # Store results using raw SQL to avoid ORM foreign key validation issues
+            # Store results using raw SQL
             stored_count = await self._store_results_raw_sql(results_to_store)
             await self.session.commit()
             
-            self.logger.info(f"Risk-free rate calculation complete: {stored_count} results stored out of {len(rf_expanded_df)} rows")
+            self.logger.info(f"Risk-free rate calculation complete: {stored_count} results stored for {bond_ticker}")
             
             return {
                 "status": "success",
                 "results_count": stored_count,
-                "message": f"Calculated risk-free rate for {len(company_tickers)} tickers across {len(rf_raw_df)} fiscal years ({stored_count} total records)"
+                "message": f"Calculated risk-free rate for {bond_ticker} using rolling 12-month geometric mean ({stored_count} total records)"
             }
             
         except Exception as e:
-            self.logger.error(f"Risk-free rate calculation failed: {type(e).__name__}: {e}")
-            await self.session.rollback()
+            self.logger.error(f"Risk-free rate calculation failed: {e}", exc_info=True)
             return {
                 "status": "error",
                 "results_count": 0,
-                "message": f"Risk-free rate calculation failed: {str(e)}"
+                "message": f"Calculation failed: {str(e)}"
             }
     
     async def _load_parameters_from_db(self, param_set_id: UUID) -> dict:
-        """Load risk-free rate related parameters from database with overrides."""
+        """Load calculation parameters from database (from param_overrides JSONB)."""
         try:
-            # Load defaults from parameters table
             query = text("""
-                SELECT parameter_name, default_value
-                FROM cissa.parameters
-                WHERE parameter_name IN (
-                    'bond_index_by_country', 'beta_rounding', 
-                    'cost_of_equity_approach', 'fixed_benchmark_return_wealth_preservation',
-                    'equity_risk_premium'
-                )
-            """)
-            
-            result = await self.session.execute(query)
-            rows = result.fetchall()
-            
-            params = {
-                'bond_index_by_country': '{"Australia": "GACGB10 Index"}',
-                'beta_rounding': '0.1',
-                'cost_of_equity_approach': 'Floating',
-                'fixed_benchmark_return_wealth_preservation': '7.5',
-                'equity_risk_premium': '5.0'
-            }
-            
-            for row in rows:
-                param_name = row[0]
-                value = row[1]
-                
-                if param_name == 'bond_index_by_country':
-                    params[param_name] = value
-                elif param_name == 'beta_rounding':
-                    params[param_name] = str(float(value))
-                elif param_name == 'cost_of_equity_approach':
-                    params[param_name] = value
-                elif param_name == 'fixed_benchmark_return_wealth_preservation':
-                    params[param_name] = str(float(value))
-                elif param_name == 'equity_risk_premium':
-                    params[param_name] = str(float(value))
-            
-            # Load overrides from parameter_set
-            override_query = text("""
                 SELECT param_overrides
                 FROM cissa.parameter_sets
                 WHERE param_set_id = :param_set_id
+                LIMIT 1
             """)
             
-            override_result = await self.session.execute(override_query, {"param_set_id": str(param_set_id)})
-            override_row = override_result.fetchone()
+            result = await self.session.execute(query, {"param_set_id": param_set_id})
+            row = result.fetchone()
             
-            if override_row and override_row[0]:
-                overrides = override_row[0]
-                for key, value in overrides.items():
-                    if key in params:
-                        params[key] = str(value) if not isinstance(value, str) else value
-            
-            # Parse bond index mapping (Australia only)
-            bond_indices_json = params['bond_index_by_country']
-            if isinstance(bond_indices_json, str):
-                bond_indices = json.loads(bond_indices_json)
-            else:
-                bond_indices = bond_indices_json
-            
-            bond_ticker = bond_indices.get('Australia', 'GACGB10 Index')
-            
-            return {
-                'bond_ticker': bond_ticker,
-                'beta_rounding': float(params['beta_rounding']),
-                'cost_of_equity_approach': params['cost_of_equity_approach'],
-                'benchmark': float(params['fixed_benchmark_return_wealth_preservation']),
-                'risk_premium': float(params['equity_risk_premium'])
+            # Default parameters
+            defaults = {
+                "bond_ticker": "GACGB10 Index",
+                "beta_rounding": 0.005,
+                "cost_of_equity_approach": "FLOATING",
+                "benchmark": 0.0,
+                "risk_premium": 0.0
             }
             
+            if row and row[0]:
+                overrides = row[0]
+                # Merge overrides with defaults
+                params = {**defaults}
+                
+                if isinstance(overrides, dict):
+                    for key in defaults.keys():
+                        if key in overrides:
+                            params[key] = overrides[key]
+                
+                # Convert to proper types
+                params["beta_rounding"] = float(params.get("beta_rounding", 0.005))
+                params["benchmark"] = float(params.get("benchmark", 0.0))
+                params["risk_premium"] = float(params.get("risk_premium", 0.0))
+                
+                return params
+            else:
+                return defaults
         except Exception as e:
             self.logger.error(f"Failed to load parameters: {e}")
             raise
     
-    async def _count_existing_rf_results(self, dataset_id: UUID, param_set_id: UUID) -> int:
-        """Count existing risk-free rate results for upsert logic."""
+    async def _get_bond_ticker_from_dataset(self, dataset_id: UUID) -> str:
+        """Try to detect bond ticker from dataset metadata."""
         try:
             query = text("""
-                SELECT COUNT(*)
-                FROM cissa.metrics_outputs
+                SELECT metadata->>'bond_ticker'
+                FROM cissa.datasets
                 WHERE dataset_id = :dataset_id
+                LIMIT 1
+            """)
+            
+            result = await self.session.execute(query, {"dataset_id": dataset_id})
+            row = result.fetchone()
+            return row[0] if row and row[0] else None
+        except Exception as e:
+            self.logger.warning(f"Could not get bond ticker from dataset: {e}")
+            # Clear the transaction on error to allow further operations
+            await self.session.rollback()
+            return None
+    
+    async def _count_existing_rf_results(self, bond_ticker: str, param_set_id: UUID) -> int:
+        """Count existing Rf results for this bond ticker."""
+        try:
+            query = text("""
+                SELECT COUNT(*) as count
+                FROM cissa.metrics_outputs
+                WHERE ticker = :ticker
                 AND param_set_id = :param_set_id
                 AND output_metric_name IN ('Rf', 'Rf_1Y', 'Rf_1Y_Raw')
             """)
             
             result = await self.session.execute(query, {
-                "dataset_id": str(dataset_id),
-                "param_set_id": str(param_set_id)
+                "ticker": bond_ticker,
+                "param_set_id": param_set_id
             })
-            
-            return result.scalar() or 0
-            
+            row = result.fetchone()
+            return row[0] if row else 0
         except Exception as e:
             self.logger.error(f"Failed to count existing results: {e}")
             return 0
     
-    async def _fetch_monthly_bond_yields(self, dataset_id: UUID, bond_ticker: str) -> pd.DataFrame:
-        """Fetch monthly RISK_FREE_RATE for bond index from fundamentals table."""
+    async def _clear_existing_rf_results(self, bond_ticker: str, param_set_id: UUID) -> int:
+        """Delete existing Rf results before recalculation."""
+        try:
+            query = text("""
+                DELETE FROM cissa.metrics_outputs
+                WHERE ticker = :ticker
+                AND param_set_id = :param_set_id
+                AND output_metric_name IN ('Rf', 'Rf_1Y', 'Rf_1Y_Raw')
+            """)
+            
+            result = await self.session.execute(query, {
+                "ticker": bond_ticker,
+                "param_set_id": param_set_id
+            })
+            
+            deleted = result.rowcount
+            self.logger.info(f"Deleted {deleted} existing Rf results for {bond_ticker}")
+            return deleted
+        except Exception as e:
+            self.logger.error(f"Failed to clear existing results: {e}")
+            raise
+    
+    async def _fetch_monthly_bond_yields(self, bond_ticker: str) -> pd.DataFrame:
+        """Fetch FULL HISTORY of monthly bond yields (RISK_FREE_RATE)."""
         try:
             query = text("""
                 SELECT
@@ -258,17 +283,13 @@ class RiskFreeRateCalculationService:
                     fiscal_month,
                     numeric_value as rf_monthly
                 FROM cissa.fundamentals
-                WHERE dataset_id = :dataset_id
-                AND metric_name = 'RISK_FREE_RATE'
+                WHERE metric_name = 'RISK_FREE_RATE'
                 AND ticker = :ticker
                 AND period_type = 'MONTHLY'
-                ORDER BY fiscal_year, fiscal_month
+                ORDER BY fiscal_year ASC, fiscal_month ASC
             """)
             
-            result = await self.session.execute(query, {
-                "dataset_id": str(dataset_id),
-                "ticker": bond_ticker
-            })
+            result = await self.session.execute(query, {"ticker": bond_ticker})
             rows = result.fetchall()
             
             df = pd.DataFrame(
@@ -281,180 +302,246 @@ class RiskFreeRateCalculationService:
             df["fiscal_year"] = pd.to_numeric(df["fiscal_year"], errors="coerce").astype(int)
             df["fiscal_month"] = pd.to_numeric(df["fiscal_month"], errors="coerce").astype(int)
             
+            # Sort by year and month
+            df = df.sort_values(["fiscal_year", "fiscal_month"]).reset_index(drop=True)
+            
+            self.logger.info(f"Loaded {len(df)} monthly records from {df['fiscal_year'].min()} to {df['fiscal_year'].max()}")
+            
             return df
             
         except Exception as e:
             self.logger.error(f"Failed to fetch monthly bond yields: {e}")
             raise
     
-    async def _fetch_company_tickers(self, dataset_id: UUID, param_set_id: UUID) -> list:
-        """Fetch all unique tickers from L1 metrics already calculated."""
-        try:
-            query = text("""
-                SELECT DISTINCT ticker
-                FROM cissa.metrics_outputs
-                WHERE dataset_id = :dataset_id
-                AND param_set_id = :param_set_id
-                AND metadata->>'metric_level' = 'L1'
-                ORDER BY ticker
-            """)
-            
-            result = await self.session.execute(query, {
-                "dataset_id": str(dataset_id),
-                "param_set_id": str(param_set_id)
-            })
-            
-            tickers = [row[0] for row in result.fetchall()]
-            return tickers
-            
-        except Exception as e:
-            self.logger.error(f"Failed to fetch company tickers: {e}")
-            raise
-    
-    def _calculate_geometric_mean(self, monthly_df: pd.DataFrame) -> pd.DataFrame:
+    def _calculate_rolling_geometric_mean(self, monthly_rf_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Calculate geometric mean of 12 monthly bond yields per fiscal year.
+        Calculate rolling 12-month geometric mean for each calendar month.
         
-        Geometric mean formula: (∏x_i)^(1/n) - 1
-        Where x_i = 1 + rf_monthly/100 (convert percentage to growth rate)
+        For each month, uses the prior 12 months (including current month) to calculate
+        the geometric mean.
         
-        Returns DataFrame with columns: fiscal_year, rf_1y_raw
+        Formula: Rf_1Y_Raw = (∏rf_prel)^(1/12) - 1
+        where rf_prel = (rf_monthly / 100) + 1
         """
         try:
-            # Group by fiscal year and calculate geometric mean
-            def geom_mean(group):
-                # Convert percentages to decimal (3.551 → 0.03551)
-                rates_decimal = group["rf_monthly"] / 100.0
-                # Add 1 to get growth rates (0.03551 → 1.03551)
-                growth_rates = 1 + rates_decimal
-                # Calculate geometric mean: (∏growth_rates)^(1/n) - 1
-                product = np.prod(growth_rates)
-                n = len(growth_rates)
-                geom_mean_value = np.power(product, 1/n) - 1
-                return geom_mean_value
+            if monthly_rf_df.empty:
+                self.logger.warning("Empty monthly data provided to rolling mean calculation")
+                return pd.DataFrame()
             
-            result_df = monthly_df.groupby("fiscal_year").apply(geom_mean).reset_index()
-            result_df.columns = ["fiscal_year", "rf_1y_raw"]
+            df = monthly_rf_df.copy()
+            
+            # Convert Rf % to growth rate (rf_prel)
+            # rf_prel = (rf_monthly / 100) + 1
+            df["rf_prel"] = (df["rf_monthly"] / 100) + 1
+            
+            # Calculate rolling 12-month geometric mean
+            # Using rolling window of 12 rows
+            df["rf_1y_raw"] = df["rf_prel"].rolling(window=12).apply(
+                lambda x: np.power(np.prod(x), 1/12) - 1 if len(x) == 12 else np.nan,
+                raw=False
+            )
+            
+            # First 11 months will be NaN - fill with the first valid value
+            first_valid = df[df["rf_1y_raw"].notna()]["rf_1y_raw"].iloc[0] if df["rf_1y_raw"].notna().any() else 0
+            df["rf_1y_raw"] = df["rf_1y_raw"].fillna(first_valid)
+            
+            self.logger.info(f"Rolling geometric mean calculated: {df['rf_1y_raw'].min():.6f} to {df['rf_1y_raw'].max():.6f}")
+            
+            # Keep only necessary columns
+            result_df = df[["fiscal_year", "fiscal_month", "rf_1y_raw"]].copy()
             
             return result_df
             
         except Exception as e:
-            self.logger.error(f"Failed to calculate geometric mean: {e}")
+            self.logger.error(f"Failed to calculate rolling geometric mean: {e}")
             raise
     
     def _apply_rounding_and_approach(
         self,
-        rf_raw_df: pd.DataFrame,
+        rf_monthly_df: pd.DataFrame,
         beta_rounding: float,
-        approach: str,
-        benchmark: float,
-        risk_premium: float
+        cost_of_equity_approach: str,
+        benchmark: float = 0.0,
+        risk_premium: float = 0.0
     ) -> pd.DataFrame:
         """
-        Apply rounding and approach logic to risk-free rate.
+        Apply rounding and approach logic to Rf_1Y_Raw values.
         
-        Rounding: Rf_1Y = round((Rf_1Y_Raw / beta_rounding), 0) * beta_rounding
+        Rounding formula: Rf_1Y = ROUND(Rf_1Y_Raw / beta_rounding, 0) * beta_rounding
+        
         Approach:
-            - FIXED: Rf = benchmark - risk_premium
-            - Floating: Rf = Rf_1Y
+        - FIXED: Rf = benchmark - risk_premium
+        - FLOATING: Rf = Rf_1Y (market-based)
         """
         try:
-            df = rf_raw_df.copy()
+            df = rf_monthly_df.copy()
             
             # Apply rounding
-            df["rf_1y"] = (df["rf_1y_raw"] / beta_rounding).round(0) * beta_rounding
+            df["rf_1y"] = np.round(df["rf_1y_raw"] / beta_rounding, 0) * beta_rounding
             
             # Apply approach
-            if approach == 'FIXED':
+            if cost_of_equity_approach == "FIXED":
                 df["rf"] = benchmark - risk_premium
-            else:  # 'Floating' or default
+                self.logger.info(f"Applied FIXED approach: Rf = {benchmark} - {risk_premium} = {df['rf'].iloc[0]}")
+            else:  # FLOATING (default)
                 df["rf"] = df["rf_1y"]
+                self.logger.info(f"Applied FLOATING approach: Rf = Rf_1Y (market-based)")
             
-            return df[["fiscal_year", "rf_1y_raw", "rf_1y", "rf"]]
+            # Ensure reasonable bounds (0-1 or 0-100% range)
+            # If values are in percentage form (0-100), cap at 100%; if decimal (0-1), cap at 1
+            max_val = df[["rf_1y", "rf"]].max().max()
+            if max_val > 1:
+                # Values are in percentage form, cap at 100%
+                df["rf"] = df["rf"].clip(upper=1.0)
+                df["rf_1y"] = df["rf_1y"].clip(upper=1.0)
+            
+            return df
             
         except Exception as e:
             self.logger.error(f"Failed to apply rounding and approach: {e}")
             raise
     
-    def _expand_to_all_companies(
-        self,
-        rf_by_year_df: pd.DataFrame,
-        company_tickers: list
-    ) -> pd.DataFrame:
+    def _extract_december_values(self, rf_monthly_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Expand annual risk-free rate (one value per fiscal year) to all companies.
+        Extract December (month 12) values for each fiscal year.
         
-        Creates a row for each (company_ticker, fiscal_year) combination.
+        Returns one row per year containing the December Rf values.
         """
         try:
-            # Create cartesian product of companies × fiscal years
-            expanded_records = []
-            for ticker in company_tickers:
-                for _, row in rf_by_year_df.iterrows():
-                    expanded_records.append({
-                        'ticker': ticker,
-                        'fiscal_year': row['fiscal_year'],
-                        'rf_1y_raw': row['rf_1y_raw'],
-                        'rf_1y': row['rf_1y'],
-                        'rf': row['rf']
-                    })
+            # Filter for December only (fiscal_month = 12)
+            december_df = rf_monthly_df[rf_monthly_df["fiscal_month"] == 12].copy()
             
-            return pd.DataFrame(expanded_records)
+            if december_df.empty:
+                self.logger.warning("No December data found in monthly Rf data")
+                return pd.DataFrame()
+            
+            # Group by fiscal_year and keep December values
+            result_df = december_df[["fiscal_year", "rf_1y_raw", "rf_1y", "rf"]].copy()
+            result_df = result_df.sort_values("fiscal_year").reset_index(drop=True)
+            
+            self.logger.info(f"Extracted {len(result_df)} December values (fiscal years {result_df['fiscal_year'].min()}-{result_df['fiscal_year'].max()})")
+            
+            return result_df
             
         except Exception as e:
-            self.logger.error(f"Failed to expand to all companies: {e}")
+            self.logger.error(f"Failed to extract December values: {e}")
+            raise
+    
+    def _build_yearly_with_metadata(
+        self,
+        rf_yearly_df: pd.DataFrame,
+        rf_monthly_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """
+        Build yearly dataframe with metadata containing all 12 monthly values.
+        
+        Metadata structure:
+        {
+            "metric_level": "L1",
+            "monthly_values": [
+                {"month": 1, "rf_1y_raw": 0.0589, "rf_1y": 0.060, "rf": 0.100},
+                ...
+                {"month": 12, "rf_1y_raw": 0.0612, "rf_1y": 0.061, "rf": 0.100}
+            ]
+        }
+        """
+        try:
+            result_records = []
+            
+            for _, yearly_row in rf_yearly_df.iterrows():
+                fiscal_year = int(yearly_row['fiscal_year'])
+                
+                # Get all 12 months for this year
+                yearly_monthly = rf_monthly_df[rf_monthly_df['fiscal_year'] == fiscal_year]
+                
+                # Build monthly values array
+                monthly_values = []
+                for _, monthly_row in yearly_monthly.iterrows():
+                    monthly_values.append({
+                        "month": int(monthly_row['fiscal_month']),
+                        "rf_1y_raw": round(float(monthly_row['rf_1y_raw']), 4),
+                        "rf_1y": round(float(monthly_row['rf_1y']), 4),
+                        "rf": round(float(monthly_row['rf']), 4)
+                    })
+                
+                # Build metadata
+                metadata = {
+                    "metric_level": "L1",
+                    "monthly_values": monthly_values
+                }
+                
+                # Create record with metadata
+                result_records.append({
+                    "fiscal_year": fiscal_year,
+                    "rf_1y_raw": round(float(yearly_row['rf_1y_raw']), 4),
+                    "rf_1y": round(float(yearly_row['rf_1y']), 4),
+                    "rf": round(float(yearly_row['rf']), 4),
+                    "metadata": metadata
+                })
+            
+            result_df = pd.DataFrame(result_records)
+            self.logger.info(f"Built metadata for {len(result_df)} yearly records")
+            
+            return result_df
+            
+        except Exception as e:
+            self.logger.error(f"Failed to build yearly metadata: {e}")
             raise
     
     def _format_results_for_storage(
         self,
         rf_df: pd.DataFrame,
+        bond_ticker: str,
         dataset_id: UUID,
         param_set_id: UUID
     ) -> list[dict]:
         """
         Format results for storage in metrics_outputs table.
         
-        Creates 3 rows per company-fiscal year: Rf_1Y_Raw, Rf_1Y, Rf
+        Creates 3 rows per fiscal year: Rf_1Y_Raw, Rf_1Y, Rf
+        Each row includes the metadata with all 12 monthly values.
         """
         try:
             records = []
             
             for _, row in rf_df.iterrows():
-                ticker = row['ticker']
                 fiscal_year = int(row['fiscal_year'])
+                metadata = row['metadata']
                 
                 # Rf_1Y_Raw
                 records.append({
                     "dataset_id": dataset_id,
                     "param_set_id": param_set_id,
-                    "ticker": ticker,
+                    "ticker": bond_ticker,
                     "fiscal_year": fiscal_year,
                     "output_metric_name": "Rf_1Y_Raw",
                     "output_metric_value": float(row['rf_1y_raw']) if pd.notna(row['rf_1y_raw']) else None,
-                    "metadata": {"metric_level": "L1"}
+                    "metadata": metadata
                 })
                 
                 # Rf_1Y
                 records.append({
                     "dataset_id": dataset_id,
                     "param_set_id": param_set_id,
-                    "ticker": ticker,
+                    "ticker": bond_ticker,
                     "fiscal_year": fiscal_year,
                     "output_metric_name": "Rf_1Y",
                     "output_metric_value": float(row['rf_1y']) if pd.notna(row['rf_1y']) else None,
-                    "metadata": {"metric_level": "L1"}
+                    "metadata": metadata
                 })
                 
                 # Rf
                 records.append({
                     "dataset_id": dataset_id,
                     "param_set_id": param_set_id,
-                    "ticker": ticker,
+                    "ticker": bond_ticker,
                     "fiscal_year": fiscal_year,
                     "output_metric_name": "Rf",
                     "output_metric_value": float(row['rf']) if pd.notna(row['rf']) else None,
-                    "metadata": {"metric_level": "L1"}
+                    "metadata": metadata
                 })
+            
+            self.logger.info(f"Formatted {len(records)} records for storage ({len(rf_df)} years × 3 metrics)")
             
             return records
             
@@ -462,59 +549,46 @@ class RiskFreeRateCalculationService:
             self.logger.error(f"Failed to format results: {e}")
             raise
     
-    async def _store_results_raw_sql(self, records: list[dict]) -> int:
-        """Store results using raw SQL INSERT to avoid ORM foreign key validation.
+    async def _store_results_raw_sql(self, results: list[dict]) -> int:
+        """
+        Store results using raw SQL with UPSERT logic.
         
-        Returns:
-            Count of records inserted.
+        Uses DO UPDATE clause to handle conflicts on (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name).
         """
         try:
-            if not records:
+            if not results:
+                self.logger.warning("No results to store")
                 return 0
             
-            # Filter out records with NULL output_metric_value
-            valid_records = [r for r in records if r["output_metric_value"] is not None]
-            
-            if not valid_records:
-                self.logger.warning("No valid results to store (all values are NULL)")
-                return 0
-            
-            # Prepare values for bulk insert
-            values = []
-            for record in valid_records:
-                values.append((
-                    str(record["dataset_id"]),
-                    str(record["param_set_id"]),
-                    record["ticker"],
-                    record["fiscal_year"],
-                    record["output_metric_name"],
-                    record["output_metric_value"],
-                    json.dumps(record["metadata"])
-                ))
-            
-            # Bulk insert using raw SQL
-            query = text("""
+            # Prepare data for bulk insert
+            insert_query = text("""
                 INSERT INTO cissa.metrics_outputs 
                 (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
                 VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata)
                 ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
-                DO NOTHING
+                DO UPDATE SET
+                    output_metric_value = EXCLUDED.output_metric_value,
+                    metadata = EXCLUDED.metadata
             """)
             
-            for value_tuple in values:
-                await self.session.execute(query, {
-                    "dataset_id": value_tuple[0],
-                    "param_set_id": value_tuple[1],
-                    "ticker": value_tuple[2],
-                    "fiscal_year": value_tuple[3],
-                    "output_metric_name": value_tuple[4],
-                    "output_metric_value": value_tuple[5],
-                    "metadata": value_tuple[6]
-                })
+            # Insert records in batches
+            batch_size = 1000
+            for i in range(0, len(results), batch_size):
+                batch = results[i:i+batch_size]
+                
+                for record in batch:
+                    await self.session.execute(insert_query, {
+                        "dataset_id": record["dataset_id"],
+                        "param_set_id": record["param_set_id"],
+                        "ticker": record["ticker"],
+                        "fiscal_year": record["fiscal_year"],
+                        "output_metric_name": record["output_metric_name"],
+                        "output_metric_value": record["output_metric_value"],
+                        "metadata": json.dumps(record["metadata"])
+                    })
             
-            self.logger.info(f"Inserted {len(valid_records)} valid records out of {len(records)} total (skipped {len(records) - len(valid_records)} NULL values)")
-            
-            return len(valid_records)
+            self.logger.info(f"Stored {len(results)} records")
+            return len(results)
             
         except Exception as e:
             self.logger.error(f"Failed to store results: {e}")
