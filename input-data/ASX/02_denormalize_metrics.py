@@ -90,6 +90,69 @@ def identify_period_type(headers):
     return 'MONTHLY'
 
 
+def extract_risk_free_rate_mapping_from_csv(csv_path):
+    """
+    Extract geography-to-index-ticker mapping from Rf.csv metadata rows.
+    
+    Rf.csv structure:
+    - Row 1: Headers (Num, Code, Country, FX, Ticker, Bond Name, dates...)
+    - Rows 2+: Data rows with one row per country/geography
+    
+    Returns:
+        Dict mapping currency (FX) → ticker
+        Example: {"AUD": "GACGB10 Index", "EUR": "GAGB10YR Index"}
+    """
+    mapping = {}
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            # Read first few rows (one per country)
+            for i, row in enumerate(reader):
+                if i >= 50:  # Safeguard: stop after 50 rows
+                    break
+                
+                ticker = row.get('Ticker', '').strip()
+                fx = row.get('FX', '').strip()
+                
+                if ticker and fx:
+                    mapping[fx] = ticker  # FX code (AUD, EUR, etc.) → Ticker
+        
+        return mapping
+    except Exception as e:
+        print(f"  ⚠  Warning: Could not extract risk-free rate mapping from {csv_path}: {e}")
+        return {}
+
+
+def detect_dataset_geography(base_csv_path):
+    """
+    Detect dataset geography from Base.csv currency.
+    
+    Reads the first company row and extracts the Data FX column value.
+    Defaults to "AUD" if detection fails.
+    
+    Returns:
+        Currency code (e.g., "AUD", "USD", "GBP", "EUR")
+    """
+    try:
+        with open(base_csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            first_row = next(reader)
+            currency = first_row.get('Data FX', '').strip()
+            if currency:
+                print(f"  📍 Dataset geography detected: {currency}")
+                return currency
+    except FileNotFoundError:
+        print(f"  ⚠  Warning: Base.csv not found at {base_csv_path}")
+    except StopIteration:
+        print(f"  ⚠  Warning: Base.csv is empty")
+    except Exception as e:
+        print(f"  ⚠  Warning: Could not detect geography from {base_csv_path}: {e}")
+    
+    # Default fallback
+    print(f"  📍 Using default geography: AUD")
+    return "AUD"
+
+
 def convert_excel_date_to_iso(excel_serial):
     """
     Convert Excel date serial number to ISO format (YYYY-MM-DD).
@@ -110,11 +173,20 @@ def convert_excel_date_to_iso(excel_serial):
         return excel_serial
 
 
-def process_metric_file(csv_path, metric_name, metric_dir):
+def process_metric_file(csv_path, metric_name, metric_dir, 
+                       dataset_geography=None, rff_mapping=None):
     """
     Process a single metric CSV file and denormalize from WIDE to LONG format.
     
-    Returns list of tuples: (ticker, period, period_type, metric, value, currency)
+    Args:
+        csv_path: Path to metric CSV file
+        metric_name: Canonical metric name (e.g., "RISK_FREE_RATE")
+        metric_dir: Directory containing metric files
+        dataset_geography: Currency code of dataset (e.g., "AUD") - optional
+        rff_mapping: Dict mapping currency → risk-free-rate ticker - optional
+    
+    Returns:
+        List of tuples: (ticker, period, period_type, metric, value, currency)
     """
     records = []
     
@@ -142,6 +214,21 @@ def process_metric_file(csv_path, metric_name, metric_dir):
                 # Skip if no ticker
                 if not ticker:
                     continue
+                
+                # RISK_FREE_RATE filtering: only ingest for the correct index for this geography
+                if metric_name == "RISK_FREE_RATE":
+                    if rff_mapping and dataset_geography:
+                        allowed_ticker = rff_mapping.get(dataset_geography)
+                        if allowed_ticker and ticker != allowed_ticker:
+                            # Skip this ticker - not the risk-free rate index for this geography
+                            continue
+                    else:
+                        # No mapping available - log warning and use default (Australia)
+                        if dataset_geography and dataset_geography != "AUD":
+                            print(f"    ⚠  Warning: Could not map risk-free rate for {dataset_geography}, using AUD default")
+                            allowed_ticker = rff_mapping.get("AUD") if rff_mapping else None
+                            if allowed_ticker and ticker != allowed_ticker:
+                                continue
                 
                 # Process each period column
                 for period_col in period_cols:
@@ -217,6 +304,26 @@ def denormalize_metrics(metric_dir, output_file, config_path=None):
     print(f"Config source:    {config_path}")
     print()
     
+    # Extract risk-free rate mapping from Rf.csv
+    print("Initializing geography-aware filtering:")
+    rff_mapping = {}
+    rff_csv_path = metric_path / 'Rf.csv'
+    if rff_csv_path.exists():
+        rff_mapping = extract_risk_free_rate_mapping_from_csv(rff_csv_path)
+        if rff_mapping:
+            print(f"  📊 Risk-free rate mapping extracted: {len(rff_mapping)} geographies")
+            for fx, ticker in sorted(rff_mapping.items()):
+                print(f"     {fx:3s} → {ticker}")
+        else:
+            print(f"  ⚠  Warning: No risk-free rate mapping extracted from Rf.csv")
+    else:
+        print(f"  ⚠  Warning: Rf.csv not found at {rff_csv_path}")
+    
+    # Detect dataset geography from Base.csv
+    base_csv_path = metric_path / 'Base.csv'
+    dataset_geography = detect_dataset_geography(base_csv_path)
+    print()
+    
     # Collect all records
     all_records = []
     stats = {
@@ -241,8 +348,14 @@ def denormalize_metrics(metric_dir, output_file, config_path=None):
         stats['files_found'] += 1
         print(f"  → {filename:25} ({database_name})")
         
-        # Process the file
-        records = process_metric_file(csv_path, database_name, metric_path)
+        # Process the file with geography-aware parameters
+        records = process_metric_file(
+            csv_path, 
+            database_name, 
+            metric_path,
+            dataset_geography=dataset_geography,
+            rff_mapping=rff_mapping
+        )
         
         if records:
             all_records.extend(records)
@@ -251,12 +364,18 @@ def denormalize_metrics(metric_dir, output_file, config_path=None):
             fiscal_count = sum(1 for r in records if r[2] == 'FISCAL')
             monthly_count = sum(1 for r in records if r[2] == 'MONTHLY')
             
+            # Show if RISK_FREE_RATE was filtered
+            if database_name == 'RISK_FREE_RATE' and rff_mapping:
+                allowed_ticker = rff_mapping.get(dataset_geography, "UNKNOWN")
+                print(f"     ✓ Extracted {len(records):,} records (filtered to {allowed_ticker})")
+            else:
+                print(f"     ✓ Extracted {len(records):,} records")
+            
             stats['files_processed'] += 1
             stats['total_records'] += len(records)
             stats['fiscal_records'] += fiscal_count
             stats['monthly_records'] += monthly_count
             
-            print(f"     ✓ Extracted {len(records):,} records")
             if fiscal_count > 0:
                 print(f"       - Fiscal:  {fiscal_count:,}")
             if monthly_count > 0:
