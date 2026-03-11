@@ -243,6 +243,7 @@ class MetricsService:
     ) -> int:
         """
         Execute a single L1 metric SQL function and insert results into metrics_outputs.
+        Handles both parameter-independent and parameter-sensitive metrics.
         
         Args:
             metric_name: Key from METRIC_FUNCTIONS dict (e.g., "Calc MC", "Calc Assets")
@@ -261,15 +262,37 @@ class MetricsService:
             # Call the SQL function to get calculated results
             logger.info(f"Executing L1 metric: {metric_name} (via {function_name})")
             
-            query = text(f"""
-                SELECT ticker, fiscal_year, {column_name} AS value
-                FROM cissa.{function_name}(:dataset_id)
-            """)
+            # Handle parameter-sensitive metrics
+            if needs_param_set:
+                param_set_id = await self._get_default_param_set_id()
+                if not param_set_id:
+                    error_msg = f"Metric {metric_name} requires param_set_id, but no default found"
+                    logger.error(error_msg)
+                    return 0
+                
+                query = text(f"""
+                    SELECT ticker, fiscal_year, {column_name} AS value
+                    FROM cissa.{function_name}(:dataset_id, :param_set_id)
+                """)
+                
+                logger.info(f"Query: {query}")
+                logger.info(f"Dataset ID param: {dataset_id}, Param Set ID: {param_set_id}")
+                
+                result = await self.session.execute(query, {
+                    "dataset_id": str(dataset_id),
+                    "param_set_id": str(param_set_id)
+                })
+            else:
+                query = text(f"""
+                    SELECT ticker, fiscal_year, {column_name} AS value
+                    FROM cissa.{function_name}(:dataset_id)
+                """)
+                
+                logger.info(f"Query: {query}")
+                logger.info(f"Dataset ID param: {dataset_id}")
+                
+                result = await self.session.execute(query, {"dataset_id": str(dataset_id)})
             
-            logger.info(f"Query: {query}")
-            logger.info(f"Dataset ID param: {dataset_id}")
-            
-            result = await self.session.execute(query, {"dataset_id": str(dataset_id)})
             rows = result.fetchall()
             
             logger.info(f"Function {function_name} returned {len(rows)} rows")
