@@ -239,6 +239,7 @@ class SchemaManager:
                 
                 # Insert metric units from config
                 # Store database_name as metric_name in the table (canonical DB value)
+                inserted_count = 0
                 for metric_data in metric_units_config:
                     database_name = metric_data.get("database_name")
                     unit = metric_data.get("unit")
@@ -250,12 +251,14 @@ class SchemaManager:
                     conn.execute(text("""
                         INSERT INTO metric_units (metric_name, unit)
                         VALUES (:metric_name, :unit)
+                        ON CONFLICT (metric_name) DO NOTHING
                     """), {
                         "metric_name": database_name,
                         "unit": unit,
                     })
+                    inserted_count += 1
                 
-                print(f"✓ Inserted {len(metric_units_config)} metric units")
+                print(f"✓ Metric units initialized ({inserted_count} processed, duplicates ignored)")
             
             return True
         

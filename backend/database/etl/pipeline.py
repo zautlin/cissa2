@@ -464,34 +464,9 @@ class PipelineOrchestrator:
                 'quality_metadata': result.get('quality_metadata', {}),
             }
             
-            # AUTO-TRIGGER L1 METRICS (after fundamentals are populated)
-            self.logger.section("AUTO-CALCULATING L1 METRICS")
-            self.logger.info("Triggering L1 metrics calculation (now that fundamentals are ready)...")
-            
-            try:
-                l1_result = self.ingester._auto_calculate_l1_metrics(self.dataset_id)
-                
-                if l1_result.get('status') == 'success':
-                    self.logger.success(f"✓ L1 Metrics: {l1_result.get('calculated', 0)}/15 metrics calculated")
-                    self.logger.info(f"  - Metrics stored: {l1_result.get('calculated', 0)}")
-                elif l1_result.get('status') == 'partial':
-                    self.logger.info(f"⚠ L1 Metrics: {l1_result.get('calculated', 0)}/15 metrics (partial)")
-                    if l1_result.get('failed', 0) > 0:
-                        self.logger.info(f"  - Failed: {l1_result.get('failed', 0)}")
-                        for error in l1_result.get('errors', [])[:3]:  # Show first 3 errors
-                            self.logger.info(f"    • {error}")
-                else:
-                    self.logger.error(f"L1 Metrics calculation failed: {l1_result.get('message', 'Unknown error')}")
-                
-                self.results['stage_2_process']['l1_metrics'] = l1_result
-            except Exception as e:
-                self.logger.error(f"L1 metrics calculation error: {e}")
-                import traceback
-                self.logger.info(traceback.format_exc())
-                self.results['stage_2_process']['l1_metrics'] = {
-                    'status': 'error',
-                    'message': str(e)
-                }
+            self.logger.section("DATA PROCESSING COMPLETE")
+            self.logger.info("✓ Stage 2: Data processing complete")
+            self.logger.info("ℹ  L1 metrics calculation is now manual via run-l1-basic-metrics.sh")
             
             return True
         

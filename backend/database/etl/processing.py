@@ -68,6 +68,21 @@ class DataQualityProcessor:
             monthly_df = aligned_df[aligned_df['period_type'] == 'MONTHLY'].copy()
             print(f"    ✓ FISCAL records: {len(fiscal_df)}, MONTHLY records: {len(monthly_df)}")
             
+            # IMPORTANT: Filter RISK_FREE_RATE to only GACGB10 Index
+            # This prevents RISK_FREE_RATE from being imputed to all companies
+            print("  [2.5/5] Filtering RISK_FREE_RATE to GACGB10 Index only...")
+            rf_fiscal = fiscal_df[fiscal_df['metric_name'] == 'RISK_FREE_RATE']
+            rf_monthly = monthly_df[monthly_df['metric_name'] == 'RISK_FREE_RATE']
+            
+            rf_fiscal_gacgb = rf_fiscal[rf_fiscal['ticker'] == 'GACGB10 Index'].copy()
+            rf_monthly_gacgb = rf_monthly[rf_monthly['ticker'] == 'GACGB10 Index'].copy()
+            
+            # Remove RISK_FREE_RATE from fiscal/monthly for imputation
+            fiscal_df = fiscal_df[fiscal_df['metric_name'] != 'RISK_FREE_RATE']
+            monthly_df = monthly_df[monthly_df['metric_name'] != 'RISK_FREE_RATE']
+            
+            print(f"    ✓ Filtered RISK_FREE_RATE: FISCAL {len(rf_fiscal_gacgb)} rows, MONTHLY {len(rf_monthly_gacgb)} rows")
+            
             # Step 3: Convert to wide format and build period_type_map for each
             print("  [3/5] Converting to wide format...")
             sector_map = self.imputation._load_sector_map()
@@ -104,7 +119,17 @@ class DataQualityProcessor:
                 n_rows += self._write_fundamentals(dataset_id, fiscal_clean, fiscal_source, fiscal_period_type_map, 'FISCAL')
             if monthly_clean is not None and not monthly_clean.empty:
                 n_rows += self._write_fundamentals(dataset_id, monthly_clean, monthly_source, monthly_period_type_map, 'MONTHLY')
-            print(f"    ✓ Wrote {n_rows} fundamentals rows")
+            
+            # Write RISK_FREE_RATE for GACGB10 Index only (no imputation, raw values only)
+            print("  [5.5/5] Writing RISK_FREE_RATE (GACGB10 Index only)...")
+            rf_rows = 0
+            if not rf_fiscal_gacgb.empty:
+                rf_rows += self._write_risk_free_rate(dataset_id, rf_fiscal_gacgb, 'FISCAL')
+            if not rf_monthly_gacgb.empty:
+                rf_rows += self._write_risk_free_rate(dataset_id, rf_monthly_gacgb, 'MONTHLY')
+            n_rows += rf_rows
+            print(f"    ✓ Wrote {rf_rows} RISK_FREE_RATE rows")
+            print(f"    ✓ Total: {n_rows} fundamentals rows")
             
             # Calculate quality metadata
             quality_metadata = self._calculate_quality_metadata(combined_log, n_rows)
@@ -351,3 +376,72 @@ class DataQualityProcessor:
             **sources_count,
             'fill_rate': round(fill_rate, 4),
         }
+    
+    def _write_risk_free_rate(
+        self,
+        dataset_id: str,
+        rf_data: pd.DataFrame,
+        period_type: str,
+    ) -> int:
+        """
+        Write RISK_FREE_RATE for GACGB10 Index only (no imputation).
+        
+        RISK_FREE_RATE is NOT imputed to all companies. It only exists for
+        GACGB10 Index in fundamentals. The risk_free_rate_service then uses
+        this single index to calculate Rf for all companies.
+        
+        Args:
+            dataset_id: UUID of dataset
+            rf_data: DataFrame with RISK_FREE_RATE data for GACGB10 Index
+            period_type: 'FISCAL' or 'MONTHLY'
+            
+        Returns:
+            Number of rows written to fundamentals table
+        """
+        rows = []
+        
+        for _, row in rf_data.iterrows():
+            ticker = str(row['ticker'])
+            metric_name = str(row['metric_name'])
+            fiscal_year = int(row['fiscal_year'])
+            value = float(row['value'])
+            
+            # Handle fiscal_month and fiscal_day based on period_type
+            if period_type == 'FISCAL':
+                fiscal_month = None
+                fiscal_day = None
+            else:  # period_type == 'MONTHLY'
+                fiscal_month = int(row['fiscal_month']) if pd.notna(row['fiscal_month']) else None
+                fiscal_day = int(row['fiscal_day']) if pd.notna(row['fiscal_day']) else None
+            
+            # Store raw data (no imputation)
+            metadata = {
+                'imputation_source': 'RAW',
+                'confidence_level': 'HIGH',
+            }
+            
+            rows.append({
+                'dataset_id': dataset_id,
+                'ticker': ticker,
+                'metric_name': metric_name,
+                'fiscal_year': fiscal_year,
+                'fiscal_month': fiscal_month,
+                'fiscal_day': fiscal_day,
+                'numeric_value': value,
+                'currency': 'AUD',
+                'period_type': period_type,
+                'imputed': False,
+                'metadata': json.dumps(metadata),
+            })
+        
+        # Bulk insert
+        if rows:
+            with self.engine.begin() as conn:
+                stmt = """
+                    INSERT INTO fundamentals 
+                    (dataset_id, ticker, metric_name, fiscal_year, fiscal_month, fiscal_day, numeric_value, currency, period_type, imputed, metadata)
+                    VALUES (%(dataset_id)s, %(ticker)s, %(metric_name)s, %(fiscal_year)s, %(fiscal_month)s, %(fiscal_day)s, %(numeric_value)s, %(currency)s, %(period_type)s, %(imputed)s, %(metadata)s::jsonb)
+                """
+                conn.exec_driver_sql(stmt, rows)
+        
+        return len(rows)
