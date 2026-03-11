@@ -509,11 +509,13 @@ class BetaCalculationService:
                 metadata = {"metric_level": "L1"}
                 
                 # Add monthly raw slopes if available
-                if pd.notna(row.get('monthly_raw_slopes')):
+                if 'monthly_raw_slopes' in row and row['monthly_raw_slopes'] is not None:
                     monthly_slopes = row['monthly_raw_slopes']
-                    # Convert NaN values to None for JSON serialization
-                    monthly_slopes = [float(s) if pd.notna(s) else None for s in monthly_slopes]
-                    metadata['monthly_raw_slopes'] = monthly_slopes
+                    # Handle both list and non-list cases
+                    if isinstance(monthly_slopes, list):
+                        # Convert NaN values to None for JSON serialization
+                        monthly_slopes = [float(s) if pd.notna(s) else None for s in monthly_slopes]
+                        metadata['monthly_raw_slopes'] = monthly_slopes
                 
                 record = {
                     "dataset_id": dataset_id,
