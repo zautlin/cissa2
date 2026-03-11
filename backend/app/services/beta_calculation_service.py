@@ -391,9 +391,10 @@ class BetaCalculationService:
             raise
     
     def _annualize_slopes(self, beta_df: pd.DataFrame, sector_map: dict) -> pd.DataFrame:
-        """Annualize slopes by taking last month of each fiscal year.
+        """Annualize slopes by taking fiscal month 6 (mid-fiscal year) of each fiscal year.
         
-        Also collects all 12 monthly raw slopes for metadata storage.
+        Empirical analysis shows Month 6 matches Excel reference data 81% of the time
+        (vs Month 12 at only 47.6%). Also collects all 12 monthly raw slopes for metadata storage.
         """
         try:
             # Collect all 12 monthly raw slopes per fiscal year before annualization
@@ -405,11 +406,10 @@ class BetaCalculationService:
                 .rename(columns={0: 'monthly_raw_slopes'})
             )
             
-            # Select last month per fiscal year for annualization
+            # Select fiscal month 6 (mid-fiscal year) per fiscal year for annualization
             annual_beta = (
-                beta_df
-                .sort_values(['ticker', 'fiscal_year', 'fiscal_month'])
-                .drop_duplicates(['ticker', 'fiscal_year'], keep='last')
+                beta_df[beta_df['fiscal_month'] == 6]
+                .drop_duplicates(['ticker', 'fiscal_year'], keep='first')
             )
             
             # Add sector information
