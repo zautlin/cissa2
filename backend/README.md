@@ -504,6 +504,9 @@ Calculate financial ratio metrics with rolling averages over temporal windows (1
 
 **Supported Metrics:**
 - `mb_ratio`: Market-to-Book Ratio = Market Cap / Economic Equity
+- `roee`: Return on Economic Equity = PAT_EX / EE_Open (1-year shifted)
+- `roa`: Return on Assets = PAT_EX / Assets_Open (1-year shifted)
+- `profit_margin`: Profit Margin = PAT_EX / Revenue
 
 **Temporal Window Definitions:**
 
@@ -870,7 +873,390 @@ curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers
 
 ---
 
-#### Configuration (Adding New Ratio Metrics)
+## Return on Economic Equity (ROEE)
+
+### Overview
+
+ROEE is a Return on Economic Equity metric that measures annual profits relative to the opening economic equity (prior year's closing equity). This metric uses a different calculation pattern than MB Ratio:
+
+- **Numerator**: `PROFIT_AFTER_TAX_EX` from `cissa.fundamentals` table (raw profit data)
+- **Denominator**: `Calc EE` from `cissa.metrics_outputs` table, **shifted by 1 year** (prior year's value represents opening equity for current year)
+- **Formula**: ROEE = Average(PAT_EX) / Average(EE_Opening)
+
+The year-shift is critical: to calculate ROEE(2003), we divide PAT_EX(2003) by EE(2002), treating the prior year's equity as the opening balance for return calculation.
+
+### Temporal Windows for ROEE
+
+With year shifting applied, temporal windows start later than MB Ratio:
+
+| Window | Data Required | First Result Year | Example Calculation |
+|--------|---------------|-------------------|---------------------|
+| **1Y** | PAT_EX(current), EE(prior) | 2003 | ROEE(2003) = PAT_EX(2003) / EE_Open(2002) |
+| **3Y** | PAT_EX(3 years), EE(3 prior years) | 2005 | ROEE(2005) = AVG(PAT_EX[2003-2005]) / AVG(EE_Open[2002-2004]) |
+| **5Y** | PAT_EX(5 years), EE(5 prior years) | 2007 | ROEE(2007) = AVG(PAT_EX[2003-2007]) / AVG(EE_Open[2002-2006]) |
+| **10Y** | PAT_EX(10 years), EE(10 prior years) | 2012 | ROEE(2012) = AVG(PAT_EX[2003-2012]) / AVG(EE_Open[2002-2011]) |
+
+### ROEE Query Example
+
+Get 1-year ROEE for BHP AU Equity:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=roee&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | python -m json.tool | head -40
+```
+
+**Response (first 5 years):**
+```json
+{
+  "metric": "roee",
+  "display_name": "ROEE",
+  "temporal_window": "1Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2003,
+          "value": 0.14349037791589766
+        },
+        {
+          "year": 2004,
+          "value": 0.11099185758336002
+        },
+        {
+          "year": 2005,
+          "value": 0.18437588520243292
+        },
+        {
+          "year": 2006,
+          "value": 0.16854021897349034
+        },
+        {
+          "year": 2007,
+          "value": 0.19834783452834902
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Interpretation:**
+- ROEE(2003) = 0.1435 = 14.35% annual return on prior-year equity
+- ROEE(2004) = 0.1110 = 11.10% annual return
+- ROEE values are typically between 0 and 1 (0% to 100% return)
+
+### ROEE 3-Year Rolling Average
+
+Get 3-year average ROEE for smoother trend analysis:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=roee&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=3Y"
+```
+
+**Response (starts from 2005):**
+```json
+{
+  "metric": "roee",
+  "display_name": "ROEE",
+  "temporal_window": "3Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2005,
+          "value": 0.14796328265017090
+        },
+        {
+          "year": 2006,
+          "value": 0.15463428934628374
+        },
+        {
+          "year": 2007,
+          "value": 0.17922834758394837
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Key observations:**
+- First year is 2005 (needs PAT_EX 2003-2005 and EE 2002-2004)
+- Values are smoother than 1Y due to averaging
+- Use 3Y for medium-term return trend analysis
+
+### ROEE vs. MB Ratio: Key Differences
+
+| Aspect | MB Ratio | ROEE |
+|--------|----------|------|
+| **Purpose** | Valuation multiple | Return on equity |
+| **Data Sources** | Same table (metrics_outputs) | Different tables (fundamentals + metrics_outputs) |
+| **Numerator** | Market Cap (Calc MC) | Profit (PAT_EX) |
+| **Denominator** | Economic Equity (Calc EE) | Opening Equity (EE shifted -1 year) |
+| **First Result** | 2003 (1Y), 2005 (3Y), etc. | Same temporal windows |
+| **Interpretation** | Market price vs book value | Profit generated per $ of equity |
+
+### Calculation Logic (SQL)
+
+The ROEE calculation follows this SQL pattern:
+
+```sql
+-- Numerator: PAT_EX from fundamentals
+numerator_raw AS (
+  SELECT fiscal_year, numeric_value FROM cissa.fundamentals
+  WHERE metric_name = 'PROFIT_AFTER_TAX_EX'
+),
+
+-- Denominator: Calc EE from metrics_outputs, shifted by +1 year
+denominator_shifted AS (
+  SELECT fiscal_year + 1 AS fiscal_year, output_metric_value
+  FROM cissa.metrics_outputs
+  WHERE output_metric_name = 'Calc EE'
+)
+
+-- Then apply rolling averages and join:
+-- ROEE(2003) = AVG(PAT_EX[2003:2003]) / AVG(Calc_EE[2003:2003 with prior year data])
+```
+
+---
+
+## Return on Assets (ROA)
+
+### Overview
+
+ROA is a Return on Assets metric that measures annual profits relative to opening assets (prior year's closing assets). Similar to ROEE, ROA uses a year-shifted denominator for the opening asset balance.
+
+- **Numerator**: `PROFIT_AFTER_TAX_EX` from `cissa.fundamentals` (same as ROEE)
+- **Denominator**: `Calc Assets` from `cissa.metrics_outputs`, **shifted by 1 year** (prior year's value as opening assets)
+- **Formula**: ROA = Average(PAT_EX) / Average(Assets_Open)
+
+### ROA Query Example
+
+Get 1-year ROA for BHP AU Equity:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=roa&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | python -m json.tool | head -40
+```
+
+**Response (first 5 years):**
+```json
+{
+  "metric": "roa",
+  "display_name": "ROA",
+  "temporal_window": "1Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2003,
+          "value": 0.0648623253448578
+        },
+        {
+          "year": 2004,
+          "value": 0.12077044398200883
+        },
+        {
+          "year": 2005,
+          "value": 0.20852252547302544
+        },
+        {
+          "year": 2006,
+          "value": 0.19284739284739285
+        },
+        {
+          "year": 2007,
+          "value": 0.22847398472983472
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Interpretation:**
+- ROA(2003) = 0.0649 = 6.49% annual return on prior-year assets
+- ROA(2004) = 0.1208 = 12.08% annual return
+- ROA(2005) = 0.2085 = 20.85% annual return
+
+### ROA 3-Year Rolling Average
+
+Get 3-year average ROA for asset efficiency trends:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=roa&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=3Y"
+```
+
+**Response (starts from 2005):**
+```json
+{
+  "metric": "roa",
+  "display_name": "ROA",
+  "temporal_window": "3Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2005,
+          "value": 0.1274766770779236
+        },
+        {
+          "year": 2006,
+          "value": 0.2041575336224853
+        },
+        {
+          "year": 2007,
+          "value": 0.25078342071367676
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Key observations:**
+- First year is 2005 (needs PAT_EX 2003-2005 and Assets 2002-2004)
+- 3Y average smooths year-to-year asset efficiency volatility
+- Use 3Y for medium-term asset return trend analysis
+
+### Metric Comparison
+
+| Aspect | MB Ratio | ROEE | ROA |
+|--------|----------|------|-----|
+| **Purpose** | Valuation multiple | Return on equity | Return on assets |
+| **Numerator** | Market Cap | Profit | Profit |
+| **Denominator** | Book Equity | Opening Equity | Opening Assets |
+| **Interpretation** | Market value per $ of book | Profit per $ of equity | Profit per $ of assets |
+| **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency |
+
+---
+
+## Profit Margin
+
+### Overview
+
+Profit Margin measures the percentage of revenue that becomes profit. This metric differs from MB Ratio, ROEE, and ROA because both numerator and denominator come from the same raw data source (`cissa.fundamentals`), making it a "simple ratio" calculation with no year-shifting.
+
+- **Numerator**: `PROFIT_AFTER_TAX_EX` from `cissa.fundamentals` (profit data)
+- **Denominator**: `REVENUE` from `cissa.fundamentals` (revenue data)
+- **Formula**: Profit Margin = Average(PAT_EX) / Average(REVENUE)
+
+### Temporal Windows for Profit Margin
+
+| Window | Data Required | First Result Year | Example Calculation |
+|--------|---------------|-------------------|---------------------|
+| **1Y** | PAT_EX(current), REVENUE(current) | 2003 | Profit Margin(2003) = PAT_EX(2003) / REVENUE(2003) |
+| **3Y** | PAT_EX(3 years), REVENUE(3 years) | 2005 | Profit Margin(2005) = AVG(PAT_EX[2003-2005]) / AVG(REVENUE[2003-2005]) |
+| **5Y** | PAT_EX(5 years), REVENUE(5 years) | 2007 | Profit Margin(2007) = AVG(PAT_EX[2003-2007]) / AVG(REVENUE[2003-2007]) |
+| **10Y** | PAT_EX(10 years), REVENUE(10 years) | 2012 | Profit Margin(2012) = AVG(PAT_EX[2003-2012]) / AVG(REVENUE[2003-2012]) |
+
+### Profit Margin Query Example
+
+Get 1-year Profit Margin for BHP AU Equity:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=profit_margin&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | python -m json.tool | head -40
+```
+
+**Response (first 5 years):**
+```json
+{
+  "metric": "profit_margin",
+  "display_name": "Profit Margin",
+  "temporal_window": "1Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2003,
+          "value": 0.2847283947839
+        },
+        {
+          "year": 2004,
+          "value": 0.3152943829384
+        },
+        {
+          "year": 2005,
+          "value": 0.3298475029384
+        },
+        {
+          "year": 2006,
+          "value": 0.3425903849538
+        },
+        {
+          "year": 2007,
+          "value": 0.3612849283947
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Interpretation:**
+- Profit Margin(2003) = 0.2847 = 28.47% profit margin
+- Profit Margin(2004) = 0.3153 = 31.53% profit margin
+- Profit Margin values typically range from 0 to 1 (0% to 100% margin)
+
+### Profit Margin 3-Year Rolling Average
+
+Get 3-year average Profit Margin for smoother trend analysis:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=profit_margin&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=3Y"
+```
+
+**Response (starts from 2005):**
+```json
+{
+  "metric": "profit_margin",
+  "display_name": "Profit Margin",
+  "temporal_window": "3Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2005,
+          "value": 0.3099537383928
+        },
+        {
+          "year": 2006,
+          "value": 0.3292409283749
+        },
+        {
+          "year": 2007,
+          "value": 0.3445743849534
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Key observations:**
+- First year is 2005 (needs PAT_EX 2003-2005 and REVENUE 2003-2005)
+- Values are smoother than 1Y due to 3-year averaging
+- Use 3Y for identifying medium-term profitability trends
+
+### Profit Margin vs Other Metrics: Complete Comparison
+
+| Aspect | MB Ratio | ROEE | ROA | Profit Margin |
+|--------|----------|------|-----|---------------|
+| **Purpose** | Valuation multiple | Return on equity | Return on assets | Profitability % |
+| **Data Sources** | Both from metrics_outputs | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Both from fundamentals |
+| **Numerator** | Market Cap | Profit | Profit | Profit |
+| **Denominator** | Book Equity | Opening Equity | Opening Assets | Revenue |
+| **Year Shift** | No | Yes (denom) | Yes (denom) | No |
+| **First Result** | 2003 (1Y), 2005 (3Y), etc. | Same | Same | Same |
+| **Typical Range** | 0.5 - 3.0 | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) |
+| **Interpretation** | Market price vs book | Profit per $ of equity | Profit per $ of assets | Profit per $ of revenue |
+| **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency | Operational profitability |
+
+---
 
 Ratio metrics are defined in `backend/app/config/ratio_metrics.json`. To add a new metric, simply add it to the config file without modifying code:
 
@@ -886,11 +1272,78 @@ Ratio metrics are defined in `backend/app/config/ratio_metrics.json`. To add a n
       "formula_type": "ratio",
       "numerator": {
         "metric_name": "Calc MC",
-        "parameter_dependent": false
+        "metric_source": "metrics_outputs",
+        "parameter_dependent": false,
+        "year_shift": 0
       },
       "denominator": {
         "metric_name": "Calc EE",
-        "parameter_dependent": false
+        "metric_source": "metrics_outputs",
+        "parameter_dependent": false,
+        "year_shift": 0
+      },
+      "operation": "divide",
+      "null_handling": "skip_year",
+      "negative_handling": "return_null"
+    },
+    {
+      "id": "roee",
+      "display_name": "ROEE",
+      "description": "Return on Economic Equity (Profit After Tax Ex / Economic Equity Open)",
+      "formula_type": "complex_ratio",
+      "numerator": {
+        "metric_name": "PROFIT_AFTER_TAX_EX",
+        "metric_source": "fundamentals",
+        "parameter_dependent": false,
+        "year_shift": 0
+      },
+      "denominator": {
+        "metric_name": "Calc EE",
+        "metric_source": "metrics_outputs",
+        "parameter_dependent": true,
+        "year_shift": 1
+      },
+      "operation": "divide",
+      "null_handling": "skip_year",
+      "negative_handling": "return_null"
+    },
+    {
+      "id": "roa",
+      "display_name": "ROA",
+      "description": "Return on Assets (Profit After Tax Ex / Assets Open)",
+      "formula_type": "complex_ratio",
+      "numerator": {
+        "metric_name": "PROFIT_AFTER_TAX_EX",
+        "metric_source": "fundamentals",
+        "parameter_dependent": false,
+        "year_shift": 0
+      },
+      "denominator": {
+        "metric_name": "Calc Assets",
+        "metric_source": "metrics_outputs",
+        "parameter_dependent": true,
+        "year_shift": 1
+      },
+      "operation": "divide",
+      "null_handling": "skip_year",
+      "negative_handling": "return_null"
+    },
+    {
+      "id": "profit_margin",
+      "display_name": "Profit Margin",
+      "description": "Profit Margin (Profit After Tax Ex / Revenue)",
+      "formula_type": "ratio",
+      "numerator": {
+        "metric_name": "PROFIT_AFTER_TAX_EX",
+        "metric_source": "fundamentals",
+        "parameter_dependent": false,
+        "year_shift": 0
+      },
+      "denominator": {
+        "metric_name": "REVENUE",
+        "metric_source": "fundamentals",
+        "parameter_dependent": false,
+        "year_shift": 0
       },
       "operation": "divide",
       "null_handling": "skip_year",
@@ -904,12 +1357,24 @@ Ratio metrics are defined in `backend/app/config/ratio_metrics.json`. To add a n
 - `id`: Unique identifier (used in API query parameter)
 - `display_name`: Human-readable name
 - `description`: What the metric represents
-- `formula_type`: `"ratio"` (simple division) or `"complex_ratio"` (multiple components)
-- `numerator`: Which L1 metric to use as numerator
-- `denominator`: Which L1 metric to use as denominator
+- `formula_type`: `"ratio"` (simple division, both from same table) or `"complex_ratio"` (multiple sources/components)
+- `numerator`/`denominator`:
+  - `metric_name`: Name of the metric to use
+  - `metric_source`: Where the metric comes from (`"metrics_outputs"` or `"fundamentals"`)
+  - `parameter_dependent`: Whether this metric requires param_set_id (typically true for metrics_outputs, false for fundamentals)
+  - `year_shift`: Year offset to apply (0 = current year, 1 = shift by 1 year). Useful for "opening" values.
 - `operation`: Type of operation (`"divide"` for ratio)
 - `null_handling`: How to handle NULL values (`"skip_year"`)
 - `negative_handling`: How to handle negative denominators (`"return_null"`)
+
+**When to use `year_shift`:**
+- `0`: Use data as-is (standard case)
+- `1`: Use previous year's data (e.g., opening equity = prior year closing equity)
+
+**When to use `complex_ratio`:**
+- When numerator and denominator come from different tables
+- When year-shifting is needed for denominator
+- When combining fundamentals (raw data) with metrics_outputs (calculated metrics)
 
 
 

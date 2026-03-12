@@ -3,6 +3,7 @@
 # ============================================================================
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Literal
+from enum import Enum
 
 
 class TimeSeries(BaseModel):
@@ -25,14 +26,37 @@ class RatioMetricsResponse(BaseModel):
     data: List[TickerData] = Field(..., description="Time-series data per ticker")
 
 
+class MetricSource(str, Enum):
+    """Source of metric data"""
+    METRICS_OUTPUTS = "metrics_outputs"
+    FUNDAMENTALS = "fundamentals"
+
+
+class MetricComponent(BaseModel):
+    """Represents numerator or denominator component in a ratio"""
+    metric_name: str = Field(..., description="Name of the metric")
+    metric_source: MetricSource = Field(
+        default=MetricSource.METRICS_OUTPUTS,
+        description="Source table (metrics_outputs or fundamentals)"
+    )
+    parameter_dependent: bool = Field(
+        default=False,
+        description="Whether metric depends on param_set_id"
+    )
+    year_shift: int = Field(
+        default=0,
+        description="Number of years to shift (for year-shift ratios like ROEE)"
+    )
+
+
 class MetricDefinition(BaseModel):
     """Metric configuration schema"""
     id: str = Field(..., description="Unique metric identifier")
     display_name: str = Field(..., description="Human-readable name")
     description: str = Field(..., description="Metric documentation")
     formula_type: Literal["ratio", "complex_ratio"] = Field(..., description="Formula type")
-    numerator: Dict[str, Any] = Field(..., description="Numerator metric(s)")
-    denominator: Dict[str, Any] = Field(..., description="Denominator metric(s)")
+    numerator: MetricComponent = Field(..., description="Numerator metric")
+    denominator: MetricComponent = Field(..., description="Denominator metric")
     operation: str = Field(..., description="Operation to perform (divide, etc.)")
     null_handling: Literal["skip_year", "use_zero"] = Field(..., description="How to handle NULL values")
     negative_handling: Literal["skip_year", "return_null", "use_absolute"] = Field(..., description="How to handle negative values")

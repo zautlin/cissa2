@@ -6,7 +6,13 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 
-from app.models.ratio_metrics import MetricDefinition, RatioMetricsResponse, TimeSeries
+from app.models.ratio_metrics import (
+    MetricDefinition,
+    RatioMetricsResponse,
+    TimeSeries,
+    MetricComponent,
+    MetricSource
+)
 from app.services.ratio_metrics_service import RatioMetricsService
 from app.services.ratio_metrics_calculator import RatioMetricsCalculator
 
@@ -21,8 +27,16 @@ class TestRatioMetricsCalculator:
             display_name="MB Ratio",
             description="Test",
             formula_type="ratio",
-            numerator={"metric_name": "Calc MC", "parameter_dependent": False},
-            denominator={"metric_name": "Calc EE", "parameter_dependent": False},
+            numerator=MetricComponent(
+                metric_name="Calc MC",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=False
+            ),
+            denominator=MetricComponent(
+                metric_name="Calc EE",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=False
+            ),
             operation="divide",
             null_handling="skip_year",
             negative_handling="return_null"
@@ -55,8 +69,16 @@ class TestRatioMetricsCalculator:
             display_name="MB Ratio",
             description="Test",
             formula_type="ratio",
-            numerator={"metric_name": "Calc MC", "parameter_dependent": False},
-            denominator={"metric_name": "Calc EE", "parameter_dependent": False},
+            numerator=MetricComponent(
+                metric_name="Calc MC",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=False
+            ),
+            denominator=MetricComponent(
+                metric_name="Calc EE",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=False
+            ),
             operation="divide",
             null_handling="skip_year",
             negative_handling="return_null"
@@ -79,7 +101,8 @@ class TestRatioMetricsCalculator:
         
         # Verify parameters
         assert params["dataset_id"] == str(dataset_id)
-        assert params["param_set_id"] == str(param_set_id)
+        # param_set_id should NOT be in params for MB Ratio since both metrics have parameter_dependent=False
+        assert "param_set_id" not in params
         assert params["numerator_metric"] == "Calc MC"
         assert params["denominator_metric"] == "Calc EE"
         assert params["ticker_0"] == "AAPL"
@@ -92,8 +115,16 @@ class TestRatioMetricsCalculator:
             display_name="MB Ratio",
             description="Test",
             formula_type="ratio",
-            numerator={"metric_name": "Calc MC", "parameter_dependent": False},
-            denominator={"metric_name": "Calc EE", "parameter_dependent": False},
+            numerator=MetricComponent(
+                metric_name="Calc MC",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=False
+            ),
+            denominator=MetricComponent(
+                metric_name="Calc EE",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=False
+            ),
             operation="divide",
             null_handling="skip_year",
             negative_handling="return_null"

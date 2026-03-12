@@ -3,7 +3,7 @@
 # ============================================================================
 from typing import List, Optional, Dict, Any
 from uuid import UUID
-from ..models.ratio_metrics import MetricDefinition
+from ..models.ratio_metrics import MetricDefinition, MetricSource, MetricComponent
 from ..core.config import get_logger
 
 logger = get_logger(__name__)
@@ -35,7 +35,7 @@ class RatioMetricsCalculator:
         - To get first result in 2012 (year_rank 11): need threshold = 11 = min_years_required + 1, so min_years_required = 10
         """
         mapping = {
-            "1Y": ("ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING", 1),
+            "1Y": ("ROWS BETWEEN 0 PRECEDING AND CURRENT ROW", 1),
             "3Y": ("ROWS BETWEEN 2 PRECEDING AND CURRENT ROW", 3),
             "5Y": ("ROWS BETWEEN 4 PRECEDING AND CURRENT ROW", 5),
             "10Y": ("ROWS BETWEEN 9 PRECEDING AND CURRENT ROW", 10)
@@ -76,10 +76,11 @@ class RatioMetricsCalculator:
         """
         Build query for simple ratio (numerator / denominator).
         
-        Example: MB Ratio = Calc MC / Calc EE
+        Example: MB Ratio = Calc MC / Calc EE (both from metrics_outputs)
+        Example: Profit Margin = PAT_EX / REVENUE (both from fundamentals)
         """
-        numerator_metric = self.metric_def.numerator["metric_name"]
-        denominator_metric = self.metric_def.denominator["metric_name"]
+        numerator = self.metric_def.numerator
+        denominator = self.metric_def.denominator
         
         # Build ticker list for IN clause
         ticker_placeholders = ", ".join([f":ticker_{i}" for i in range(len(tickers))])
@@ -94,9 +95,14 @@ class RatioMetricsCalculator:
             year_filter += f" AND m.fiscal_year <= :end_year"
             ticker_params["end_year"] = end_year
         
-        # Get the minimum fiscal year for each ticker to calculate which years have enough data
-        min_year_calc = f"""
-        WITH numerator_rolling AS (
+        # Determine which table to query from
+        numerator_table = "cissa.metrics_outputs" if numerator.metric_source == MetricSource.METRICS_OUTPUTS else "cissa.fundamentals"
+        denominator_table = "cissa.metrics_outputs" if denominator.metric_source == MetricSource.METRICS_OUTPUTS else "cissa.fundamentals"
+        
+        # Build numerator CTE with appropriate column name and table
+        if numerator.metric_source == MetricSource.METRICS_OUTPUTS:
+            numerator_cte = f"""
+        numerator_rolling AS (
             SELECT
                 ticker,
                 fiscal_year,
@@ -107,12 +113,34 @@ class RatioMetricsCalculator:
                         {self.rows_between}
                     ) AS numerator_value,
                 ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank
-            FROM cissa.metrics_outputs
+            FROM {numerator_table}
             WHERE dataset_id = :dataset_id
                 AND param_set_id = :param_set_id
                 AND output_metric_name = :numerator_metric
                 AND ticker IN ({ticker_placeholders})
-        ),
+        )"""
+        else:  # fundamentals
+            numerator_cte = f"""
+        numerator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(numeric_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS numerator_value,
+                ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank
+            FROM {numerator_table}
+            WHERE dataset_id = :dataset_id
+                AND metric_name = :numerator_metric
+                AND ticker IN ({ticker_placeholders})
+        )"""
+        
+        # Build denominator CTE with appropriate column name and table
+        if denominator.metric_source == MetricSource.METRICS_OUTPUTS:
+            denominator_cte = f"""
         denominator_rolling AS (
             SELECT
                 ticker,
@@ -123,12 +151,162 @@ class RatioMetricsCalculator:
                         ORDER BY fiscal_year 
                         {self.rows_between}
                     ) AS denominator_value
+            FROM {denominator_table}
+            WHERE dataset_id = :dataset_id
+                AND param_set_id = :param_set_id
+                AND output_metric_name = :denominator_metric
+                AND ticker IN ({ticker_placeholders})
+        )"""
+        else:  # fundamentals
+            denominator_cte = f"""
+        denominator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(numeric_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS denominator_value
+            FROM {denominator_table}
+            WHERE dataset_id = :dataset_id
+                AND metric_name = :denominator_metric
+                AND ticker IN ({ticker_placeholders})
+        )"""
+        
+        query = f"""
+        WITH {numerator_cte},
+             {denominator_cte}
+        SELECT
+            m.ticker,
+            m.fiscal_year,
+            CASE
+                WHEN d.denominator_value IS NULL THEN NULL
+                WHEN d.denominator_value = 0 THEN NULL
+                WHEN m.numerator_value IS NULL THEN NULL
+                ELSE m.numerator_value / d.denominator_value
+            END AS ratio_value
+        FROM numerator_rolling m
+        FULL OUTER JOIN denominator_rolling d 
+            ON m.ticker = d.ticker AND m.fiscal_year = d.fiscal_year
+        WHERE m.ticker IS NOT NULL 
+            AND m.year_rank >= :min_year_threshold {year_filter}
+        ORDER BY m.ticker, m.fiscal_year;
+        """
+        
+        params = {
+            "dataset_id": str(dataset_id),
+            "numerator_metric": numerator.metric_name,
+            "denominator_metric": denominator.metric_name,
+            "min_year_threshold": self.min_years_required + 1,
+            **ticker_params
+        }
+        
+        # Only add param_set_id if either metric requires it
+        if numerator.parameter_dependent or denominator.parameter_dependent:
+            params["param_set_id"] = str(param_set_id)
+        
+        return query, params
+    
+    def _build_complex_ratio_query(
+        self,
+        tickers: List[str],
+        dataset_id: UUID,
+        param_set_id: UUID,
+        start_year: Optional[int] = None,
+        end_year: Optional[int] = None
+    ) -> tuple[str, Dict[str, Any]]:
+        """
+        Build query for complex ratio with year shifting and mixed data sources.
+        
+        Example: ROEE = PAT_EX (from fundamentals, 1Y/3Y/5Y/10Y avg) 
+                      / Calc EE (from metrics_outputs, shifted by 1 year, 1Y/3Y/5Y/10Y avg)
+        
+        The denominator is shifted so that year N-1's Calc EE becomes year N's EE_Open.
+        This allows calculating ROEE(N) = PAT_EX(N) / EE_Open(N) where EE_Open is prior year's EE.
+        """
+        numerator = self.metric_def.numerator
+        denominator = self.metric_def.denominator
+        
+        # Build ticker list for IN clause
+        ticker_placeholders = ", ".join([f":ticker_{i}" for i in range(len(tickers))])
+        ticker_params = {f"ticker_{i}": t for i, t in enumerate(tickers)}
+        
+        # Build year filter
+        year_filter = ""
+        if start_year is not None:
+            year_filter += f" AND m.fiscal_year >= :start_year"
+            ticker_params["start_year"] = start_year
+        if end_year is not None:
+            year_filter += f" AND m.fiscal_year <= :end_year"
+            ticker_params["end_year"] = end_year
+        
+        # Build numerator CTE (from fundamentals)
+        numerator_cte = f"""
+        numerator_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                numeric_value AS pat_ex_value
+            FROM cissa.fundamentals
+            WHERE dataset_id = :dataset_id
+                AND metric_name = :numerator_metric
+                AND ticker IN ({ticker_placeholders})
+        ),
+        numerator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(pat_ex_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS numerator_value,
+                ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank
+            FROM numerator_raw
+        )
+        """
+        
+        # Build denominator CTE (from metrics_outputs, with year shift)
+        year_shift = denominator.year_shift
+        denominator_cte = f"""
+        denominator_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                output_metric_value
             FROM cissa.metrics_outputs
             WHERE dataset_id = :dataset_id
                 AND param_set_id = :param_set_id
                 AND output_metric_name = :denominator_metric
                 AND ticker IN ({ticker_placeholders})
+        ),
+        denominator_shifted AS (
+            SELECT
+                ticker,
+                fiscal_year + {year_shift} AS fiscal_year,
+                output_metric_value AS ee_open_value
+            FROM denominator_raw
+        ),
+        denominator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(ee_open_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS denominator_value
+            FROM denominator_shifted
         )
+        """
+        
+        query = f"""
+        WITH {numerator_cte},
+             {denominator_cte}
         SELECT
             m.ticker,
             m.fiscal_year,
@@ -149,27 +327,10 @@ class RatioMetricsCalculator:
         params = {
             "dataset_id": str(dataset_id),
             "param_set_id": str(param_set_id),
-            "numerator_metric": numerator_metric,
-            "denominator_metric": denominator_metric,
-            "min_year_threshold": self.min_years_required + 1,
+            "numerator_metric": numerator.metric_name,
+            "denominator_metric": denominator.metric_name,
+            "min_year_threshold": self.min_years_required + 1,  # year_shift doesn't affect threshold, only data filtering
             **ticker_params
         }
         
-        return min_year_calc, params
-    
-    def _build_complex_ratio_query(
-        self,
-        tickers: List[str],
-        dataset_id: UUID,
-        param_set_id: UUID,
-        start_year: Optional[int] = None,
-        end_year: Optional[int] = None
-    ) -> tuple[str, Dict[str, Any]]:
-        """
-        Build query for complex ratio with multiple components in numerator/denominator.
-        
-        Example: Effective Tax Rate = Tax Cost / |PAT + XO Cost|
-        """
-        # This will be implemented for more complex ratios
-        # For now, raise NotImplementedError
-        raise NotImplementedError("Complex ratio queries not yet implemented")
+        return query, params

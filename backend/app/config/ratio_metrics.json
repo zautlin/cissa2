@@ -7,11 +7,78 @@
       "formula_type": "ratio",
       "numerator": {
         "metric_name": "Calc MC",
-        "parameter_dependent": false
+        "metric_source": "metrics_outputs",
+        "parameter_dependent": false,
+        "year_shift": 0
       },
       "denominator": {
         "metric_name": "Calc EE",
-        "parameter_dependent": false
+        "metric_source": "metrics_outputs",
+        "parameter_dependent": false,
+        "year_shift": 0
+      },
+      "operation": "divide",
+      "null_handling": "skip_year",
+      "negative_handling": "return_null"
+    },
+    {
+      "id": "roee",
+      "display_name": "ROEE",
+      "description": "Return on Economic Equity (Profit After Tax Ex / Economic Equity Open)",
+      "formula_type": "complex_ratio",
+      "numerator": {
+        "metric_name": "PROFIT_AFTER_TAX_EX",
+        "metric_source": "fundamentals",
+        "parameter_dependent": false,
+        "year_shift": 0
+      },
+      "denominator": {
+        "metric_name": "Calc EE",
+        "metric_source": "metrics_outputs",
+        "parameter_dependent": true,
+        "year_shift": 1
+      },
+      "operation": "divide",
+      "null_handling": "skip_year",
+      "negative_handling": "return_null"
+    },
+    {
+      "id": "roa",
+      "display_name": "ROA",
+      "description": "Return on Assets (Profit After Tax Ex / Assets Open)",
+      "formula_type": "complex_ratio",
+      "numerator": {
+        "metric_name": "PROFIT_AFTER_TAX_EX",
+        "metric_source": "fundamentals",
+        "parameter_dependent": false,
+        "year_shift": 0
+      },
+      "denominator": {
+        "metric_name": "Calc Assets",
+        "metric_source": "metrics_outputs",
+        "parameter_dependent": true,
+        "year_shift": 1
+      },
+      "operation": "divide",
+      "null_handling": "skip_year",
+      "negative_handling": "return_null"
+    },
+    {
+      "id": "profit_margin",
+      "display_name": "Profit Margin",
+      "description": "Profit Margin (Profit After Tax Ex / Revenue)",
+      "formula_type": "ratio",
+      "numerator": {
+        "metric_name": "PROFIT_AFTER_TAX_EX",
+        "metric_source": "fundamentals",
+        "parameter_dependent": false,
+        "year_shift": 0
+      },
+      "denominator": {
+        "metric_name": "REVENUE",
+        "metric_source": "fundamentals",
+        "parameter_dependent": false,
+        "year_shift": 0
       },
       "operation": "divide",
       "null_handling": "skip_year",
