@@ -37,7 +37,7 @@ class CostOfEquityService:
     Calculates: KE = Rf + Beta × RiskPremium
     
     Key optimizations:
-    - Uses existing Beta and Rf_1Y from metrics_outputs (no recalculation)
+    - Uses existing Calc Beta and Calc Rf from metrics_outputs (no recalculation)
     - Vectorized Pandas operations (no row-by-row iteration)
     - Batch database inserts (1000 records per batch)
     
@@ -55,7 +55,7 @@ class CostOfEquityService:
         param_set_id: UUID,
     ) -> dict:
         """
-        Calculate Cost of Equity using existing Beta and Rf_1Y.
+        Calculate Cost of Equity using existing Calc Beta and Calc Rf.
         
         Returns:
             {
@@ -74,21 +74,21 @@ class CostOfEquityService:
             logger.info(f"    - KE approach: {params.get('cost_of_equity_approach', 'Floating')}")
             logger.info(f"    - Risk premium: {params.get('equity_risk_premium', 0.05):.4f}")
             
-            # Fetch existing Beta and Rf_1Y from metrics_outputs
-            logger.info("  Fetching Beta and Rf_1Y from metrics_outputs...")
+            # Fetch existing Calc Beta and Calc Rf from metrics_outputs
+            logger.info("  Fetching Calc Beta and Calc Rf from metrics_outputs...")
             beta_df, rf_df = await self._fetch_ke_inputs(dataset_id, param_set_id)
             
             if beta_df.empty and rf_df.empty:
-                logger.error("    No Beta/Rf_1Y data found")
+                logger.error("    No Calc Beta/Calc Rf data found")
                 return {
                     "status": "error",
                     "records_calculated": 0,
                     "records_inserted": 0,
-                    "message": "No Beta or Rf_1Y data found in metrics_outputs"
+                    "message": "No Calc Beta or Calc Rf data found in metrics_outputs"
                 }
             
-            logger.info(f"    - Beta records: {len(beta_df)}")
-            logger.info(f"    - Rf_1Y records: {len(rf_df)}")
+            logger.info(f"    - Calc Beta records: {len(beta_df)}")
+            logger.info(f"    - Calc Rf records: {len(rf_df)}")
             
             # Calculate KE using vectorized operations
             logger.info("  Calculating KE = Rf + Beta × RiskPremium (vectorized)...")
@@ -184,7 +184,7 @@ class CostOfEquityService:
     
     async def _fetch_ke_inputs(self, dataset_id: UUID, param_set_id: UUID) -> tuple:
         """
-        Fetch Beta and Rf_1Y from metrics_outputs separately.
+        Fetch Calc Beta and Calc Rf from metrics_outputs separately.
         
         Returns: (beta_df, rf_df) where each has columns: ticker, fiscal_year, value
         """
@@ -193,7 +193,7 @@ class CostOfEquityService:
             FROM cissa.metrics_outputs
             WHERE dataset_id = :dataset_id
               AND param_set_id = :param_set_id
-              AND output_metric_name = 'Beta'
+              AND output_metric_name = 'Calc Beta'
             ORDER BY ticker, fiscal_year
         """)
         
@@ -202,7 +202,7 @@ class CostOfEquityService:
             FROM cissa.metrics_outputs
             WHERE dataset_id = :dataset_id
               AND param_set_id = :param_set_id
-              AND output_metric_name = 'Rf_1Y'
+              AND output_metric_name = 'Calc Rf'
             ORDER BY ticker, fiscal_year
         """)
         

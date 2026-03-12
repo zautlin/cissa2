@@ -115,7 +115,7 @@ BETA_COUNT=$(psql "$DB_URL" -t -c "
     SELECT COUNT(*) FROM cissa.metrics_outputs
     WHERE dataset_id = '$DATASET_ID'
       AND param_set_id = '$PARAM_SET_ID'
-      AND output_metric_name = 'Beta';
+      AND output_metric_name = 'Calc Beta';
 " 2>/dev/null | xargs)
 
 if [ "$BETA_COUNT" -eq 0 ]; then
@@ -128,7 +128,7 @@ RF_COUNT=$(psql "$DB_URL" -t -c "
     SELECT COUNT(*) FROM cissa.metrics_outputs
     WHERE dataset_id = '$DATASET_ID'
       AND param_set_id = '$PARAM_SET_ID'
-      AND output_metric_name IN ('Rf', 'Rf_1Y', 'Rf_1Y_Raw');
+      AND output_metric_name IN ('Calc Rf');
 " 2>/dev/null | xargs)
 
 if [ "$RF_COUNT" -eq 0 ]; then
@@ -231,12 +231,12 @@ WITH ke_data AS (
   SELECT 
     ticker, fiscal_year,
     MAX(CASE WHEN output_metric_name = 'Calc KE' THEN output_metric_value END) as ke,
-    MAX(CASE WHEN output_metric_name = 'Beta' THEN output_metric_value END) as beta,
-    MAX(CASE WHEN output_metric_name = 'Rf_1Y' THEN output_metric_value END) as rf_1y
+    MAX(CASE WHEN output_metric_name = 'Calc Beta' THEN output_metric_value END) as beta,
+    MAX(CASE WHEN output_metric_name = 'Calc Rf' THEN output_metric_value END) as rf_1y
   FROM cissa.metrics_outputs
   WHERE dataset_id = '$DATASET_ID'
     AND param_set_id = '$PARAM_SET_ID'
-    AND output_metric_name IN ('Calc KE', 'Beta', 'Rf_1Y')
+    AND output_metric_name IN ('Calc KE', 'Calc Beta', 'Calc Rf')
   GROUP BY ticker, fiscal_year
   LIMIT 10
 )
