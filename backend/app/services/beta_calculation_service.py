@@ -226,7 +226,7 @@ class BetaCalculationService:
                 FROM cissa.metrics_outputs
                 WHERE dataset_id = :dataset_id
                 AND param_set_id = :param_set_id
-                AND output_metric_name = 'Beta'
+                AND output_metric_name = 'Calc Beta'
             """)
             
             result = await self.session.execute(query, {
@@ -295,6 +295,34 @@ class BetaCalculationService:
             
         except Exception as e:
             self.logger.error(f"Failed to fetch sector map: {e}")
+            return {}
+    
+    async def _fetch_inception_years(self, dataset_id: UUID) -> dict:
+        """Fetch inception year (first available data year) for each ticker.
+        
+        Matches legacy behavior: inception = MIN(fiscal_year) where data is not null.
+        """
+        try:
+            query = text("""
+                SELECT 
+                    ticker,
+                    MIN(CAST(fiscal_year AS INTEGER)) as inception_year
+                FROM cissa.fundamentals
+                WHERE dataset_id = :dataset_id
+                AND metric_name = 'COMPANY_TSR'
+                AND period_type = 'MONTHLY'
+                GROUP BY ticker
+            """)
+            
+            result = await self.session.execute(query, {"dataset_id": str(dataset_id)})
+            rows = result.fetchall()
+            
+            inception_map = {row[0]: row[1] for row in rows}
+            self.logger.info(f"Loaded inception years for {len(inception_map)} tickers")
+            return inception_map
+            
+        except Exception as e:
+            self.logger.error(f"Failed to fetch inception years: {e}")
             return {}
     
     def _calculate_rolling_ols(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -471,11 +499,32 @@ class BetaCalculationService:
             raise
     
     def _apply_approach_to_ke(self, spot_betas: pd.DataFrame, approach_to_ke: str, beta_rounding: float) -> pd.DataFrame:
-        """Apply approach_to_ke logic to calculate final beta."""
+        """Apply approach_to_ke logic to calculate final beta.
+        
+        Args:
+            spot_betas: DataFrame with spot_slope and ticker_avg columns
+            approach_to_ke: 'FIXED' or 'Floating' (or any other)
+            beta_rounding: Rounding factor (e.g., 0.1)
+        
+        Returns:
+            DataFrame with ticker, fiscal_year, beta, monthly_raw_slopes columns
+        
+        Logic:
+            - FIXED: Average across ALL years (same value for all years) = ticker_avg
+            - Floating (DEFAULT): Cumulative average from inception year to each year
+        """
         try:
             spot_betas = spot_betas.copy()
             
+            # DEBUG: Log the exact approach value
+            self.logger.info(f"DEBUG: approach_to_ke = '{approach_to_ke}' (type: {type(approach_to_ke).__name__}, len: {len(approach_to_ke) if isinstance(approach_to_ke, str) else 'N/A'})")
+            self.logger.info(f"DEBUG: comparison result: approach_to_ke == 'FIXED' -> {approach_to_ke == 'FIXED'}")
+            self.logger.info(f"DEBUG: spot_betas.shape = {spot_betas.shape}")
+            self.logger.info(f"DEBUG: spot_betas columns = {list(spot_betas.columns)}")
+            self.logger.info(f"DEBUG: spot_betas sample BHP (first 5): {spot_betas[spot_betas['ticker']=='BHP AU Equity'].head().to_dict()}")
+            
             if approach_to_ke == 'FIXED':
+                # FIXED: Use average across ALL years (same for all years)
                 spot_betas['beta'] = spot_betas.apply(
                     lambda x: np.round(x['ticker_avg'] / beta_rounding, 0) * beta_rounding
                     if pd.notna(x['ticker_avg'])
@@ -483,9 +532,43 @@ class BetaCalculationService:
                     axis=1
                 )
             else:
+                # Floating (DEFAULT): Cumulative average from inception year to each year
+                # Group by ticker and calculate cumulative mean within each ticker
+                spot_betas = spot_betas.sort_values(['ticker', 'fiscal_year']).reset_index(drop=True)
+                
+                cumulative_betas = []
+                
+                for ticker in spot_betas['ticker'].unique():
+                    ticker_data = spot_betas[spot_betas['ticker'] == ticker].copy()
+                    
+                    # Sort by fiscal_year to ensure cumulative calculation is chronological
+                    ticker_data = ticker_data.sort_values('fiscal_year').reset_index(drop=True)
+                    
+                    # Calculate cumulative average of spot_slope from inception to each year
+                    # Note: We use forward-filling cumulative mean (expanding window)
+                    cumulative_means = []
+                    for i in range(len(ticker_data)):
+                        # Get all spot_slope values from inception (index 0) to current year (index i)
+                        values_to_avg = ticker_data['spot_slope'].iloc[:i+1]
+                        
+                        # Calculate cumulative average (only non-NaN values)
+                        if values_to_avg.notna().any():
+                            cum_avg = values_to_avg.mean()  # pandas mean() skips NaN by default
+                        else:
+                            cum_avg = np.nan
+                        
+                        cumulative_means.append(cum_avg)
+                    
+                    ticker_data['floating_beta'] = cumulative_means
+                    cumulative_betas.append(ticker_data)
+                
+                # Combine all tickers back
+                spot_betas = pd.concat(cumulative_betas, ignore_index=True)
+                
+                # Apply floating beta with rounding
                 spot_betas['beta'] = spot_betas.apply(
-                    lambda x: np.round(x['spot_slope'] / beta_rounding, 0) * beta_rounding
-                    if pd.notna(x['spot_slope'])
+                    lambda x: np.round(x['floating_beta'] / beta_rounding, 0) * beta_rounding
+                    if pd.notna(x['floating_beta'])
                     else np.nan,
                     axis=1
                 )
@@ -522,7 +605,7 @@ class BetaCalculationService:
                     "param_set_id": param_set_id,
                     "ticker": row['ticker'],
                     "fiscal_year": int(row['fiscal_year']),
-                    "output_metric_name": "Beta",
+                    "output_metric_name": "Calc Beta",
                     "output_metric_value": float(row['beta']) if pd.notna(row['beta']) else None,
                     "metadata": metadata
                 }

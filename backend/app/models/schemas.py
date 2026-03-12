@@ -2,7 +2,7 @@
 # Pydantic Request/Response Models (Schemas)
 # ============================================================================
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
+from typing import Optional, Any
 from uuid import UUID
 from datetime import datetime
 
@@ -217,3 +217,39 @@ class GetMetricsResponse(BaseModel):
     filters_applied: dict = Field(default_factory=dict, description="Summary of filters applied to the query")
     status: str = Field(default="success", description="Status: 'success' or 'error'")
     message: Optional[str] = Field(default=None, description="Message or warning detail")
+
+
+# ============================================================================
+# Parameters Management
+# ============================================================================
+
+class ParameterUpdateRequest(BaseModel):
+    """Request to update one or more parameters."""
+    parameters: dict[str, Any] = Field(..., description="Key-value pairs of parameters to update (e.g., {'tax_rate_franking_credits': 0.35, 'beta_rounding': 3})")
+    set_as_active: bool = Field(default=False, description="If true, set this parameter set as active")
+    set_as_default: bool = Field(default=False, description="If true, set this parameter set as default")
+
+
+class ParameterSetResponse(BaseModel):
+    """Response with merged parameter values (baseline + overrides)."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    param_set_id: UUID = Field(..., description="UUID of the parameter set")
+    param_set_name: Optional[str] = Field(None, description="Name of the parameter set")
+    is_active: bool = Field(..., description="Whether this is the currently active parameter set")
+    is_default: bool = Field(..., description="Whether this is the default parameter set")
+    created_at: datetime = Field(..., description="When this parameter set was created")
+    updated_at: datetime = Field(..., description="When this parameter set was last updated")
+    parameters: dict[str, Any] = Field(..., description="All parameters with merged values (baseline + overrides)")
+    status: str = Field(default="success", description="Status: 'success' or 'error'")
+    message: Optional[str] = Field(default=None, description="Error message if status is 'error'")
+
+
+class ParameterSetListResponse(BaseModel):
+    """Response with list of parameter sets."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    results_count: int
+    results: list[ParameterSetResponse] = Field(default_factory=list)
+    status: str = Field(default="success", description="Status: 'success' or 'error'")
+    message: Optional[str] = Field(default=None, description="Message or error detail")

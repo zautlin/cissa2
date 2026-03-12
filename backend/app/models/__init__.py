@@ -22,6 +22,9 @@ from .schemas import (
     MetricsOutputResponse,
     MetricRecord,
     GetMetricsResponse,
+    ParameterUpdateRequest,
+    ParameterSetResponse,
+    ParameterSetListResponse,
 )
 
 __all__ = [
@@ -46,4 +49,7 @@ __all__ = [
     "MetricsOutputResponse",
     "MetricRecord",
     "GetMetricsResponse",
+    "ParameterUpdateRequest",
+    "ParameterSetResponse",
+    "ParameterSetListResponse",
 ]

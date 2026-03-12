@@ -154,6 +154,260 @@ curl http://localhost:8000/api/v1/metrics/health
 
 ---
 
+### Parameters Management
+
+Parameter management endpoints allow users to retrieve and update calculation parameters through the UI. Each parameter update creates a new versioned parameter set, providing full audit trails and easy rollback capabilities.
+
+#### Get Active Parameter Set
+
+**GET** `/api/v1/parameters/active`
+
+Retrieve the currently active parameter set with all merged parameter values (baseline + overrides).
+
+**Example Request:**
+```bash
+curl http://localhost:8000/api/v1/parameters/active
+```
+
+**Example Response:**
+```json
+{
+  "param_set_id": "550e8400-e29b-41d4-a716-446655440000",
+  "param_set_name": "param_set_20260312_101530_123456",
+  "is_active": true,
+  "is_default": false,
+  "created_at": "2026-03-12T10:15:30Z",
+  "updated_at": "2026-03-12T10:15:30Z",
+  "parameters": {
+    "country": "Australia",
+    "currency_notation": "A$m",
+    "cost_of_equity_approach": "Floating",
+    "include_franking_credits_tsr": false,
+    "fixed_benchmark_return_wealth_preservation": 7.5,
+    "equity_risk_premium": 5.0,
+    "tax_rate_franking_credits": 30.0,
+    "value_of_franking_credits": 75.0,
+    "risk_free_rate_rounding": 0.5,
+    "beta_rounding": 0.1,
+    "last_calendar_year": 2019,
+    "beta_relative_error_tolerance": 40.0,
+    "terminal_year": 60
+  },
+  "status": "success",
+  "message": null
+}
+```
+
+**Use Case:** UI page load - retrieve user's current working parameters before any calculations.
+
+---
+
+#### Get Specific Parameter Set
+
+**GET** `/api/v1/parameters/{param_set_id}`
+
+Retrieve a specific parameter set by UUID with all merged parameter values.
+
+**Path Parameters:**
+- `param_set_id` (UUID): The parameter set ID to retrieve
+
+**Example Request:**
+```bash
+curl http://localhost:8000/api/v1/parameters/550e8400-e29b-41d4-a716-446655440000
+```
+
+**Example Response:**
+```json
+{
+  "param_set_id": "550e8400-e29b-41d4-a716-446655440000",
+  "param_set_name": "param_set_20260312_101530_123456",
+  "is_active": false,
+  "is_default": false,
+  "created_at": "2026-03-12T10:15:30Z",
+  "updated_at": "2026-03-12T10:15:30Z",
+  "parameters": {
+    "country": "Australia",
+    "currency_notation": "A$m",
+    "cost_of_equity_approach": "Floating",
+    "tax_rate_franking_credits": 30.0,
+    "beta_rounding": 0.1,
+    ...all parameters
+  },
+  "status": "success",
+  "message": null
+}
+```
+
+**Use Case:** Retrieve a previously saved parameter set for comparison or reactivation.
+
+---
+
+#### Update Parameters (Create New Parameter Set)
+
+**POST** `/api/v1/parameters/{param_set_id}/update`
+
+Update one or more parameters by creating a new parameter set. The new set inherits values from the specified parameter set and applies the updates as JSONB overrides.
+
+**Path Parameters:**
+- `param_set_id` (UUID): The parameter set to base updates on (usually the current active set)
+
+**Request Body:**
+```json
+{
+  "parameters": {
+    "tax_rate_franking_credits": 35.0,
+    "beta_rounding": 0.2
+  },
+  "set_as_active": true,
+  "set_as_default": false
+}
+```
+
+**Request Schema:**
+- `parameters` (dict[string, any], required): Key-value pairs of parameters to update
+  - Example: `{"tax_rate_franking_credits": 35.0}` or `{"beta_rounding": 0.2, "risk_free_rate_rounding": 0.25}`
+- `set_as_active` (boolean, optional, default=false): If true, the new parameter set becomes active
+- `set_as_default` (boolean, optional, default=false): If true, the new parameter set becomes the default
+
+**Example Request:**
+```bash
+curl -X POST http://localhost:8000/api/v1/parameters/550e8400-e29b-41d4-a716-446655440000/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": {
+      "tax_rate_franking_credits": 35.0,
+      "beta_rounding": 0.2
+    },
+    "set_as_active": true,
+    "set_as_default": false
+  }'
+```
+
+**Response:**
+```json
+{
+  "param_set_id": "660e8400-e29b-41d4-a716-446655440001",
+  "param_set_name": "param_set_20260312_102045_654321",
+  "is_active": true,
+  "is_default": false,
+  "created_at": "2026-03-12T10:20:45Z",
+  "updated_at": "2026-03-12T10:20:45Z",
+  "parameters": {
+    "country": "Australia",
+    "currency_notation": "A$m",
+    "cost_of_equity_approach": "Floating",
+    "include_franking_credits_tsr": false,
+    "fixed_benchmark_return_wealth_preservation": 7.5,
+    "equity_risk_premium": 5.0,
+    "tax_rate_franking_credits": 35.0,
+    "value_of_franking_credits": 75.0,
+    "risk_free_rate_rounding": 0.5,
+    "beta_rounding": 0.2,
+    "last_calendar_year": 2019,
+    "beta_relative_error_tolerance": 40.0,
+    "terminal_year": 60
+  },
+  "status": "success",
+  "message": null
+}
+```
+
+**Error Response (Validation Failure):**
+```json
+{
+  "detail": "Parameter validation failed: Parameter 'tax_rate_franking_credits': Must be between 0 and 100 (percentage); Parameter 'unknown_param': Unknown parameter: unknown_param"
+}
+```
+Status: `422 Unprocessable Entity`
+
+**Use Cases:**
+
+**Scenario 1: Update single parameter and activate**
+```bash
+curl -X POST http://localhost:8000/api/v1/parameters/550e8400-e29b-41d4-a716-446655440000/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": {"tax_rate_franking_credits": 35.0},
+    "set_as_active": true,
+    "set_as_default": false
+  }'
+```
+Result: New parameter set created, becomes active, all calculations use the new tax rate.
+
+**Scenario 2: Update multiple parameters and set as both active and default**
+```bash
+curl -X POST http://localhost:8000/api/v1/parameters/550e8400-e29b-41d4-a716-446655440000/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": {
+      "tax_rate_franking_credits": 35.0,
+      "beta_rounding": 0.2,
+      "risk_free_rate_rounding": 0.25
+    },
+    "set_as_active": true,
+    "set_as_default": true
+  }'
+```
+Result: New parameter set with all updates, becomes both active and default.
+
+**Scenario 3: Save parameters for later (don't activate yet)**
+```bash
+curl -X POST http://localhost:8000/api/v1/parameters/550e8400-e29b-41d4-a716-446655440000/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": {"beta_rounding": 0.2},
+    "set_as_active": false,
+    "set_as_default": false
+  }'
+```
+Result: New parameter set created but not activated; current active set unchanged.
+
+---
+
+#### Set Parameter Set as Active
+
+**POST** `/api/v1/parameters/{param_set_id}/set-active`
+
+Activate a parameter set without creating a new one. Only one parameter set can be active at a time.
+
+**Path Parameters:**
+- `param_set_id` (UUID): The parameter set to activate
+
+**Example Request:**
+```bash
+curl -X POST http://localhost:8000/api/v1/parameters/550e8400-e29b-41d4-a716-446655440000/set-active
+```
+
+**Response:**
+Same as GET endpoint - returns the now-active parameter set with all merged values.
+
+**Use Case:** Switch back to a previously saved parameter set without modifying parameters.
+
+---
+
+#### Set Parameter Set as Default
+
+**POST** `/api/v1/parameters/{param_set_id}/set-default`
+
+Mark a parameter set as the default one. Only one parameter set can be default at a time.
+
+**Important:** The default parameter set does NOT need to be the active one. The default is what users "reset to" when needed, while the active set is used for calculations.
+
+**Path Parameters:**
+- `param_set_id` (UUID): The parameter set to set as default
+
+**Example Request:**
+```bash
+curl -X POST http://localhost:8000/api/v1/parameters/550e8400-e29b-41d4-a716-446655440000/set-default
+```
+
+**Response:**
+Same as GET endpoint - returns the now-default parameter set with all merged values.
+
+**Use Case:** Define a standard baseline configuration that users can reset to when experimenting.
+
+---
+
 ### Query Metrics (Flexible Retrieval)
 
 **GET** `/api/v1/metrics/get_metrics/`
@@ -579,6 +833,172 @@ Batch inserts in groups of 1000+ for efficiency.
 2. Expand any endpoint
 3. Click "Try it out"
 4. Fill in parameters and execute
+
+### Testing Parameters API
+
+The Parameters API provides endpoints for retrieving and managing user parameters. Below are comprehensive testing examples:
+
+#### 1. Get Active Parameter Set
+
+```bash
+curl http://localhost:8000/api/v1/parameters/active | jq '.'
+```
+
+Expected response includes all current parameter values with `is_active=true`.
+
+#### 2. Update Parameters and Set as Active
+
+This is the primary workflow - user updates parameters in UI:
+
+```bash
+# First, get the current active parameter set ID
+PARAM_SET_ID=$(curl -s http://localhost:8000/api/v1/parameters/active | jq -r '.param_set_id')
+
+# Update tax rate and activate
+curl -X POST http://localhost:8000/api/v1/parameters/$PARAM_SET_ID/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": {
+      "tax_rate_franking_credits": 35.0,
+      "beta_rounding": 0.2
+    },
+    "set_as_active": true,
+    "set_as_default": false
+  }' | jq '.'
+```
+
+Expected response: New parameter set with updated values and `is_active=true`.
+
+#### 3. Get Specific Parameter Set (Historical)
+
+```bash
+# Using the param_set_id returned from previous update
+PARAM_SET_ID="550e8400-e29b-41d4-a716-446655440000"
+
+curl http://localhost:8000/api/v1/parameters/$PARAM_SET_ID | jq '.'
+```
+
+Useful for retrieving parameter values used in previous calculations.
+
+#### 4. Set Parameter Set as Default (Without Updating)
+
+```bash
+PARAM_SET_ID="550e8400-e29b-41d4-a716-446655440000"
+
+curl -X POST http://localhost:8000/api/v1/parameters/$PARAM_SET_ID/set-default | jq '.'
+```
+
+This marks the parameter set as the "reset" baseline without making it active.
+
+#### 5. Switch to Previously Saved Parameter Set
+
+```bash
+PARAM_SET_ID="550e8400-e29b-41d4-a716-446655440000"
+
+curl -X POST http://localhost:8000/api/v1/parameters/$PARAM_SET_ID/set-active | jq '.'
+```
+
+Useful when user wants to revert to a previous parameter configuration.
+
+#### 6. Save Parameters Without Activating
+
+```bash
+PARAM_SET_ID=$(curl -s http://localhost:8000/api/v1/parameters/active | jq -r '.param_set_id')
+
+# Save parameters for later experimentation without affecting current calculations
+curl -X POST http://localhost:8000/api/v1/parameters/$PARAM_SET_ID/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": {
+      "equity_risk_premium": 6.0
+    },
+    "set_as_active": false,
+    "set_as_default": false
+  }' | jq '.param_set_id, .is_active'
+```
+
+#### Full Integration Test Script
+
+Save this as `test_parameters.sh`:
+
+```bash
+#!/bin/bash
+
+API_URL="http://localhost:8000/api/v1/parameters"
+
+echo "=== Parameters API Integration Test ==="
+echo
+
+# Test 1: Get active parameters
+echo "1. Getting active parameter set..."
+ACTIVE=$(curl -s $API_URL/active)
+PARAM_SET_ID=$(echo $ACTIVE | jq -r '.param_set_id')
+echo "Active Parameter Set ID: $PARAM_SET_ID"
+echo "Tax Rate: $(echo $ACTIVE | jq '.parameters.tax_rate_franking_credits')"
+echo
+
+# Test 2: Update and activate
+echo "2. Updating tax_rate_franking_credits to 35.0 and activating..."
+UPDATED=$(curl -s -X POST $API_URL/$PARAM_SET_ID/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": {"tax_rate_franking_credits": 35.0},
+    "set_as_active": true,
+    "set_as_default": false
+  }')
+NEW_PARAM_SET_ID=$(echo $UPDATED | jq -r '.param_set_id')
+echo "New Parameter Set ID: $NEW_PARAM_SET_ID"
+echo "New Tax Rate: $(echo $UPDATED | jq '.parameters.tax_rate_franking_credits')"
+echo "Is Active: $(echo $UPDATED | jq '.is_active')"
+echo
+
+# Test 3: Verify new active set
+echo "3. Verifying new active set..."
+ACTIVE_NOW=$(curl -s $API_URL/active)
+echo "Current Active Set ID: $(echo $ACTIVE_NOW | jq -r '.param_set_id')"
+echo "Current Tax Rate: $(echo $ACTIVE_NOW | jq '.parameters.tax_rate_franking_credits')"
+echo
+
+# Test 4: Set as default
+echo "4. Setting new parameter set as default..."
+SET_DEFAULT=$(curl -s -X POST $API_URL/$NEW_PARAM_SET_ID/set-default)
+echo "Is Default: $(echo $SET_DEFAULT | jq '.is_default')"
+echo
+
+# Test 5: Retrieve historical parameter set
+echo "5. Retrieving original parameter set (historical)..."
+HISTORICAL=$(curl -s $API_URL/$PARAM_SET_ID)
+echo "Original Set ID: $(echo $HISTORICAL | jq -r '.param_set_id')"
+echo "Original Tax Rate: $(echo $HISTORICAL | jq '.parameters.tax_rate_franking_credits')"
+echo
+
+echo "=== Test Complete ==="
+```
+
+Run it:
+```bash
+chmod +x test_parameters.sh
+./test_parameters.sh
+```
+
+#### Error Testing
+
+Test validation errors:
+
+```bash
+PARAM_SET_ID=$(curl -s http://localhost:8000/api/v1/parameters/active | jq -r '.param_set_id')
+
+# This should fail with validation error (tax_rate must be 0-100)
+curl -X POST http://localhost:8000/api/v1/parameters/$PARAM_SET_ID/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": {"tax_rate_franking_credits": 150.0},
+    "set_as_active": true,
+    "set_as_default": false
+  }' | jq '.detail'
+```
+
+Expected error status: `422 Unprocessable Entity`
 
 ### Using curl
 
