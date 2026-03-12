@@ -725,12 +725,13 @@ class BetaCalculationService:
         1. Use individual Calc Adj Beta (adjusted_slope if available)
         2. Use sector average (sector_slope if adjusted_slope is NaN)
         3. Use global market average (if both adjusted_slope and sector_slope are NaN)
+        4. Use 1.0 as ultimate fallback
         """
         try:
             spot_betas = annual_beta.merge(
                 sector_slopes,
                 on=['sector', 'fiscal_year'],
-                how='inner'
+                how='left'
             )
             
             # Tier 1 & 2: Individual → Sector
@@ -748,10 +749,13 @@ class BetaCalculationService:
             # Apply Tier 3 fallback for any remaining NaN values
             spot_betas['spot_slope'] = spot_betas['spot_slope'].fillna(global_avg)
             
+            # Tier 4: Apply ultimate 1.0 fallback for any still-NaN values (safety net)
+            spot_betas['spot_slope'] = spot_betas['spot_slope'].fillna(1.0)
+            
             # Track which tier was used for audit trail (optional)
             spot_betas['fallback_tier_used'] = spot_betas.apply(
                 lambda x: 1 if pd.notna(x['adjusted_slope'])
-                          else (2 if pd.notna(x['sector_slope']) else 3),
+                          else (2 if pd.notna(x['sector_slope']) else (3 if x['spot_slope'] == global_avg else 4)),
                 axis=1
             )
             
