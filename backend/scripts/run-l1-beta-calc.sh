@@ -153,7 +153,7 @@ SELECT
 FROM cissa.metrics_outputs
 WHERE dataset_id = '$DATASET_ID'
   AND param_set_id = '$PARAM_SET_ID'
-  AND output_metric_name = 'Beta'
+  AND output_metric_name = 'Calc Beta'
 GROUP BY output_metric_name;
 EOF
 
@@ -168,7 +168,7 @@ SELECT
 FROM cissa.metrics_outputs
 WHERE dataset_id = '$DATASET_ID'
   AND param_set_id = '$PARAM_SET_ID'
-  AND output_metric_name = 'Beta'
+  AND output_metric_name = 'Calc Beta'
 ORDER BY ticker, fiscal_year
 LIMIT 10;
 EOF

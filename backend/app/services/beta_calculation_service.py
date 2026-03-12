@@ -95,10 +95,10 @@ class BetaCalculationService:
             
             self.logger.info(f"Fetched {len(monthly_df)} monthly return records for {monthly_df['ticker'].nunique()} tickers")
             
-            # 4. Fetch sector data
-            self.logger.info("Fetching sector information...")
-            sector_map = await self._fetch_sector_map()
-            self.logger.info(f"Loaded {len(sector_map)} ticker-sector mappings")
+            # 4. Fetch sector and fiscal month data
+            self.logger.info("Fetching sector and fiscal month information...")
+            sector_map, fy_month_map = await self._fetch_sector_and_fiscal_month_map()
+            self.logger.info(f"Loaded {len(sector_map)} ticker-sector mappings with fiscal months")
             
             # 5. Calculate rolling OLS slopes
             self.logger.info("Calculating rolling OLS slopes (60-month window)...")
@@ -113,9 +113,9 @@ class BetaCalculationService:
                 params['beta_rounding']
             )
             
-            # 7. Annualize slopes
-            self.logger.info("Annualizing slopes by fiscal_year...")
-            annual_df = self._annualize_slopes(transformed_df, sector_map)
+            # 7. Annualize slopes (using ticker-specific fiscal months)
+            self.logger.info("Annualizing slopes by ticker-specific fiscal month...")
+            annual_df = self._annualize_slopes(transformed_df, sector_map, fy_month_map)
             self.logger.info(f"Annualized to {annual_df['fiscal_year'].nunique()} fiscal years")
             
             # 8. Generate sector slopes
@@ -284,18 +284,39 @@ class BetaCalculationService:
             self.logger.error(f"Failed to fetch monthly returns: {e}")
             raise
     
-    async def _fetch_sector_map(self) -> dict:
-        """Fetch ticker to sector mapping from companies table."""
+    async def _fetch_sector_and_fiscal_month_map(self) -> tuple[dict, dict]:
+        """Fetch ticker to sector and fiscal month mapping from companies table.
+        
+        Returns:
+            (sector_map, fy_month_map) where:
+            - sector_map: {ticker: sector}
+            - fy_month_map: {ticker: fy_report_month}
+        """
         try:
-            query = text("SELECT ticker, sector FROM cissa.companies")
+            query = text("""
+                SELECT ticker, sector, 
+                       EXTRACT(MONTH FROM fy_report_month)::INTEGER as fy_month
+                FROM cissa.companies
+            """)
             result = await self.session.execute(query)
             rows = result.fetchall()
             
-            return {row[0]: row[1] for row in rows}
+            sector_map = {}
+            fy_month_map = {}
+            
+            for ticker, sector, fy_month in rows:
+                sector_map[ticker] = sector
+                if fy_month is None:
+                    self.logger.error(f"Missing fy_report_month for ticker {ticker}")
+                    raise ValueError(f"Ticker {ticker} has missing fy_report_month in companies table")
+                fy_month_map[ticker] = fy_month
+            
+            self.logger.info(f"Loaded sector and fiscal month mappings for {len(sector_map)} tickers")
+            return sector_map, fy_month_map
             
         except Exception as e:
-            self.logger.error(f"Failed to fetch sector map: {e}")
-            return {}
+            self.logger.error(f"Failed to fetch sector and fiscal month map: {e}")
+            raise
     
     async def _fetch_inception_years(self, dataset_id: UUID) -> dict:
         """Fetch inception year (first available data year) for each ticker.
@@ -418,11 +439,34 @@ class BetaCalculationService:
             self.logger.error(f"Failed to transform slopes: {e}")
             raise
     
-    def _annualize_slopes(self, beta_df: pd.DataFrame, sector_map: dict) -> pd.DataFrame:
-        """Annualize slopes by taking fiscal month 6 (mid-fiscal year) of each fiscal year.
+    def _annualize_slopes(self, beta_df: pd.DataFrame, sector_map: dict, fy_month_map: dict) -> pd.DataFrame:
+        """Annualize slopes by taking ticker-specific fiscal month of each fiscal year.
         
-        Empirical analysis shows Month 6 matches Excel reference data 81% of the time
-        (vs Month 12 at only 47.6%). Also collects all 12 monthly raw slopes for metadata storage.
+        CRITICAL FIX: This method now uses ticker-specific fiscal year end months instead of
+        assuming all tickers follow June fiscal year. This is essential because ASX companies
+        have different fiscal year ends:
+        - S32 AU Equity: fy_report_month = June (6)
+        - RIO AU Equity: fy_report_month = December (12)
+        - BHP AU Equity: fy_report_month = December (12)
+        - etc.
+        
+        For each ticker, we filter monthly slopes to only include the month matching that
+        ticker's fiscal year end. This ensures the annualized slope is always taken from
+        the last month of that ticker's fiscal year, matching the logic in the Excel reference
+        implementation.
+        
+        Also collects all 12 monthly raw slopes for metadata storage.
+        
+        Args:
+            beta_df: DataFrame with columns [ticker, fiscal_year, fiscal_month, slope, ...]
+            sector_map: Dict mapping ticker → sector (from companies table)
+            fy_month_map: Dict mapping ticker → fy_report_month (from companies table)
+        
+        Returns:
+            DataFrame with annualized data, one row per (ticker, fiscal_year)
+        
+        Raises:
+            ValueError: If any ticker in fy_month_map is missing or has no data
         """
         try:
             # Collect all 12 monthly raw slopes per fiscal year before annualization
@@ -434,11 +478,32 @@ class BetaCalculationService:
                 .rename(columns={0: 'monthly_raw_slopes'})
             )
             
-            # Select fiscal month 6 (mid-fiscal year) per fiscal year for annualization
-            annual_beta = (
-                beta_df[beta_df['fiscal_month'] == 6]
-                .drop_duplicates(['ticker', 'fiscal_year'], keep='first')
-            )
+            # For each ticker, filter to its specific fiscal month
+            annual_betas = []
+            
+            for ticker in beta_df['ticker'].unique():
+                if ticker not in fy_month_map:
+                    self.logger.error(f"Ticker {ticker} not found in fy_month_map")
+                    raise ValueError(f"Ticker {ticker} has no fiscal month information")
+                
+                fy_month = fy_month_map[ticker]
+                self.logger.debug(f"Annualizing {ticker} using fiscal month {fy_month}")
+                
+                ticker_data = beta_df[beta_df['ticker'] == ticker]
+                ticker_annual = ticker_data[ticker_data['fiscal_month'] == fy_month].copy()
+                
+                if ticker_annual.empty:
+                    self.logger.warning(f"No data found for {ticker} in fiscal month {fy_month}")
+                    continue
+                
+                ticker_annual = ticker_annual.drop_duplicates(['ticker', 'fiscal_year'], keep='first')
+                annual_betas.append(ticker_annual)
+            
+            if not annual_betas:
+                self.logger.warning("No annualized data available after fiscal month filtering")
+                return pd.DataFrame()
+            
+            annual_beta = pd.concat(annual_betas, ignore_index=True)
             
             # Add sector information
             annual_beta['sector'] = annual_beta['ticker'].map(sector_map)
@@ -474,7 +539,13 @@ class BetaCalculationService:
             raise
     
     def _apply_4tier_fallback(self, annual_beta: pd.DataFrame, sector_slopes: pd.DataFrame) -> pd.DataFrame:
-        """Apply 4-tier fallback logic."""
+        """Apply 4-tier fallback logic to determine spot_slope for each record.
+        
+        Fallback order:
+        1. Use individual Calc Adj Beta (adjusted_slope if available)
+        2. Use sector average (sector_slope if adjusted_slope is NaN)
+        3. Use global market average (if both adjusted_slope and sector_slope are NaN)
+        """
         try:
             spot_betas = annual_beta.merge(
                 sector_slopes,
@@ -482,8 +553,29 @@ class BetaCalculationService:
                 how='inner'
             )
             
+            # Tier 1 & 2: Individual → Sector
             spot_betas['spot_slope'] = spot_betas['adjusted_slope'].fillna(spot_betas['sector_slope'])
             
+            # Tier 3: Calculate global market average (average of all non-NaN adjusted slopes)
+            global_avg = annual_beta['adjusted_slope'].dropna().mean()
+            
+            if pd.isna(global_avg):
+                self.logger.warning("No valid adjusted slopes found to create global fallback - using 1.0 as ultimate fallback")
+                global_avg = 1.0
+            else:
+                self.logger.info(f"Tier 3 global fallback calculated: {global_avg:.4f}")
+            
+            # Apply Tier 3 fallback for any remaining NaN values
+            spot_betas['spot_slope'] = spot_betas['spot_slope'].fillna(global_avg)
+            
+            # Track which tier was used for audit trail (optional)
+            spot_betas['fallback_tier_used'] = spot_betas.apply(
+                lambda x: 1 if pd.notna(x['adjusted_slope'])
+                          else (2 if pd.notna(x['sector_slope']) else 3),
+                axis=1
+            )
+            
+            # Calculate ticker average for FIXED approach
             ticker_avg = spot_betas.groupby('ticker')['spot_slope'].mean(skipna=False)
             
             spot_betas = spot_betas.merge(
