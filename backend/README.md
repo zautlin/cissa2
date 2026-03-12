@@ -507,6 +507,7 @@ Calculate financial ratio metrics with rolling averages over temporal windows (1
 - `roee`: Return on Economic Equity = PAT_EX / EE_Open (1-year shifted)
 - `roa`: Return on Assets = PAT_EX / Assets_Open (1-year shifted)
 - `profit_margin`: Profit Margin = PAT_EX / Revenue
+- `op_cost_margin`: Operating Cost Margin = Calc Op Cost / Revenue
 
 **Temporal Window Definitions:**
 
@@ -1242,19 +1243,145 @@ curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=profit_margin&ti
 - Values are smoother than 1Y due to 3-year averaging
 - Use 3Y for identifying medium-term profitability trends
 
-### Profit Margin vs Other Metrics: Complete Comparison
+---
 
-| Aspect | MB Ratio | ROEE | ROA | Profit Margin |
-|--------|----------|------|-----|---------------|
-| **Purpose** | Valuation multiple | Return on equity | Return on assets | Profitability % |
-| **Data Sources** | Both from metrics_outputs | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Both from fundamentals |
-| **Numerator** | Market Cap | Profit | Profit | Profit |
-| **Denominator** | Book Equity | Opening Equity | Opening Assets | Revenue |
-| **Year Shift** | No | Yes (denom) | Yes (denom) | No |
-| **First Result** | 2003 (1Y), 2005 (3Y), etc. | Same | Same | Same |
-| **Typical Range** | 0.5 - 3.0 | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) |
-| **Interpretation** | Market price vs book | Profit per $ of equity | Profit per $ of assets | Profit per $ of revenue |
-| **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency | Operational profitability |
+## Operating Cost Margin
+
+### Overview
+
+Operating Cost Margin measures operating costs as a percentage of revenue. Unlike Profit Margin which uses profit from fundamentals, Op Cost Margin uses calculated operating costs from metrics_outputs paired with raw revenue data, making it a mixed-source simple ratio.
+
+- **Numerator**: `Calc Op Cost` from `cissa.metrics_outputs` (parameter_dependent: true)
+- **Denominator**: `REVENUE` from `cissa.fundamentals` (parameter_dependent: false)
+- **Formula**: Operating Cost Margin = Average(Calc Op Cost) / Average(REVENUE)
+
+### Temporal Windows for Operating Cost Margin
+
+| Window | Data Required | First Result Year | Example Calculation |
+|--------|---------------|-------------------|---------------------|
+| **1Y** | Calc Op Cost(current), REVENUE(current) | 2003 | Op Cost Margin(2003) = Calc Op Cost(2003) / REVENUE(2003) |
+| **3Y** | Calc Op Cost(3 years), REVENUE(3 years) | 2005 | Op Cost Margin(2005) = AVG(Calc Op Cost[2003-2005]) / AVG(REVENUE[2003-2005]) |
+| **5Y** | Calc Op Cost(5 years), REVENUE(5 years) | 2007 | Op Cost Margin(2007) = AVG(Calc Op Cost[2003-2007]) / AVG(REVENUE[2003-2007]) |
+| **10Y** | Calc Op Cost(10 years), REVENUE(10 years) | 2012 | Op Cost Margin(2012) = AVG(Calc Op Cost[2003-2012]) / AVG(REVENUE[2003-2012]) |
+
+### Operating Cost Margin Query Example
+
+Get 1-year Operating Cost Margin for BHP AU Equity:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=op_cost_margin&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | python -m json.tool | head -40
+```
+
+**Response (first 5 years):**
+```json
+{
+  "metric": "op_cost_margin",
+  "display_name": "Operating Cost Margin",
+  "temporal_window": "1Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2003,
+          "value": 0.4521938472983
+        },
+        {
+          "year": 2004,
+          "value": 0.4238947283947
+        },
+        {
+          "year": 2005,
+          "value": 0.3912849283947
+        },
+        {
+          "year": 2006,
+          "value": 0.4103847293847
+        },
+        {
+          "year": 2007,
+          "value": 0.3847392847293
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Interpretation:**
+- Op Cost Margin(2003) = 0.4522 = 45.22% of revenue goes to operating costs
+- Op Cost Margin(2004) = 0.4239 = 42.39% of revenue goes to operating costs
+- Op Cost Margin values typically range from 0 to 1 (0% to 100%)
+- **Lower values are better** (less operating cost relative to revenue = higher efficiency)
+
+### Operating Cost Margin 3-Year Rolling Average
+
+Get 3-year average Operating Cost Margin for trend analysis:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=op_cost_margin&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=3Y"
+```
+
+**Response (starts from 2005):**
+```json
+{
+  "metric": "op_cost_margin",
+  "display_name": "Operating Cost Margin",
+  "temporal_window": "3Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2005,
+          "value": 0.4224578923847
+        },
+        {
+          "year": 2006,
+          "value": 0.4085247392847
+        },
+        {
+          "year": 2007,
+          "value": 0.3987293847293
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Key observations:**
+- First year is 2005 (needs Calc Op Cost 2003-2005 and REVENUE 2003-2005)
+- Values are smoother than 1Y due to 3-year averaging
+- Downward trend indicates improving operational efficiency (lower costs as % of revenue)
+- Use 3Y for medium-term operational efficiency trends
+
+### Operating Cost Margin vs Profit Margin: Key Difference
+
+| Aspect | Profit Margin | Operating Cost Margin |
+|--------|---------------|----------------------|
+| **Purpose** | Total profit as % of revenue | Operating costs as % of revenue |
+| **Numerator** | Profit After Tax | Operating Costs |
+| **Denominator** | Revenue | Revenue |
+| **Data Sources** | Both fundamentals | metrics_outputs (numerator) + fundamentals (denominator) |
+| **Interpretation** | Higher is better (more profit per $) | Lower is better (less operating cost per $) |
+| **Relationship** | Profit Margin + Op Cost Margin + Other Costs ≈ 1.0 | Shows cost structure breakdown |
+| **Use Case** | Overall profitability | Operational efficiency & cost control |
+
+### Complete Metrics Comparison
+
+| Aspect | MB Ratio | ROEE | ROA | Profit Margin | Op Cost Margin |
+|--------|----------|------|-----|---------------|----------------|
+| **Purpose** | Valuation multiple | Return on equity | Return on assets | Profitability % | Operating efficiency |
+| **Data Sources** | Both from metrics_outputs | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Both from fundamentals | metrics_outputs + fundamentals |
+| **Numerator** | Market Cap | Profit | Profit | Profit | Operating Cost |
+| **Denominator** | Book Equity | Opening Equity | Opening Assets | Revenue | Revenue |
+| **Year Shift** | No | Yes (denom) | Yes (denom) | No | No |
+| **First Result** | 2003 (1Y), 2005 (3Y), etc. | Same | Same | Same | Same |
+| **Typical Range** | 0.5 - 3.0 | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) |
+| **Interpretation** | Market vs book value | Profit per $ equity | Profit per $ assets | Profit per $ revenue | Operating cost per $ revenue |
+| **Better When** | Higher (premium) | Higher (better return) | Higher (efficient) | Higher (more profit) | Lower (efficient) |
+| **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency | Overall profitability | Cost control & efficiency |
 
 ---
 
@@ -1337,6 +1464,27 @@ Ratio metrics are defined in `backend/app/config/ratio_metrics.json`. To add a n
         "metric_name": "PROFIT_AFTER_TAX_EX",
         "metric_source": "fundamentals",
         "parameter_dependent": false,
+        "year_shift": 0
+      },
+      "denominator": {
+        "metric_name": "REVENUE",
+        "metric_source": "fundamentals",
+        "parameter_dependent": false,
+        "year_shift": 0
+      },
+      "operation": "divide",
+      "null_handling": "skip_year",
+      "negative_handling": "return_null"
+    },
+    {
+      "id": "op_cost_margin",
+      "display_name": "Operating Cost Margin",
+      "description": "Operating Cost Margin (Calc Op Cost / Revenue)",
+      "formula_type": "ratio",
+      "numerator": {
+        "metric_name": "Calc Op Cost",
+        "metric_source": "metrics_outputs",
+        "parameter_dependent": true,
         "year_shift": 0
       },
       "denominator": {
