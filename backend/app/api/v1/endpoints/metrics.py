@@ -25,7 +25,9 @@ from ....services.metrics_service import MetricsService
 from ....services.l2_metrics_service import L2MetricsService
 from ....services.beta_calculation_service import BetaCalculationService
 from ....services.risk_free_rate_service import RiskFreeRateCalculationService
+from ....services.ratio_metrics_service import RatioMetricsService
 from ....repositories.metrics_query_repository import MetricsQueryRepository
+from ....models.ratio_metrics import RatioMetricsResponse
 from ....core.config import get_logger
 
 logger = get_logger(__name__)
@@ -767,5 +769,70 @@ async def get_metrics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve metrics: {str(e)}"
+        )
+
+
+@router.get("/ratio-metrics", response_model=RatioMetricsResponse)
+async def get_ratio_metrics(
+    metric: str = Query(..., description="Metric ID (e.g., 'mb_ratio')"),
+    tickers: str = Query(..., description="Comma-separated ticker list (e.g., 'AAPL,MSFT')"),
+    dataset_id: UUID = Query(..., description="Dataset ID"),
+    temporal_window: str = Query("1Y", regex="^(1Y|3Y|5Y|10Y)$", description="Temporal window"),
+    param_set_id: Optional[UUID] = Query(None, description="Parameter set ID (defaults to base_case)"),
+    start_year: Optional[int] = Query(None, description="Optional start year filter"),
+    end_year: Optional[int] = Query(None, description="Optional end year filter"),
+    db: AsyncSession = Depends(get_db)
+) -> RatioMetricsResponse:
+    """
+    Calculate ratio metrics with rolling averages.
+    
+    Supported metrics:
+    - mb_ratio: Market-to-Book Ratio (Market Cap / Economic Equity)
+    
+    Temporal windows:
+    - 1Y: Annual values (current year only)
+    - 3Y: 3-year rolling average (starts year 2003 if data from 2001)
+    - 5Y: 5-year rolling average (starts year 2005)
+    - 10Y: 10-year rolling average (starts year 2010)
+    
+    Example:
+        GET /api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=AAPL,MSFT&temporal_window=3Y&dataset_id=...
+    """
+    
+    try:
+        # Parse comma-separated tickers and validate
+        ticker_list = [t.strip().upper() for t in tickers.split(",")]
+        if not ticker_list or any(not t for t in ticker_list):
+            raise ValueError("Invalid ticker list")
+        
+        logger.info(f"Calculating {metric} for tickers {ticker_list}, window={temporal_window}")
+        
+        # Initialize service
+        service = RatioMetricsService(db)
+        
+        # Calculate metric
+        result = await service.calculate_ratio_metric(
+            metric_id=metric,
+            tickers=ticker_list,
+            dataset_id=dataset_id,
+            temporal_window=temporal_window,
+            param_set_id=param_set_id,
+            start_year=start_year,
+            end_year=end_year
+        )
+        
+        return result
+        
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error calculating ratio metric: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate ratio metric: {str(e)}"
         )
 

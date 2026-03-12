@@ -1,0 +1,21 @@
+{
+  "metrics": [
+    {
+      "id": "mb_ratio",
+      "display_name": "MB Ratio",
+      "description": "Market-to-Book Ratio (Market Cap / Economic Equity)",
+      "formula_type": "ratio",
+      "numerator": {
+        "metric_name": "Calc MC",
+        "parameter_dependent": false
+      },
+      "denominator": {
+        "metric_name": "Calc EE",
+        "parameter_dependent": false
+      },
+      "operation": "divide",
+      "null_handling": "skip_year",
+      "negative_handling": "return_null"
+    }
+  ]
+}
