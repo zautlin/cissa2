@@ -101,6 +101,11 @@ class RatioMetricsCalculator:
         
         # Build numerator CTE with appropriate column name and table
         if numerator.metric_source == MetricSource.METRICS_OUTPUTS:
+            # For metrics_outputs, conditionally include param_set_id filter only if parameter_dependent
+            param_filter = ""
+            if numerator.parameter_dependent:
+                param_filter = "\n                AND param_set_id = :param_set_id"
+            
             numerator_cte = f"""
         numerator_rolling AS (
             SELECT
@@ -114,8 +119,7 @@ class RatioMetricsCalculator:
                     ) AS numerator_value,
                 ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank
             FROM {numerator_table}
-            WHERE dataset_id = :dataset_id
-                AND param_set_id = :param_set_id
+            WHERE dataset_id = :dataset_id{param_filter}
                 AND output_metric_name = :numerator_metric
                 AND ticker IN ({ticker_placeholders})
         )"""
@@ -140,6 +144,11 @@ class RatioMetricsCalculator:
         
         # Build denominator CTE with appropriate column name and table
         if denominator.metric_source == MetricSource.METRICS_OUTPUTS:
+            # For metrics_outputs, conditionally include param_set_id filter only if parameter_dependent
+            param_filter = ""
+            if denominator.parameter_dependent:
+                param_filter = "\n                AND param_set_id = :param_set_id"
+            
             denominator_cte = f"""
         denominator_rolling AS (
             SELECT
@@ -152,8 +161,7 @@ class RatioMetricsCalculator:
                         {self.rows_between}
                     ) AS denominator_value
             FROM {denominator_table}
-            WHERE dataset_id = :dataset_id
-                AND param_set_id = :param_set_id
+            WHERE dataset_id = :dataset_id{param_filter}
                 AND output_metric_name = :denominator_metric
                 AND ticker IN ({ticker_placeholders})
         )"""
