@@ -3,15 +3,13 @@
 # L1 Risk-Free Rate Calculation - Phase 08 Risk-Free Rate from Market Data
 # ============================================================================
 # This script calculates Risk-Free Rate metrics:
-#   - Rf: Fixed benchmark - risk_premium (if FIXED approach)
-#   - Rf_1Y: 1-year rolling geometric mean of monthly rates
-#   - Rf_1Y_Raw: Unrounded 1-year rate
+#   - Calc Rf: Final metric using Fixed or Floating approach
 #
 # Calculation Method:
 #   - 12-month rolling geometric mean of monthly Rf rates
-#   - Rf_1Y_Raw: Geometric mean before rounding
 #   - Rf_1Y: Rounded to nearest 0.5% (default rounding)
-#   - Rf: benchmark - risk_premium (FIXED) OR Rf_1Y (FLOATING)
+#   - Fixed approach: Calc Rf = Benchmark - Risk Premium (static, same all years)
+#   - Floating approach: Calc Rf = Rf_1Y (dynamic, varies by year)
 #
 # Usage:
 #   ./run-l1-rf-calc.sh                    # Uses default parameter set
@@ -155,7 +153,7 @@ SELECT
 FROM cissa.metrics_outputs
 WHERE dataset_id = '$DATASET_ID'
   AND param_set_id = '$PARAM_SET_ID'
-  AND output_metric_name IN ('Rf', 'Rf_1Y', 'Rf_1Y_Raw')
+  AND output_metric_name = 'Calc Rf'
 GROUP BY output_metric_name
 ORDER BY output_metric_name;
 EOF
@@ -171,7 +169,7 @@ SELECT
 FROM cissa.metrics_outputs
 WHERE dataset_id = '$DATASET_ID'
   AND param_set_id = '$PARAM_SET_ID'
-  AND output_metric_name IN ('Rf', 'Rf_1Y', 'Rf_1Y_Raw')
+  AND output_metric_name = 'Calc Rf'
 ORDER BY ticker, fiscal_year, output_metric_name
 LIMIT 15;
 EOF
@@ -191,8 +189,8 @@ echo -e "\n${CYAN}Next Steps:${NC}"
 echo -e "  1. Calculate Cost of Equity (KE):"
 echo -e "     ./run-l1-cost-of-equity-calc.sh"
 echo -e ""
-echo -e "  2. Review Risk-Free Rate metrics in database:"
-echo -e "     SELECT * FROM cissa.metrics_outputs WHERE output_metric_name IN ('Rf', 'Rf_1Y') LIMIT 10;"
+echo -e "  2. Review Calc Rf metrics in database:"
+echo -e "     SELECT * FROM cissa.metrics_outputs WHERE output_metric_name = 'Calc Rf' LIMIT 10;"
 echo -e ""
 echo -e "  3. Check calculation logs:"
 echo -e "     grep -i 'risk.free' /tmp/api.log | tail -20"
