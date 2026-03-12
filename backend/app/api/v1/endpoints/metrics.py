@@ -800,8 +800,8 @@ async def get_ratio_metrics(
     """
     
     try:
-        # Parse comma-separated tickers and validate
-        ticker_list = [t.strip().upper() for t in tickers.split(",")]
+        # Parse comma-separated tickers and validate (preserve original case)
+        ticker_list = [t.strip() for t in tickers.split(",")]
         if not ticker_list or any(not t for t in ticker_list):
             raise ValueError("Invalid ticker list")
         

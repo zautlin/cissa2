@@ -15,16 +15,30 @@ class RatioMetricsCalculator:
     def __init__(self, metric_def: MetricDefinition, temporal_window: str = "1Y"):
         self.metric_def = metric_def
         self.temporal_window = temporal_window
-        self.rows_between = self._calculate_rows_between(temporal_window)
+        self.rows_between, self.min_years_required = self._calculate_rows_between(temporal_window)
     
     @staticmethod
-    def _calculate_rows_between(temporal_window: str) -> str:
-        """Convert temporal window to SQL ROWS BETWEEN clause"""
+    def _calculate_rows_between(temporal_window: str) -> tuple[str, int]:
+        """
+        Convert temporal window to SQL ROWS BETWEEN clause and minimum year requirement.
+        
+        Returns:
+            (sql_rows_between, min_years_required)
+            - sql_rows_between: SQL window function clause
+            - min_years_required: Minimum prior fiscal years needed (used to calculate threshold as min_years_required + 1 = year_rank >= threshold)
+        
+        Logic for year_rank threshold calculation:
+        - year_rank 1 = 2002 (first year)
+        - To get first result in 2003 (year_rank 2): need threshold = 2 = min_years_required + 1, so min_years_required = 1
+        - To get first result in 2005 (year_rank 4): need threshold = 4 = min_years_required + 1, so min_years_required = 3
+        - To get first result in 2007 (year_rank 6): need threshold = 6 = min_years_required + 1, so min_years_required = 5
+        - To get first result in 2012 (year_rank 11): need threshold = 11 = min_years_required + 1, so min_years_required = 10
+        """
         mapping = {
-            "1Y": "ROWS BETWEEN 0 PRECEDING AND CURRENT ROW",
-            "3Y": "ROWS BETWEEN 2 PRECEDING AND CURRENT ROW",
-            "5Y": "ROWS BETWEEN 4 PRECEDING AND CURRENT ROW",
-            "10Y": "ROWS BETWEEN 9 PRECEDING AND CURRENT ROW"
+            "1Y": ("ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING", 1),
+            "3Y": ("ROWS BETWEEN 2 PRECEDING AND CURRENT ROW", 3),
+            "5Y": ("ROWS BETWEEN 4 PRECEDING AND CURRENT ROW", 5),
+            "10Y": ("ROWS BETWEEN 9 PRECEDING AND CURRENT ROW", 10)
         }
         if temporal_window not in mapping:
             raise ValueError(f"Invalid temporal window: {temporal_window}. Must be one of: 1Y, 3Y, 5Y, 10Y")
@@ -80,7 +94,8 @@ class RatioMetricsCalculator:
             year_filter += f" AND m.fiscal_year <= :end_year"
             ticker_params["end_year"] = end_year
         
-        sql = f"""
+        # Get the minimum fiscal year for each ticker to calculate which years have enough data
+        min_year_calc = f"""
         WITH numerator_rolling AS (
             SELECT
                 ticker,
@@ -90,7 +105,8 @@ class RatioMetricsCalculator:
                         PARTITION BY ticker 
                         ORDER BY fiscal_year 
                         {self.rows_between}
-                    ) AS numerator_value
+                    ) AS numerator_value,
+                ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank
             FROM cissa.metrics_outputs
             WHERE dataset_id = :dataset_id
                 AND param_set_id = :param_set_id
@@ -125,7 +141,8 @@ class RatioMetricsCalculator:
         FROM numerator_rolling m
         FULL OUTER JOIN denominator_rolling d 
             ON m.ticker = d.ticker AND m.fiscal_year = d.fiscal_year
-        WHERE m.ticker IS NOT NULL {year_filter}
+        WHERE m.ticker IS NOT NULL 
+            AND m.year_rank >= :min_year_threshold {year_filter}
         ORDER BY m.ticker, m.fiscal_year;
         """
         
@@ -134,10 +151,11 @@ class RatioMetricsCalculator:
             "param_set_id": str(param_set_id),
             "numerator_metric": numerator_metric,
             "denominator_metric": denominator_metric,
+            "min_year_threshold": self.min_years_required + 1,
             **ticker_params
         }
         
-        return sql, params
+        return min_year_calc, params
     
     def _build_complex_ratio_query(
         self,

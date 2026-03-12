@@ -31,18 +31,31 @@ class RatioMetricsRepository:
             result = await self.session.execute(query, params or {})
             rows = result.fetchall()
             
+            logger.debug(f"Query executed, returned {len(rows)} rows")
+            
             # Convert rows to dictionaries
             results = []
             for row in rows:
+                # Try to access by column name first (for named columns), fall back to index
+                try:
+                    ticker = row["ticker"]
+                    fiscal_year = row["fiscal_year"]
+                    value = row["ratio_value"]
+                except (TypeError, KeyError):
+                    # Fall back to positional access
+                    ticker = row[0]
+                    fiscal_year = row[1]
+                    value = row[2]
+                
                 results.append({
-                    "ticker": row[0],
-                    "fiscal_year": row[1],
-                    "value": row[2]
+                    "ticker": ticker,
+                    "fiscal_year": fiscal_year,
+                    "value": value
                 })
             
             logger.info(f"Ratio query returned {len(results)} rows")
             return results
             
         except Exception as e:
-            logger.error(f"Error executing ratio query: {str(e)}")
+            logger.error(f"Error executing ratio query: {str(e)}", exc_info=True)
             raise

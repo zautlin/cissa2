@@ -487,7 +487,431 @@ curl "http://localhost:8000/api/v1/metrics/get_metrics/?dataset_id=c753dc4f-d547
 
 ---
 
-### Calculate L1 Metrics
+### Ratio Metrics (On-The-Fly Calculation with Temporal Windows)
+
+**GET** `/api/v1/metrics/ratio-metrics`
+
+Calculate financial ratio metrics with rolling averages over temporal windows (1Y, 3Y, 5Y, 10Y). Ratios are calculated on-the-fly using SQL window functions without storing pre-calculated values. All temporal windows require a full year of prior data before producing results.
+
+**Query Parameters:**
+- `metric` (required, string): Metric ID (e.g., `mb_ratio`)
+- `tickers` (required, string): Comma-separated ticker list (e.g., `BHP AU Equity` or `AAPL,MSFT`)
+- `dataset_id` (required, UUID): Dataset UUID
+- `temporal_window` (optional, string, default="1Y"): One of `1Y`, `3Y`, `5Y`, `10Y`
+- `param_set_id` (optional, UUID): Parameter set UUID (defaults to base_case if not provided)
+- `start_year` (optional, integer): Filter results from this year onwards
+- `end_year` (optional, integer): Filter results up to this year
+
+**Supported Metrics:**
+- `mb_ratio`: Market-to-Book Ratio = Market Cap / Economic Equity
+
+**Temporal Window Definitions:**
+
+When data starts in fiscal year 2002:
+
+| Window | First Result Year | Data Used | Min Prior Years | Example |
+|--------|------------------|-----------|-----------------|---------|
+| **1Y** | 2003 | Current year only | 1 | Uses 2002 to calculate 2003 |
+| **3Y** | 2005 | 3-year rolling average | 3 | Uses 2002-2004 to calculate 2005 |
+| **5Y** | 2007 | 5-year rolling average | 5 | Uses 2002-2006 to calculate 2007 |
+| **10Y** | 2012 | 10-year rolling average | 10 | Uses 2002-2011 to calculate 2012 |
+
+**Response Schema:**
+```json
+{
+  "metric": "string (metric ID)",
+  "display_name": "string",
+  "temporal_window": "string (1Y|3Y|5Y|10Y)",
+  "data": [
+    {
+      "ticker": "string",
+      "time_series": [
+        {
+          "year": "integer",
+          "value": "number or null"
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+#### Example 1: Single Ticker, Single Metric, 1Y Window (Default)
+
+Get MB Ratio for BHP AU Equity using annual values (current year only):
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719"
+```
+
+**Pretty-printed response (first 5 years):**
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719" | python -m json.tool | head -40
+```
+
+```json
+{
+  "metric": "mb_ratio",
+  "display_name": "MB Ratio",
+  "temporal_window": "1Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2003,
+          "value": 1.2116482122958967
+        },
+        {
+          "year": 2004,
+          "value": 1.6324947466480935
+        },
+        {
+          "year": 2005,
+          "value": 2.1555443848919094
+        },
+        {
+          "year": 2006,
+          "value": 2.949325715881008
+        },
+        {
+          "year": 2007,
+          "value": 3.2001624508471638
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Key observations:**
+- First year is 2003 (not 2002) because 1Y window needs 1 prior year of data
+- MB Ratio values range from ~1.2 to ~3.2 over the 5-year period
+- Each value represents the ratio for that fiscal year
+
+---
+
+#### Example 2: Single Ticker, 3Y Window (3-Year Rolling Average)
+
+Get 3-year rolling average MB Ratio for BHP AU Equity:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=3Y" | python -m json.tool | head -40
+```
+
+```json
+{
+  "metric": "mb_ratio",
+  "display_name": "MB Ratio",
+  "temporal_window": "3Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2005,
+          "value": 1.6902125865453
+        },
+        {
+          "year": 2006,
+          "value": 1.9400939762113
+        },
+        {
+          "year": 2007,
+          "value": 2.437259903
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Key observations:**
+- First year is 2005 (needs 2002, 2003, 2004 data to calculate)
+- Values are smoother due to 3-year averaging (volatility reduced)
+- 2005 value (1.69) is average of 2002-2004 MB Ratios
+
+**What this means:**
+- 2005's 3Y value is the average of fiscal years 2002, 2003, and 2004
+- This smooths out annual volatility and shows medium-term trends
+- Use 3Y for identifying trends while reducing noise
+
+---
+
+#### Example 3: Single Ticker, 5Y Window
+
+Get 5-year rolling average MB Ratio for BHP AU Equity:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=5Y"
+```
+
+**Response (starts from 2007):**
+- First year: 2007 (uses 2002-2006 data)
+- Each value represents 5-year average
+- Use 5Y to smooth longer-term trends and remove annual volatility
+
+---
+
+#### Example 4: Single Ticker, 10Y Window (Longest-Term Average)
+
+Get 10-year rolling average MB Ratio for BHP AU Equity:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=10Y"
+```
+
+**Response (starts from 2012):**
+- First year: 2012 (uses 2002-2011 data)
+- Each value represents 10-year average
+- Use 10Y to identify structural changes in long-term valuation
+
+---
+
+#### Example 5: Multiple Tickers (Same Metric, Same Window)
+
+Compare MB Ratio across multiple companies:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity,RIO%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | python -m json.tool | head -60
+```
+
+```json
+{
+  "metric": "mb_ratio",
+  "display_name": "MB Ratio",
+  "temporal_window": "1Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2003,
+          "value": 1.2116482122958967
+        },
+        {
+          "year": 2004,
+          "value": 1.6324947466480935
+        }
+      ]
+    },
+    {
+      "ticker": "RIO AU Equity",
+      "time_series": [
+        {
+          "year": 2003,
+          "value": 1.1523847293847
+        },
+        {
+          "year": 2004,
+          "value": 1.7234982374892
+        }
+      ]
+    }
+  ]
+}
+```
+
+**UI Application:**
+- Plot both tickers on same chart to compare valuation trends
+- Identify which company trades at premium/discount to peers
+- Observe divergence/convergence patterns over time
+
+---
+
+#### Example 6: Multiple Tickers with Year Filter
+
+Get 3Y MB Ratio for multiple companies, filtered to specific year range:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity,RIO%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=3Y&start_year=2010&end_year=2015"
+```
+
+**Response:**
+- Only includes years 2010-2015
+- Both tickers included in result
+- Useful for analyzing specific time periods of interest
+
+---
+
+#### Example 7: Format Response for Easy Reading
+
+Display just the ticker, year, and ratio value:
+
+```bash
+curl -s "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | \
+jq -r '.data[] | "\(.ticker)\n" + (.time_series | map("\(.year): \(.value | tostring)") | join("\n"))'
+```
+
+**Output:**
+```
+BHP AU Equity
+2003: 1.2116482122958967
+2004: 1.6324947466480935
+2005: 2.1555443848919094
+2006: 2.949325715881008
+2007: 3.2001624508471638
+...
+```
+
+---
+
+#### Example 8: Extract Only Years Above a Threshold
+
+Find years where MB Ratio exceeded 2.0:
+
+```bash
+curl -s "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | \
+jq '.data[].time_series | map(select(.value > 2.0)) | .[] | "\(.year): \(.value)"'
+```
+
+**Output:**
+```
+2005: 2.1555443848919094
+2006: 2.949325715881008
+2007: 3.2001624508471638
+2008: 3.4309905650703936
+...
+```
+
+---
+
+#### Example 9: Compare Window Performance
+
+View how the same metric changes across temporal windows:
+
+```bash
+#!/bin/bash
+
+DATASET_ID="523eeffd-9220-4d27-927b-e418f9c21d8a"
+PARAM_SET_ID="71a0caa6-b52c-4c5e-b550-1048b7329719"
+TICKER="BHP%20AU%20Equity"
+
+echo "MB Ratio Comparison Across Temporal Windows"
+echo ""
+
+for WINDOW in 1Y 3Y 5Y 10Y; do
+  RESPONSE=$(curl -s "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=$TICKER&dataset_id=$DATASET_ID&param_set_id=$PARAM_SET_ID&temporal_window=$WINDOW")
+  
+  FIRST_YEAR=$(echo $RESPONSE | jq '.data[0].time_series[0].year')
+  LAST_YEAR=$(echo $RESPONSE | jq '.data[0].time_series[-1].year')
+  COUNT=$(echo $RESPONSE | jq '.data[0].time_series | length')
+  FIRST_VALUE=$(echo $RESPONSE | jq '.data[0].time_series[0].value')
+  
+  echo "$WINDOW Window:"
+  echo "  First Year: $FIRST_YEAR (Value: $FIRST_VALUE)"
+  echo "  Last Year: $LAST_YEAR"
+  echo "  Total Years: $COUNT"
+  echo ""
+done
+```
+
+**Output:**
+```
+MB Ratio Comparison Across Temporal Windows
+
+1Y Window:
+  First Year: 2003 (Value: 1.2116482122958967)
+  Last Year: 2023
+  Total Years: 21
+
+3Y Window:
+  First Year: 2005 (Value: 1.6902125865453)
+  Last Year: 2023
+  Total Years: 19
+
+5Y Window:
+  First Year: 2007 (Value: 1.8734982374982)
+  Last Year: 2023
+  Total Years: 17
+
+10Y Window:
+  First Year: 2012 (Value: 2.4839283847829)
+  Last Year: 2023
+  Total Years: 12
+```
+
+---
+
+#### Example 10: Error Handling
+
+**Invalid metric:**
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=invalid_metric&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719"
+```
+
+**Response (HTTP 400):**
+```json
+{
+  "detail": "Unknown metric: invalid_metric. Available metrics: mb_ratio"
+}
+```
+
+**Invalid temporal window:**
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=2Y"
+```
+
+**Response (HTTP 422):**
+```json
+{
+  "detail": [
+    {
+      "type": "string_pattern_mismatch",
+      "loc": ["query", "temporal_window"],
+      "msg": "String should match pattern '^(1Y|3Y|5Y|10Y)$'",
+      "input": "2Y"
+    }
+  ]
+}
+```
+
+---
+
+#### Configuration (Adding New Ratio Metrics)
+
+Ratio metrics are defined in `backend/app/config/ratio_metrics.json`. To add a new metric, simply add it to the config file without modifying code:
+
+**File:** `backend/app/config/ratio_metrics.json`
+
+```json
+{
+  "metrics": [
+    {
+      "id": "mb_ratio",
+      "display_name": "MB Ratio",
+      "description": "Market-to-Book Ratio (Market Cap / Economic Equity)",
+      "formula_type": "ratio",
+      "numerator": {
+        "metric_name": "Calc MC",
+        "parameter_dependent": false
+      },
+      "denominator": {
+        "metric_name": "Calc EE",
+        "parameter_dependent": false
+      },
+      "operation": "divide",
+      "null_handling": "skip_year",
+      "negative_handling": "return_null"
+    }
+  ]
+}
+```
+
+**Schema Explanation:**
+- `id`: Unique identifier (used in API query parameter)
+- `display_name`: Human-readable name
+- `description`: What the metric represents
+- `formula_type`: `"ratio"` (simple division) or `"complex_ratio"` (multiple components)
+- `numerator`: Which L1 metric to use as numerator
+- `denominator`: Which L1 metric to use as denominator
+- `operation`: Type of operation (`"divide"` for ratio)
+- `null_handling`: How to handle NULL values (`"skip_year"`)
+- `negative_handling`: How to handle negative denominators (`"return_null"`)
+
+
 
 **POST** `/api/v1/metrics/calculate`
 
