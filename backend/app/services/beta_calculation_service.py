@@ -100,6 +100,10 @@ class BetaCalculationService:
             sector_map, fy_month_map = await self._fetch_sector_and_fiscal_month_map()
             self.logger.info(f"Loaded {len(sector_map)} ticker-sector mappings with fiscal months")
             
+            # 4b. Fetch begin_year for scaffolding
+            self.logger.info("Fetching begin_year for all tickers...")
+            begin_year_map = await self._fetch_begin_years()
+            
             # 5. Calculate rolling OLS slopes
             self.logger.info("Calculating rolling OLS slopes (60-month window)...")
             ols_df = self._calculate_rolling_ols(monthly_df)
@@ -116,18 +120,23 @@ class BetaCalculationService:
             # 7. Annualize slopes (using ticker-specific fiscal months)
             self.logger.info("Annualizing slopes by ticker-specific fiscal month...")
             annual_df = self._annualize_slopes(transformed_df, sector_map, fy_month_map)
-            self.logger.info(f"Annualized to {annual_df['fiscal_year'].nunique()} fiscal years")
+            self.logger.info(f"Annualized to {annual_df['fiscal_year'].nunique()} fiscal years with {len(annual_df)} records")
             
             # 8. Generate sector slopes
             self.logger.info("Calculating sector average slopes...")
             sector_slopes = self._generate_sector_slopes(annual_df)
             self.logger.info(f"Calculated sector slopes for {sector_slopes['sector'].nunique()} sectors")
             
-            # 9. Apply 4-tier fallback logic
-            self.logger.info("Applying 4-tier fallback logic...")
-            spot_betas = self._apply_4tier_fallback(annual_df, sector_slopes)
+            # 9. Scaffold and backfill: create complete (ticker, fiscal_year) coverage with fallback values
+            self.logger.info("Creating complete (ticker, fiscal_year) scaffold and backfilling missing years with fallback...")
+            scaffolded_df = self._scaffold_and_backfill_betas(annual_df, sector_slopes, begin_year_map)
+            self.logger.info(f"Scaffolded to {len(scaffolded_df)} complete records ({len(annual_df)} calculated, {len(scaffolded_df) - len(annual_df)} backfilled)")
             
-            # 10. Apply approach_to_ke
+            # 10. Apply 4-tier fallback logic (now on complete scaffold)
+            self.logger.info("Applying 4-tier fallback logic...")
+            spot_betas = self._apply_4tier_fallback(scaffolded_df, sector_slopes)
+            
+            # 11. Apply approach_to_ke
             self.logger.info(f"Applying approach_to_ke: {params['cost_of_equity_approach']}...")
             final_betas = self._apply_approach_to_ke(
                 spot_betas,
@@ -351,6 +360,116 @@ class BetaCalculationService:
             self.logger.error(f"Failed to fetch inception years: {e}")
             return {}
     
+    async def _fetch_begin_years(self) -> dict:
+        """Fetch begin_year from companies table for all tickers.
+        
+        Returns:
+            {ticker: begin_year} mapping
+        """
+        try:
+            query = text("""
+                SELECT ticker, begin_year
+                FROM cissa.companies
+                WHERE begin_year IS NOT NULL
+            """)
+            
+            result = await self.session.execute(query)
+            rows = result.fetchall()
+            
+            begin_year_map = {row[0]: row[1] for row in rows}
+            self.logger.info(f"Loaded begin_year for {len(begin_year_map)} tickers")
+            return begin_year_map
+            
+        except Exception as e:
+            self.logger.error(f"Failed to fetch begin years: {e}")
+            return {}
+    
+    def _scaffold_and_backfill_betas(self, annual_df: pd.DataFrame, sector_slopes: pd.DataFrame, begin_year_map: dict) -> pd.DataFrame:
+        """Generate complete (ticker, fiscal_year) scaffold and fill missing years with fallback values.
+        
+        Algorithm:
+        1. Create scaffold: all (ticker, fiscal_year) from begin_year to max(annual_df.fiscal_year)
+        2. Left-join calculated annual_df onto scaffold
+        3. For rows with NaN adjusted_slope:
+           - Try Tier 2: Use sector_slope if available
+           - Try Tier 3: Use global average from all non-NaN adjusted_slopes
+        4. Fill remaining NaN with 1.0 as ultimate fallback
+        
+        Args:
+            annual_df: DataFrame with calculated annual slopes (only years with source data)
+            sector_slopes: DataFrame with sector average slopes
+            begin_year_map: Dict mapping ticker -> begin_year from companies table
+        
+        Returns:
+            Complete DataFrame with all (ticker, fiscal_year) combinations filled with calculated or fallback values
+        """
+        try:
+            # Determine year range
+            max_year = int(annual_df['fiscal_year'].max()) if len(annual_df) > 0 else 2023
+            
+            # Get all unique tickers in annual_df
+            tickers = annual_df['ticker'].unique()
+            
+            # Create complete scaffold: all (ticker, fiscal_year) from begin_year to max_year
+            scaffold_rows = []
+            for ticker in tickers:
+                begin_year = begin_year_map.get(ticker, 1981)  # Default to 1981 if not found
+                for year in range(begin_year, max_year + 1):
+                    scaffold_rows.append({'ticker': ticker, 'fiscal_year': year})
+            
+            scaffold_df = pd.DataFrame(scaffold_rows)
+            self.logger.info(f"Created scaffold with {len(scaffold_df)} (ticker, fiscal_year) combinations")
+            
+            # Left-join calculated slopes onto scaffold
+            # Keep all columns from annual_df
+            merged_df = scaffold_df.merge(
+                annual_df,
+                on=['ticker', 'fiscal_year'],
+                how='left'
+            )
+            
+            # For rows without calculated adjusted_slope, apply fallback logic
+            # First, merge with sector slopes to have sector_slope available
+            merged_df = merged_df.merge(
+                sector_slopes,
+                on=['sector', 'fiscal_year'],
+                how='left'
+            )
+            
+            # Tier 2: Use sector_slope if adjusted_slope is NaN
+            merged_df['adjusted_slope_with_fallback'] = merged_df['adjusted_slope'].fillna(merged_df['sector_slope'])
+            
+            # Calculate Tier 3 (global average) for remaining NaNs
+            global_avg = annual_df['adjusted_slope'].dropna().mean()
+            if pd.isna(global_avg):
+                global_avg = 1.0
+                self.logger.warning("No valid adjusted slopes found for Tier 3 fallback - using 1.0")
+            
+            # Tier 3: Use global average if both adjusted_slope and sector_slope are NaN
+            merged_df['adjusted_slope_with_fallback'] = merged_df['adjusted_slope_with_fallback'].fillna(global_avg)
+            
+            # Track which tier was used
+            merged_df['fallback_tier_used'] = merged_df.apply(
+                lambda x: 1 if pd.notna(x['adjusted_slope'])
+                          else (2 if pd.notna(x['sector_slope']) else 3),
+                axis=1
+            )
+            
+            # Update adjusted_slope to use fallback values
+            merged_df['adjusted_slope'] = merged_df['adjusted_slope_with_fallback']
+            
+            # Keep original columns from annual_df plus fallback_tier_used
+            result_columns = ['ticker', 'fiscal_year', 'sector', 'adjusted_slope', 'slope', 'std_err', 'rel_std_err', 'monthly_raw_slopes', 'fallback_tier_used']
+            result_df = merged_df[[col for col in result_columns if col in merged_df.columns]]
+            
+            self.logger.info(f"Backfilled {(result_df['fallback_tier_used'] > 1).sum()} records with Tier 2/3 fallback values")
+            
+            return result_df
+            
+        except Exception as e:
+            self.logger.error(f"Failed to scaffold and backfill betas: {e}")
+            raise
+     
     def _calculate_rolling_ols(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate rolling OLS slopes for each ticker using scipy.stats.linregress.
         
