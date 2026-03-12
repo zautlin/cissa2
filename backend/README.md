@@ -509,6 +509,7 @@ Calculate financial ratio metrics with rolling averages over temporal windows (1
 - `profit_margin`: Profit Margin = PAT_EX / Revenue
 - `op_cost_margin`: Operating Cost Margin = Calc Op Cost / Revenue
 - `non_op_cost_margin`: Non-Operating Cost Margin = Calc Non Op Cost / Revenue
+- `xo_cost_margin`: XO Cost Margin = Calc XO Cost / Revenue
 - `etr`: Effective Tax Rate = Calc Tax Cost / |PAT_EX + Calc XO Cost|
 
 **Temporal Window Definitions:**
@@ -1511,6 +1512,121 @@ curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=non_op_cost_marg
 | **Better When** | Higher (premium) | Higher (better return) | Higher (efficient) | Higher (more profit) | Lower (efficient) | Lower (efficient) |
 | **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency | Overall profitability | Cost control & efficiency | Financing burden analysis |
 
+### XO Cost Margin
+
+XO Cost Margin shows the proportion of revenue consumed by extraordinary costs (one-time, non-recurring items). It helps identify the impact of extraordinary expenses on revenue.
+
+**Formula:** XO Cost Margin = Calc XO Cost / REVENUE
+
+**Data Dependencies:**
+- **Numerator:** Calc XO Cost (from `metrics_outputs`, requires `param_set_id`)
+- **Denominator:** REVENUE (from `fundamentals`)
+- **Sources:** Mixed (metrics_outputs + fundamentals)
+- **Parameter Dependent:** Yes (numerator requires param_set_id)
+
+**Temporal Windows:**
+
+| Window | Data Required | First Result Year | Example Calculation |
+|--------|---------------|-------------------|---------------------|
+| **1Y** | Calc XO Cost(current), REVENUE(current) | 2003 | XO Cost Margin(2003) = Calc XO Cost(2003) / REVENUE(2003) |
+| **3Y** | Calc XO Cost(3 years), REVENUE(3 years) | 2005 | XO Cost Margin(2005) = AVG(Calc XO Cost[2003-2005]) / AVG(REVENUE[2003-2005]) |
+| **5Y** | Calc XO Cost(5 years), REVENUE(5 years) | 2007 | XO Cost Margin(2007) = AVG(Calc XO Cost[2003-2007]) / AVG(REVENUE[2003-2007]) |
+| **10Y** | Calc XO Cost(10 years), REVENUE(10 years) | 2012 | XO Cost Margin(2012) = AVG(Calc XO Cost[2003-2012]) / AVG(REVENUE[2003-2012]) |
+
+### XO Cost Margin Query Example
+
+Get 1-year XO Cost Margin for BHP AU Equity:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=xo_cost_margin&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | python -m json.tool | head -40
+```
+
+**Response (first 5 years):**
+```json
+{
+  "metric": "xo_cost_margin",
+  "display_name": "XO Cost Margin",
+  "temporal_window": "1Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2003,
+          "value": 0.0123845723947
+        },
+        {
+          "year": 2004,
+          "value": 0.0089374928374
+        },
+        {
+          "year": 2005,
+          "value": 0.0105928374928
+        },
+        {
+          "year": 2006,
+          "value": 0.0067293847293
+        },
+        {
+          "year": 2007,
+          "value": 0.0145928374928
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Interpretation:**
+- XO Cost Margin(2003) = 0.0124 = 1.24% of revenue goes to extraordinary costs
+- XO Cost Margin(2004) = 0.0089 = 0.89% of revenue goes to extraordinary costs
+- XO Cost Margin values typically range from 0 to 0.1 (0% to 10%)
+- **Lower values are better** (fewer extraordinary expenses relative to revenue = more stable earnings)
+- High/volatile XO Cost Margin might indicate one-time events or restructuring charges
+
+### XO Cost Margin 3-Year Rolling Average
+
+Get 3-year average XO Cost Margin for trend analysis:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=xo_cost_margin&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=3Y"
+```
+
+**Response (starts from 2005):**
+```json
+{
+  "metric": "xo_cost_margin",
+  "display_name": "XO Cost Margin",
+  "temporal_window": "3Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2005,
+          "value": 0.0106383383383
+        },
+        {
+          "year": 2006,
+          "value": 0.0087532532532
+        },
+        {
+          "year": 2007,
+          "value": 0.0106050050050
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Key observations:**
+- First year is 2005 (needs Calc XO Cost 2003-2005 and REVENUE 2003-2005)
+- Values are smoother than 1Y due to 3-year averaging
+- Lower overall trend indicates declining extraordinary costs (improving earnings quality)
+- Spikes in XO Cost Margin might indicate asset write-downs, restructuring, or litigation settlements
+- Use 3Y for assessing true operational performance (excluding one-time items)
+
 ### Effective Tax Rate
 
 Effective Tax Rate (ETR) measures the proportion of pre-tax economic income that goes to taxes. It combines Tax Cost with the sum of Profit After Tax and Extraordinary Costs to calculate the effective tax burden.
@@ -1636,21 +1752,21 @@ curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=etr&tickers=BHP%
 - Upward trend might indicate changing tax environment or loss of tax breaks
 - Use 3Y for medium-term tax burden analysis and statutory compliance tracking
 
-### Complete Metrics Comparison (Extended - Including ETR)
+### Complete Metrics Comparison (Extended - Including All Metrics)
 
-| Aspect | MB Ratio | ROEE | ROA | Profit Margin | Op Cost Margin | Non Op Cost Margin | ETR |
-|--------|----------|------|-----|---------------|----------------|-------------------|-----|
-| **Purpose** | Valuation multiple | Return on equity | Return on assets | Profitability % | Operating efficiency | Financial efficiency | Tax burden |
-| **Data Sources** | Both from metrics_outputs | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Both from fundamentals | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Complex (all 3 sources) |
-| **Numerator** | Market Cap | Profit | Profit | Profit | Operating Cost | Non-Operating Cost | Tax Cost |
-| **Denominator** | Book Equity | Opening Equity | Opening Assets | Revenue | Revenue | Revenue | ABS(PAT + XO Cost) |
-| **Operations** | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Composite: add + abs |
-| **Year Shift** | No | Yes (denom) | Yes (denom) | No | No | No | No |
-| **First Result** | 2003 (1Y), 2005 (3Y), etc. | Same | Same | Same | Same | Same | Same |
-| **Typical Range** | 0.5 - 3.0 | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 0.2 (or 0-20%) | 0.15 - 0.45 |
-| **Interpretation** | Market vs book value | Profit per $ equity | Profit per $ assets | Profit per $ revenue | Operating cost per $ revenue | Non-op cost per $ revenue | Tax per $ economic income |
-| **Better When** | Higher (premium) | Higher (better return) | Higher (efficient) | Higher (more profit) | Lower (efficient) | Lower (efficient) | Lower (efficient) |
-| **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency | Overall profitability | Cost control & efficiency | Financing burden | Tax planning & compliance |
+| Aspect | MB Ratio | ROEE | ROA | Profit Margin | Op Cost Margin | Non Op Cost Margin | XO Cost Margin | ETR |
+|--------|----------|------|-----|---------------|----------------|-------------------|----------------|-----|
+| **Purpose** | Valuation multiple | Return on equity | Return on assets | Profitability % | Operating efficiency | Financial efficiency | Extraordinary cost burden | Tax burden |
+| **Data Sources** | Both from metrics_outputs | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Both from fundamentals | metrics_outputs + fundamentals | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Complex (all 3 sources) |
+| **Numerator** | Market Cap | Profit | Profit | Profit | Operating Cost | Non-Operating Cost | Extraordinary Cost | Tax Cost |
+| **Denominator** | Book Equity | Opening Equity | Opening Assets | Revenue | Revenue | Revenue | Revenue | ABS(PAT + XO Cost) |
+| **Operations** | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Composite: add + abs |
+| **Year Shift** | No | Yes (denom) | Yes (denom) | No | No | No | No | No |
+| **First Result** | 2003 (1Y), 2005 (3Y), etc. | Same | Same | Same | Same | Same | Same | Same |
+| **Typical Range** | 0.5 - 3.0 | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 0.2 (or 0-20%) | 0 - 0.1 (or 0-10%) | 0.15 - 0.45 |
+| **Interpretation** | Market vs book value | Profit per $ equity | Profit per $ assets | Profit per $ revenue | Operating cost per $ revenue | Non-op cost per $ revenue | Extraordinary cost per $ revenue | Tax per $ economic income |
+| **Better When** | Higher (premium) | Higher (better return) | Higher (efficient) | Higher (more profit) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) |
+| **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency | Overall profitability | Cost control & efficiency | Financing burden | Earnings quality & stability | Tax planning & compliance |
 
 ### Operating Cost Margin vs Profit Margin: Key Difference
 
@@ -1775,6 +1891,27 @@ Ratio metrics are defined in `backend/app/config/ratio_metrics.json`. To add a n
         "formula_type": "ratio",
         "numerator": {
           "metric_name": "Calc Non Op Cost",
+          "metric_source": "metrics_outputs",
+          "parameter_dependent": true,
+          "year_shift": 0
+        },
+        "denominator": {
+          "metric_name": "REVENUE",
+          "metric_source": "fundamentals",
+          "parameter_dependent": false,
+          "year_shift": 0
+        },
+        "operation": "divide",
+        "null_handling": "skip_year",
+        "negative_handling": "return_null"
+      },
+      {
+        "id": "xo_cost_margin",
+        "display_name": "XO Cost Margin",
+        "description": "Extraordinary Cost Margin (Calc XO Cost / Revenue)",
+        "formula_type": "ratio",
+        "numerator": {
+          "metric_name": "Calc XO Cost",
           "metric_source": "metrics_outputs",
           "parameter_dependent": true,
           "year_shift": 0

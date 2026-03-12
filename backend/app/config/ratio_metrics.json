@@ -147,10 +147,31 @@
          "operand_metric_source": "metrics_outputs",
          "operand_parameter_dependent": true,
          "apply_absolute_value": true
-       },
-       "operation": "divide",
-       "null_handling": "skip_year",
-       "negative_handling": "return_null"
-     }
-   ]
-}
+        },
+        "operation": "divide",
+        "null_handling": "skip_year",
+        "negative_handling": "return_null"
+      },
+      {
+        "id": "xo_cost_margin",
+        "display_name": "XO Cost Margin",
+        "description": "Extraordinary Cost Margin (Calc XO Cost / Revenue)",
+        "formula_type": "ratio",
+        "numerator": {
+          "metric_name": "Calc XO Cost",
+          "metric_source": "metrics_outputs",
+          "parameter_dependent": true,
+          "year_shift": 0
+        },
+        "denominator": {
+          "metric_name": "REVENUE",
+          "metric_source": "fundamentals",
+          "parameter_dependent": false,
+          "year_shift": 0
+        },
+        "operation": "divide",
+        "null_handling": "skip_year",
+        "negative_handling": "return_null"
+      }
+    ]
+  }

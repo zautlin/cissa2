@@ -335,6 +335,63 @@ class TestRatioMetricsCalculator:
         # Both should use param_set_id, so we should see it in the operand_raw CTE
         assert "param_set_id = :param_set_id" in sql
 
+    def test_xo_cost_margin_mixed_source_query_generation(self):
+        """Test SQL query generation for mixed-source simple ratio (XO Cost Margin)"""
+        metric_def = MetricDefinition(
+            id="xo_cost_margin",
+            display_name="XO Cost Margin",
+            description="Test",
+            formula_type="ratio",
+            numerator=MetricComponent(
+                metric_name="Calc XO Cost",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=True
+            ),
+            denominator=MetricComponent(
+                metric_name="REVENUE",
+                metric_source=MetricSource.FUNDAMENTALS,
+                parameter_dependent=False
+            ),
+            operation="divide",
+            null_handling="skip_year",
+            negative_handling="return_null"
+        )
+        
+        calc = RatioMetricsCalculator(metric_def, "1Y")
+        
+        tickers = ["BHP"]
+        dataset_id = UUID("12345678-1234-1234-1234-123456789012")
+        param_set_id = UUID("87654321-4321-4321-4321-210987654321")
+        
+        sql, params = calc.build_query(tickers, dataset_id, param_set_id)
+        
+        # Verify SQL structure
+        assert "numerator_rolling" in sql
+        assert "denominator_rolling" in sql
+        assert "FULL OUTER JOIN" in sql
+        
+        # Verify numerator uses metrics_outputs
+        assert "cissa.metrics_outputs" in sql
+        # Verify denominator uses fundamentals
+        assert "cissa.fundamentals" in sql
+        
+        # Verify mixed column names
+        assert "output_metric_value" in sql  # numerator from metrics_outputs
+        assert "numeric_value" in sql  # denominator from fundamentals
+        assert "output_metric_name" in sql  # numerator metric name
+        assert "metric_name" in sql  # denominator metric name (also in fundamentals)
+        
+        # Verify parameters
+        assert params["dataset_id"] == str(dataset_id)
+        # param_set_id SHOULD be in params because numerator is parameter_dependent
+        assert params["param_set_id"] == str(param_set_id)
+        assert params["numerator_metric"] == "Calc XO Cost"
+        assert params["denominator_metric"] == "REVENUE"
+        assert params["ticker_0"] == "BHP"
+        
+        # Verify param_set_id is in SQL (for numerator from metrics_outputs)
+        assert "param_set_id = :param_set_id" in sql
+
 class TestRatioMetricsService:
     """Test service layer (requires async context)"""
     
