@@ -100,9 +100,11 @@ class BetaCalculationService:
             sector_map, fy_month_map = await self._fetch_sector_and_fiscal_month_map()
             self.logger.info(f"Loaded {len(sector_map)} ticker-sector mappings with fiscal months")
             
-            # 4b. Fetch begin_year for scaffolding
-            self.logger.info("Fetching begin_year for all tickers...")
+            # 4b. Fetch begin_year mappings and global minimum
+            self.logger.info("Fetching begin_year for all tickers and global minimum...")
             begin_year_map = await self._fetch_begin_years()
+            global_min_begin_year = await self._fetch_global_min_begin_year()
+            self.logger.info(f"Global minimum begin_year: {global_min_begin_year}")
             
             # 5. Calculate rolling OLS slopes
             self.logger.info("Calculating rolling OLS slopes (60-month window)...")
@@ -128,8 +130,8 @@ class BetaCalculationService:
             self.logger.info(f"Calculated sector slopes for {sector_slopes['sector'].nunique()} sectors")
             
             # 9. Scaffold and backfill: create complete (ticker, fiscal_year) coverage with fallback values
-            self.logger.info("Creating complete (ticker, fiscal_year) scaffold and backfilling missing years with fallback...")
-            scaffolded_df = self._scaffold_and_backfill_betas(annual_df, sector_slopes, begin_year_map)
+            self.logger.info(f"Creating complete (ticker, fiscal_year) scaffold ({global_min_begin_year}-2023) and backfilling missing years with fallback...")
+            scaffolded_df = self._scaffold_and_backfill_betas(annual_df, sector_slopes, begin_year_map, global_min_begin_year)
             self.logger.info(f"Scaffolded to {len(scaffolded_df)} complete records ({len(annual_df)} calculated, {len(scaffolded_df) - len(annual_df)} backfilled)")
             
             # 10. Apply 4-tier fallback logic (now on complete scaffold)
@@ -384,11 +386,40 @@ class BetaCalculationService:
             self.logger.error(f"Failed to fetch begin years: {e}")
             return {}
     
-    def _scaffold_and_backfill_betas(self, annual_df: pd.DataFrame, sector_slopes: pd.DataFrame, begin_year_map: dict) -> pd.DataFrame:
+    async def _fetch_global_min_begin_year(self) -> int:
+        """Fetch minimum begin_year across all companies in the dataset.
+        
+        Returns:
+            The earliest begin_year value, or 1981 as fallback
+        """
+        try:
+            query = text("""
+                SELECT MIN(begin_year) as min_begin_year
+                FROM cissa.companies
+                WHERE begin_year IS NOT NULL
+            """)
+            
+            result = await self.session.execute(query)
+            row = result.fetchone()
+            
+            if row and row[0] is not None:
+                min_year = int(row[0])
+                self.logger.info(f"Global minimum begin_year: {min_year}")
+                return min_year
+            else:
+                self.logger.warning("No valid begin_year found in companies table, using 1981 as fallback")
+                return 1981
+            
+        except Exception as e:
+            self.logger.error(f"Failed to fetch global min begin_year: {e}")
+            return 1981
+     
+    def _scaffold_and_backfill_betas(self, annual_df: pd.DataFrame, sector_slopes: pd.DataFrame, begin_year_map: dict, global_min_begin_year: int) -> pd.DataFrame:
         """Generate complete (ticker, fiscal_year) scaffold and fill missing years with fallback values.
         
         Algorithm:
-        1. Create scaffold: all (ticker, fiscal_year) from begin_year to max(annual_df.fiscal_year)
+        1. Create scaffold: all (ticker, fiscal_year) from global_min_begin_year to max(annual_df.fiscal_year)
+           for ALL tickers, not just each ticker's individual begin_year
         2. Left-join calculated annual_df onto scaffold
         3. For rows with NaN adjusted_slope:
            - Try Tier 2: Use sector_slope if available
@@ -398,7 +429,8 @@ class BetaCalculationService:
         Args:
             annual_df: DataFrame with calculated annual slopes (only years with source data)
             sector_slopes: DataFrame with sector average slopes
-            begin_year_map: Dict mapping ticker -> begin_year from companies table
+            begin_year_map: Dict mapping ticker -> begin_year from companies table (not used for scaffolding)
+            global_min_begin_year: Global minimum begin_year across all companies - used as universal start year
         
         Returns:
             Complete DataFrame with all (ticker, fiscal_year) combinations filled with calculated or fallback values
@@ -410,15 +442,15 @@ class BetaCalculationService:
             # Get all unique tickers in annual_df
             tickers = annual_df['ticker'].unique()
             
-            # Create complete scaffold: all (ticker, fiscal_year) from begin_year to max_year
+            # Create complete scaffold: all (ticker, fiscal_year) from GLOBAL MIN begin_year to max_year
+            # This ensures every ticker has full coverage from the earliest begin_year in the dataset
             scaffold_rows = []
             for ticker in tickers:
-                begin_year = begin_year_map.get(ticker, 1981)  # Default to 1981 if not found
-                for year in range(begin_year, max_year + 1):
+                for year in range(global_min_begin_year, max_year + 1):
                     scaffold_rows.append({'ticker': ticker, 'fiscal_year': year})
             
             scaffold_df = pd.DataFrame(scaffold_rows)
-            self.logger.info(f"Created scaffold with {len(scaffold_df)} (ticker, fiscal_year) combinations")
+            self.logger.info(f"Created scaffold with {len(scaffold_df)} (ticker, fiscal_year) combinations from {global_min_begin_year} to {max_year}")
             
             # Left-join calculated slopes onto scaffold
             # Keep all columns from annual_df
