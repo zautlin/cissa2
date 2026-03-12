@@ -1,10 +1,17 @@
 # ============================================================================
 # Risk-Free Rate Calculation Service (Phase 08)
 # ============================================================================
-# Calculates: Risk-free rate (Rf, Rf_1Y, Rf_1Y_Raw) using ROLLING 12-MONTH 
+# Calculates: Calc Rf (final risk-free rate metric) using ROLLING 12-MONTH 
 #             geometric mean of monthly bond yields from bond index
 # Stores results in cissa.metrics_outputs table
 # Implements legacy rates.py algorithm with rolling window calculation
+# Algorithm:
+#   1. Calculate Rf_1Y_Raw (12-month rolling geometric mean, unrounded)
+#   2. Calculate Rf_1Y (rounded to nearest beta_rounding)
+#   3. Apply approach logic to get Calc Rf:
+#      - Fixed: Calc Rf = Benchmark - Risk Premium (static)
+#      - Floating: Calc Rf = Rf_1Y (dynamic, year-specific)
+#   4. Store only Calc Rf (one value per fiscal year)
 # ============================================================================
 
 import pandas as pd
@@ -24,24 +31,19 @@ class RiskFreeRateCalculationService:
     """
     Service for Phase 08 risk-free rate calculation.
     
-    Calculates risk-free rate using ROLLING 12-MONTH geometric mean of monthly bond yields.
-    Implements legacy rates.py algorithm with per-calendar-month rolling window.
+    Calculates Calc Rf (final metric) using legacy rates.py algorithm:
+    1. Calculate Rf_1Y_Raw: rolling 12-month geometric mean (unrounded)
+    2. Calculate Rf_1Y: rounded to nearest beta_rounding (0.5%)
+    3. Apply approach logic:
+       - Fixed: Calc Rf = Benchmark - Risk Premium (static, same all years)
+       - Floating: Calc Rf = Rf_1Y (dynamic, varies by year)
+    4. Store ONLY Calc Rf in metrics_outputs (one row per fiscal year)
     
     Key features:
-    - Calculates Rf ONLY for the bond index (e.g., GACGB10 Index for Australia)
-    - Each calendar month gets a 12-month rolling geometric mean
-    - Jan 2002 uses Feb 2001 - Jan 2002 (prior 12 months including current)
-    - Stores only December value for each year in metrics_outputs
-    - Stores all 12 monthly values in metadata for reference
-    
-    Algorithm:
-    1. Fetch monthly RISK_FREE_RATE for bond index - full history
-    2. For each calendar month in the data:
-       - Calculate rolling 12-month geometric mean: (∏rf_prel)^(1/12) - 1
-       - Apply rounding: round((result / beta_rounding), 0) * beta_rounding
-    3. Extract December value for each year
-    4. Store with metadata containing all 12 monthly values
-    5. Create 3 metrics per year: Rf_1Y_Raw, Rf_1Y, Rf
+    - Calculates for bond index (e.g., GACGB10 Index for Australia)
+    - Each calendar month gets 12-month rolling geometric mean
+    - Extracts December value for each fiscal year
+    - Stores single Calc Rf metric (not intermediate values)
     """
     
     def __init__(self, session: AsyncSession):
@@ -117,33 +119,25 @@ class RiskFreeRateCalculationService:
             rf_monthly_df = self._calculate_rolling_geometric_mean(monthly_rf_df)
             self.logger.info(f"Calculated rolling geometric mean for {len(rf_monthly_df)} calendar months")
             
-            # 6. Apply rounding and approach logic
-            self.logger.info(f"Applying rounding (beta_rounding={params['beta_rounding']}) and approach ({params['cost_of_equity_approach']})...")
-            rf_monthly_final_df = self._apply_rounding_and_approach(
+            # 6. Calculate Calc Rf (apply approach logic: Fixed or Floating)
+            self.logger.info(f"Calculating Calc Rf with approach ({params['cost_of_equity_approach']})...")
+            rf_monthly_calc_df = self._calculate_calc_rf(
                 rf_monthly_df,
-                params['beta_rounding'],
                 params['cost_of_equity_approach'],
                 params['benchmark'],
-                params['risk_premium']
+                params['risk_premium'],
+                params['beta_rounding']
             )
             
             # 7. Extract December values for each year
             self.logger.info("Extracting December values for each year...")
-            rf_yearly_df = self._extract_december_values(rf_monthly_final_df)
+            rf_yearly_df = self._extract_december_values(rf_monthly_calc_df)
             self.logger.info(f"Extracted {len(rf_yearly_df)} yearly values (December only)")
             
-            # 8. Build yearly data (metadata will be built per-metric during formatting)
-            self.logger.info("Building yearly data...")
-            rf_yearly_df, rf_monthly_final_df = self._build_yearly_with_metadata(
-                rf_yearly_df,
-                rf_monthly_final_df
-            )
-            
-            # 9. Format and store results (with metric-specific metadata)
+            # 8. Format and store results
             self.logger.info("Storing results in metrics_outputs...")
             results_to_store = self._format_results_for_storage(
                 rf_yearly_df,
-                rf_monthly_final_df,
                 bond_ticker,
                 dataset_id,
                 param_set_id
@@ -240,7 +234,7 @@ class RiskFreeRateCalculationService:
                 FROM cissa.metrics_outputs
                 WHERE ticker = :ticker
                 AND param_set_id = :param_set_id
-                AND output_metric_name IN ('Rf', 'Rf_1Y', 'Rf_1Y_Raw')
+                AND output_metric_name = 'Calc Rf'
             """)
             
             result = await self.session.execute(query, {
@@ -260,7 +254,7 @@ class RiskFreeRateCalculationService:
                 DELETE FROM cissa.metrics_outputs
                 WHERE ticker = :ticker
                 AND param_set_id = :param_set_id
-                AND output_metric_name IN ('Rf', 'Rf_1Y', 'Rf_1Y_Raw')
+                AND output_metric_name = 'Calc Rf'
             """)
             
             result = await self.session.execute(query, {
@@ -357,51 +351,64 @@ class RiskFreeRateCalculationService:
             self.logger.error(f"Failed to calculate rolling geometric mean: {e}")
             raise
     
-    def _apply_rounding_and_approach(
+    def _calculate_calc_rf(
         self,
         rf_monthly_df: pd.DataFrame,
-        beta_rounding: float,
         cost_of_equity_approach: str,
         benchmark: float = 0.0,
-        risk_premium: float = 0.0
+        risk_premium: float = 0.0,
+        beta_rounding: float = 0.005
     ) -> pd.DataFrame:
         """
-        Apply rounding and approach logic to Rf_1Y_Raw values.
+        Calculate final Calc Rf by applying approach logic.
         
-        Calculates three metrics:
-        - Rf: December Rf_PREL value (growth rate format, e.g., 1.0517)
-        - Rf_1Y: Rounded 12-month geometric mean (decimal percentage, e.g., 0.060)
-        - Rf_1Y_Raw: Unrounded 12-month geometric mean (decimal percentage, e.g., 0.0586)
+        Implements legacy rates.py logic:
+        - Calculates Rf_1Y: ROUND(Rf_1Y_Raw / beta_rounding, 0) * beta_rounding
+        - Applies approach:
+          - Fixed: Calc Rf = Benchmark - Risk Premium (static, same all years)
+          - Floating: Calc Rf = Rf_1Y (rolling geometric mean, varies by year)
         
-        Rounding formula for Rf_1Y: ROUND(Rf_1Y_Raw / beta_rounding, 0) * beta_rounding
+        Args:
+            rf_monthly_df: DataFrame with rf_1y_raw column
+            cost_of_equity_approach: 'FIXED' or 'FLOATING'
+            benchmark: Benchmark rate (e.g., 0.075 for 7.5%)
+            risk_premium: Risk premium (e.g., 0.050 for 5.0%)
+            beta_rounding: Rounding factor (e.g., 0.005 for 0.5%)
+        
+        Returns:
+            DataFrame with calc_rf column (final metric)
         """
         try:
             df = rf_monthly_df.copy()
             
-            # Apply rounding to Rf_1Y_Raw
+            # Step 1: Calculate Rf_1Y (rounded 12-month geometric mean)
             df["rf_1y"] = np.round(df["rf_1y_raw"] / beta_rounding, 0) * beta_rounding
             
-            # Rf is the December Rf_PREL (growth rate format)
-            # For non-December months, we'll fill this in during the yearly extraction
-            df["rf"] = df["rf_prel"]
+            # Step 2: Apply approach logic to get Calc Rf
+            if cost_of_equity_approach.upper() == "FIXED":
+                # Fixed approach: static value = Benchmark - Risk Premium
+                fixed_rf = benchmark - risk_premium
+                df["calc_rf"] = np.round(fixed_rf / beta_rounding, 0) * beta_rounding
+                self.logger.info(f"Fixed approach: Calc Rf = {fixed_rf:.6f} (Benchmark {benchmark:.6f} - Premium {risk_premium:.6f})")
+            else:
+                # Floating approach: Calc Rf = Rf_1Y (rounded geometric mean)
+                df["calc_rf"] = df["rf_1y"]
+                self.logger.info(f"Floating approach: Calc Rf varies by year (using Rf_1Y)")
             
-            self.logger.info(f"Applied rounding (beta_rounding={beta_rounding})")
-            self.logger.info(f"Rf_PREL values calculated (growth rate format)")
-            
-            return df
+            # Return only necessary columns
+            return df[["fiscal_year", "fiscal_month", "calc_rf"]]
             
         except Exception as e:
-            self.logger.error(f"Failed to apply rounding and approach: {e}")
+            self.logger.error(f"Failed to calculate Calc Rf: {e}")
             raise
     
     def _extract_december_values(self, rf_monthly_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Extract December (month 12) values for each fiscal year.
+        Extract December (month 12) Calc Rf value for each fiscal year.
         
         Returns one row per year containing:
-        - rf_1y_raw: unrounded 12-month geometric mean (decimal %)
-        - rf_1y: rounded 12-month geometric mean (decimal %)
-        - rf: December Rf_PREL (growth rate format, e.g., 1.0517)
+        - fiscal_year: The fiscal year
+        - calc_rf: The final Calc Rf metric value (either static or rolling)
         """
         try:
             # Filter for December only (fiscal_month = 12)
@@ -411,11 +418,11 @@ class RiskFreeRateCalculationService:
                 self.logger.warning("No December data found in monthly Rf data")
                 return pd.DataFrame()
             
-            # Group by fiscal_year and keep December values (including rf_prel)
-            result_df = december_df[["fiscal_year", "rf_prel", "rf_1y_raw", "rf_1y", "rf"]].copy()
+            # Keep only fiscal_year and calc_rf columns
+            result_df = december_df[["fiscal_year", "calc_rf"]].copy()
             result_df = result_df.sort_values("fiscal_year").reset_index(drop=True)
             
-            self.logger.info(f"Extracted {len(result_df)} December values (fiscal years {result_df['fiscal_year'].min()}-{result_df['fiscal_year'].max()})")
+            self.logger.info(f"Extracted {len(result_df)} December Calc Rf values (fiscal years {result_df['fiscal_year'].min()}-{result_df['fiscal_year'].max()})")
             
             return result_df
             
@@ -423,47 +430,9 @@ class RiskFreeRateCalculationService:
             self.logger.error(f"Failed to extract December values: {e}")
             raise
     
-    def _build_yearly_with_metadata(
-        self,
-        rf_yearly_df: pd.DataFrame,
-        rf_monthly_df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Prepare yearly dataframe (without metadata) and return with monthly data.
-        
-        Metadata will be built per-metric during formatting to avoid redundancy.
-        
-        Returns:
-            Tuple of (yearly_df, monthly_df) where yearly_df contains only
-            fiscal_year and the three December Rf values.
-        """
-        try:
-            result_records = []
-            
-            for _, yearly_row in rf_yearly_df.iterrows():
-                fiscal_year = int(yearly_row['fiscal_year'])
-                
-                # Create record with just December values (no metadata)
-                result_records.append({
-                    "fiscal_year": fiscal_year,
-                    "rf_1y_raw": round(float(yearly_row['rf_1y_raw']), 4),
-                    "rf_1y": round(float(yearly_row['rf_1y']), 4),
-                    "rf": round(float(yearly_row['rf']), 4)
-                })
-            
-            result_df = pd.DataFrame(result_records)
-            self.logger.info(f"Prepared yearly records for {len(result_df)} years")
-            
-            return result_df, rf_monthly_df
-            
-        except Exception as e:
-            self.logger.error(f"Failed to build yearly data: {e}")
-            raise
-    
     def _format_results_for_storage(
         self,
         rf_df: pd.DataFrame,
-        rf_monthly_df: pd.DataFrame,
         bond_ticker: str,
         dataset_id: UUID,
         param_set_id: UUID
@@ -471,98 +440,27 @@ class RiskFreeRateCalculationService:
         """
         Format results for storage in metrics_outputs table.
         
-        Creates 3 rows per fiscal year: Rf_1Y_Raw, Rf_1Y, Rf
-        Each row includes METRIC-SPECIFIC metadata with only the 12 monthly values for that metric.
-        
-        Metadata structure per metric:
-        {
-            "metric_level": "L1",
-            "monthly_values": [
-                {"month": 1, "value": 0.0589},
-                ...
-                {"month": 12, "value": 0.0612}
-            ]
-        }
+        Creates 1 row per fiscal year containing only the final Calc Rf metric.
+        Simple metadata structure: {"metric_level": "L1"}
         """
         try:
             records = []
             
             for _, row in rf_df.iterrows():
                 fiscal_year = int(row['fiscal_year'])
-                
-                # Get all 12 months for this year
-                yearly_monthly = rf_monthly_df[rf_monthly_df['fiscal_year'] == fiscal_year]
-                
-                # === Rf_1Y_Raw record ===
-                rf_1y_raw_monthly_values = []
-                for _, monthly_row in yearly_monthly.iterrows():
-                    rf_1y_raw_monthly_values.append({
-                        "month": int(monthly_row['fiscal_month']),
-                        "value": round(float(monthly_row['rf_1y_raw']), 4)
-                    })
-                
-                rf_1y_raw_metadata = {
-                    "metric_level": "L1",
-                    "monthly_values": rf_1y_raw_monthly_values
-                }
+                calc_rf = float(row['calc_rf']) if pd.notna(row['calc_rf']) else None
                 
                 records.append({
                     "dataset_id": dataset_id,
                     "param_set_id": param_set_id,
                     "ticker": bond_ticker,
                     "fiscal_year": fiscal_year,
-                    "output_metric_name": "Rf_1Y_Raw",
-                    "output_metric_value": float(row['rf_1y_raw']) if pd.notna(row['rf_1y_raw']) else None,
-                    "metadata": rf_1y_raw_metadata
-                })
-                
-                # === Rf_1Y record ===
-                rf_1y_monthly_values = []
-                for _, monthly_row in yearly_monthly.iterrows():
-                    rf_1y_monthly_values.append({
-                        "month": int(monthly_row['fiscal_month']),
-                        "value": round(float(monthly_row['rf_1y']), 4)
-                    })
-                
-                rf_1y_metadata = {
-                    "metric_level": "L1",
-                    "monthly_values": rf_1y_monthly_values
-                }
-                
-                records.append({
-                    "dataset_id": dataset_id,
-                    "param_set_id": param_set_id,
-                    "ticker": bond_ticker,
-                    "fiscal_year": fiscal_year,
-                    "output_metric_name": "Rf_1Y",
-                    "output_metric_value": float(row['rf_1y']) if pd.notna(row['rf_1y']) else None,
-                    "metadata": rf_1y_metadata
-                })
-                
-                # === Rf record ===
-                rf_monthly_values = []
-                for _, monthly_row in yearly_monthly.iterrows():
-                    rf_monthly_values.append({
-                        "month": int(monthly_row['fiscal_month']),
-                        "value": round(float(monthly_row['rf']), 4)
-                    })
-                
-                rf_metadata = {
-                    "metric_level": "L1",
-                    "monthly_values": rf_monthly_values
-                }
-                
-                records.append({
-                    "dataset_id": dataset_id,
-                    "param_set_id": param_set_id,
-                    "ticker": bond_ticker,
-                    "fiscal_year": fiscal_year,
-                    "output_metric_name": "Rf",
-                    "output_metric_value": float(row['rf']) if pd.notna(row['rf']) else None,
-                    "metadata": rf_metadata
+                    "output_metric_name": "Calc Rf",
+                    "output_metric_value": calc_rf,
+                    "metadata": {"metric_level": "L1"}
                 })
             
-            self.logger.info(f"Formatted {len(records)} records for storage ({len(rf_df)} years × 3 metrics, metric-specific metadata)")
+            self.logger.info(f"Formatted {len(records)} records for storage ({len(rf_df)} years × 1 metric)")
             
             return records
             
