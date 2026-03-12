@@ -47,6 +47,27 @@ class MetricComponent(BaseModel):
         default=0,
         description="Number of years to shift (for year-shift ratios like ROEE)"
     )
+    # Composite operation support (for metrics like Effective Tax Rate)
+    operation: Optional[str] = Field(
+        default=None,
+        description="Operation to combine with operand_metric (e.g., 'add', 'subtract'). If set, operand_metric_name and operand_metric_source are required."
+    )
+    operand_metric_name: Optional[str] = Field(
+        default=None,
+        description="Second metric name for composite operations (e.g., 'Calc XO Cost' in ETR denominator)"
+    )
+    operand_metric_source: Optional[MetricSource] = Field(
+        default=None,
+        description="Source of the operand metric"
+    )
+    operand_parameter_dependent: Optional[bool] = Field(
+        default=False,
+        description="Whether operand metric depends on param_set_id"
+    )
+    apply_absolute_value: bool = Field(
+        default=False,
+        description="Whether to apply ABS() to the final component value (for composite results)"
+    )
 
 
 class MetricDefinition(BaseModel):

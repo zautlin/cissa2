@@ -90,10 +90,10 @@ class RatioMetricsCalculator:
         year_filter = ""
         if start_year is not None:
             year_filter += f" AND m.fiscal_year >= :start_year"
-            ticker_params["start_year"] = start_year
+            ticker_params["start_year"] = str(start_year)
         if end_year is not None:
             year_filter += f" AND m.fiscal_year <= :end_year"
-            ticker_params["end_year"] = end_year
+            ticker_params["end_year"] = str(end_year)
         
         # Determine which table to query from
         numerator_table = "cissa.metrics_outputs" if numerator.metric_source == MetricSource.METRICS_OUTPUTS else "cissa.fundamentals"
@@ -231,8 +231,11 @@ class RatioMetricsCalculator:
         Example: ROEE = PAT_EX (from fundamentals, 1Y/3Y/5Y/10Y avg) 
                       / Calc EE (from metrics_outputs, shifted by 1 year, 1Y/3Y/5Y/10Y avg)
         
-        The denominator is shifted so that year N-1's Calc EE becomes year N's EE_Open.
-        This allows calculating ROEE(N) = PAT_EX(N) / EE_Open(N) where EE_Open is prior year's EE.
+        Example: ETR = Calc Tax Cost (from metrics_outputs, 1Y/3Y/5Y/10Y avg)
+                    / ABS(PAT_EX (from fundamentals) + Calc XO Cost (from metrics_outputs))
+        
+        The denominator can be simple (single metric with optional year shift) or
+        composite (multiple metrics combined with operation, optionally wrapped in ABS).
         """
         numerator = self.metric_def.numerator
         denominator = self.metric_def.denominator
@@ -245,18 +248,50 @@ class RatioMetricsCalculator:
         year_filter = ""
         if start_year is not None:
             year_filter += f" AND m.fiscal_year >= :start_year"
-            ticker_params["start_year"] = start_year
+            ticker_params["start_year"] = str(start_year)
         if end_year is not None:
             year_filter += f" AND m.fiscal_year <= :end_year"
-            ticker_params["end_year"] = end_year
+            ticker_params["end_year"] = str(end_year)
         
-        # Build numerator CTE (from fundamentals)
-        numerator_cte = f"""
+        # Build numerator CTE (flexible: can be from metrics_outputs or fundamentals)
+        if numerator.metric_source == MetricSource.METRICS_OUTPUTS:
+            # From metrics_outputs - use output_metric_value and output_metric_name
+            param_filter = ""
+            if numerator.parameter_dependent:
+                param_filter = "\n                AND param_set_id = :param_set_id"
+            
+            numerator_cte = f"""
         numerator_raw AS (
             SELECT
                 ticker,
                 fiscal_year,
-                numeric_value AS pat_ex_value
+                output_metric_value AS numerator_raw_value
+            FROM cissa.metrics_outputs
+            WHERE dataset_id = :dataset_id{param_filter}
+                AND output_metric_name = :numerator_metric
+                AND ticker IN ({ticker_placeholders})
+        ),
+        numerator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(numerator_raw_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS numerator_value,
+                ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank
+            FROM numerator_raw
+        )
+        """
+        else:  # fundamentals
+            numerator_cte = f"""
+        numerator_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                numeric_value AS numerator_raw_value
             FROM cissa.fundamentals
             WHERE dataset_id = :dataset_id
                 AND metric_name = :numerator_metric
@@ -266,7 +301,7 @@ class RatioMetricsCalculator:
             SELECT
                 ticker,
                 fiscal_year,
-                AVG(pat_ex_value) 
+                AVG(numerator_raw_value) 
                     OVER (
                         PARTITION BY ticker 
                         ORDER BY fiscal_year 
@@ -277,9 +312,16 @@ class RatioMetricsCalculator:
         )
         """
         
-        # Build denominator CTE (from metrics_outputs, with year shift)
-        year_shift = denominator.year_shift
-        denominator_cte = f"""
+        # Check if denominator is composite (has operand_metric_name)
+        if denominator.operation and denominator.operand_metric_name:
+            # Composite denominator (e.g., ETR: ABS(PAT_EX + Calc XO Cost))
+            denominator_cte = self._build_composite_denominator_cte(
+                ticker_placeholders, ticker_params, denominator
+            )
+        else:
+            # Simple denominator (e.g., ROEE: Calc EE with year shift)
+            year_shift = denominator.year_shift
+            denominator_cte = f"""
         denominator_raw AS (
             SELECT
                 ticker,
@@ -334,11 +376,147 @@ class RatioMetricsCalculator:
         
         params = {
             "dataset_id": str(dataset_id),
-            "param_set_id": str(param_set_id),
             "numerator_metric": numerator.metric_name,
-            "denominator_metric": denominator.metric_name,
             "min_year_threshold": self.min_years_required + 1,  # year_shift doesn't affect threshold, only data filtering
             **ticker_params
         }
         
+        # Add param_set_id if needed by numerator or denominator components
+        needs_param_set_id = (
+            numerator.parameter_dependent or 
+            denominator.parameter_dependent or 
+            (denominator.operation and denominator.operand_parameter_dependent)
+        )
+        if needs_param_set_id:
+            params["param_set_id"] = str(param_set_id)
+        
+        # Add denominator metric names
+        if denominator.operation and denominator.operand_metric_name:
+            # Composite denominator
+            params["denominator_metric"] = denominator.metric_name
+            params["operand_metric"] = denominator.operand_metric_name
+        else:
+            # Simple denominator
+            params["denominator_metric"] = denominator.metric_name
+        
         return query, params
+    
+    def _build_composite_denominator_cte(
+        self,
+        ticker_placeholders: str,
+        ticker_params: Dict[str, Any],
+        denominator: MetricComponent
+    ) -> str:
+        """
+        Build CTE for composite denominator (e.g., ABS(PAT_EX + Calc XO Cost)).
+        
+        Handles:
+        - Multiple metric sources (fundamentals + metrics_outputs)
+        - Composite operations (add, subtract)
+        - Optional absolute value wrapping
+        """
+        if not denominator.operation:
+            raise ValueError("Composite denominator requires 'operation' to be set")
+        
+        operation = denominator.operation.lower()
+        
+        # Map operation to SQL operator
+        op_map = {
+            "add": "+",
+            "subtract": "-"
+        }
+        
+        if operation not in op_map:
+            raise ValueError(f"Unknown operation: {operation}. Must be one of: {', '.join(op_map.keys())}")
+        
+        sql_op = op_map[operation]
+        
+        # Determine main metric source (typically fundamentals in ETR case)
+        main_is_metrics_outputs = (denominator.metric_source == MetricSource.METRICS_OUTPUTS)
+        operand_is_metrics_outputs = (denominator.operand_metric_source == MetricSource.METRICS_OUTPUTS)
+        
+        # Build raw CTEs for both components
+        if main_is_metrics_outputs:
+            main_cte = f"""
+        denominator_main_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                output_metric_value AS main_value
+            FROM cissa.metrics_outputs
+            WHERE dataset_id = :dataset_id
+                AND param_set_id = :param_set_id
+                AND output_metric_name = :denominator_metric
+                AND ticker IN ({ticker_placeholders})
+        )"""
+        else:  # fundamentals
+            main_cte = f"""
+        denominator_main_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                numeric_value AS main_value
+            FROM cissa.fundamentals
+            WHERE dataset_id = :dataset_id
+                AND metric_name = :denominator_metric
+                AND ticker IN ({ticker_placeholders})
+        )"""
+        
+        if operand_is_metrics_outputs:
+            operand_param_filter = ""
+            if denominator.operand_parameter_dependent:
+                operand_param_filter = "\n                AND param_set_id = :param_set_id"
+            
+            operand_cte = f"""
+        denominator_operand_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                output_metric_value AS operand_value
+            FROM cissa.metrics_outputs
+            WHERE dataset_id = :dataset_id{operand_param_filter}
+                AND output_metric_name = :operand_metric
+                AND ticker IN ({ticker_placeholders})
+        )"""
+        else:  # fundamentals
+            operand_cte = f"""
+        denominator_operand_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                numeric_value AS operand_value
+            FROM cissa.fundamentals
+            WHERE dataset_id = :dataset_id
+                AND metric_name = :operand_metric
+                AND ticker IN ({ticker_placeholders})
+        )"""
+        
+        # Build combined CTE with operation and optional ABS
+        abs_wrapper = "ABS(" if denominator.apply_absolute_value else ""
+        abs_closer = ")" if denominator.apply_absolute_value else ""
+        
+        combined_cte = f"""
+        denominator_combined AS (
+            SELECT
+                COALESCE(m.ticker, o.ticker) AS ticker,
+                COALESCE(m.fiscal_year, o.fiscal_year) AS fiscal_year,
+                {abs_wrapper}COALESCE(m.main_value, 0) {sql_op} COALESCE(o.operand_value, 0){abs_closer} AS combined_value
+            FROM denominator_main_raw m
+            FULL OUTER JOIN denominator_operand_raw o
+                ON m.ticker = o.ticker AND m.fiscal_year = o.fiscal_year
+        ),
+        denominator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(combined_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS denominator_value
+            FROM denominator_combined
+        )
+        """
+        
+        return f"{main_cte},\n{operand_cte},\n{combined_cte}"

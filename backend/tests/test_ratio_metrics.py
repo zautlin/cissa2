@@ -145,9 +145,9 @@ class TestRatioMetricsCalculator:
         assert ">= :start_year" in sql
         assert "<= :end_year" in sql
         
-        # Verify parameters
-        assert params["start_year"] == 2015
-        assert params["end_year"] == 2023
+        # Verify parameters (converted to strings for SQL)
+        assert params["start_year"] == "2015"
+        assert params["end_year"] == "2023"
     
     def test_op_cost_margin_mixed_source_query_generation(self):
         """Test SQL query generation for mixed-source simple ratio (Op Cost Margin)"""
@@ -261,6 +261,78 @@ class TestRatioMetricsCalculator:
         assert params["ticker_0"] == "BHP"
         
         # Verify param_set_id is in SQL (for numerator from metrics_outputs)
+        assert "param_set_id = :param_set_id" in sql
+
+    def test_etr_composite_denominator_query_generation(self):
+        """Test SQL query generation for Effective Tax Rate with composite denominator"""
+        metric_def = MetricDefinition(
+            id="etr",
+            display_name="Effective Tax Rate",
+            description="Test",
+            formula_type="complex_ratio",
+            numerator=MetricComponent(
+                metric_name="Calc Tax Cost",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=True
+            ),
+            denominator=MetricComponent(
+                metric_name="PROFIT_AFTER_TAX_EX",
+                metric_source=MetricSource.FUNDAMENTALS,
+                parameter_dependent=False,
+                operation="add",
+                operand_metric_name="Calc XO Cost",
+                operand_metric_source=MetricSource.METRICS_OUTPUTS,
+                operand_parameter_dependent=True,
+                apply_absolute_value=True
+            ),
+            operation="divide",
+            null_handling="skip_year",
+            negative_handling="return_null"
+        )
+        
+        calc = RatioMetricsCalculator(metric_def, "1Y")
+        
+        tickers = ["BHP"]
+        dataset_id = UUID("12345678-1234-1234-1234-123456789012")
+        param_set_id = UUID("87654321-4321-4321-4321-210987654321")
+        
+        sql, params = calc.build_query(tickers, dataset_id, param_set_id)
+        
+        # Verify SQL structure for composite denominator
+        assert "denominator_main_raw" in sql
+        assert "denominator_operand_raw" in sql
+        assert "denominator_combined" in sql
+        assert "denominator_rolling" in sql
+        
+        # Verify composite operation (add)
+        assert "+" in sql  # Addition operator
+        assert "ABS(" in sql  # Absolute value wrapper
+        
+        # Verify multiple CTEs are used
+        assert "numerator_rolling" in sql
+        assert "FULL OUTER JOIN" in sql
+        
+        # Verify both fundamentals and metrics_outputs are queried
+        assert "cissa.fundamentals" in sql
+        assert "cissa.metrics_outputs" in sql
+        
+        # Verify column names from different sources
+        assert "output_metric_value" in sql  # From metrics_outputs
+        assert "numeric_value" in sql  # From fundamentals
+        assert "output_metric_name" in sql  # numerator metric name
+        assert "metric_name" in sql  # denominator metric name
+        
+        # Verify parameters
+        assert params["dataset_id"] == str(dataset_id)
+        assert params["param_set_id"] == str(param_set_id)
+        assert params["numerator_metric"] == "Calc Tax Cost"
+        assert params["denominator_metric"] == "PROFIT_AFTER_TAX_EX"
+        assert params["operand_metric"] == "Calc XO Cost"
+        assert params["ticker_0"] == "BHP"
+        
+        # Verify param_set_id is in SQL at least once (for operand: Calc XO Cost from metrics_outputs)
+        # Note: numerator is Calc Tax Cost from metrics_outputs, and operand is Calc XO Cost from metrics_outputs
+        # Both should use param_set_id, so we should see it in the operand_raw CTE
         assert "param_set_id = :param_set_id" in sql
 
 class TestRatioMetricsService:

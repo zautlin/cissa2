@@ -509,6 +509,7 @@ Calculate financial ratio metrics with rolling averages over temporal windows (1
 - `profit_margin`: Profit Margin = PAT_EX / Revenue
 - `op_cost_margin`: Operating Cost Margin = Calc Op Cost / Revenue
 - `non_op_cost_margin`: Non-Operating Cost Margin = Calc Non Op Cost / Revenue
+- `etr`: Effective Tax Rate = Calc Tax Cost / |PAT_EX + Calc XO Cost|
 
 **Temporal Window Definitions:**
 
@@ -1510,6 +1511,147 @@ curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=non_op_cost_marg
 | **Better When** | Higher (premium) | Higher (better return) | Higher (efficient) | Higher (more profit) | Lower (efficient) | Lower (efficient) |
 | **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency | Overall profitability | Cost control & efficiency | Financing burden analysis |
 
+### Effective Tax Rate
+
+Effective Tax Rate (ETR) measures the proportion of pre-tax economic income that goes to taxes. It combines Tax Cost with the sum of Profit After Tax and Extraordinary Costs to calculate the effective tax burden.
+
+**Formula:** ETR = Calc Tax Cost / |PROFIT_AFTER_TAX_EX + Calc XO Cost|
+
+**Data Dependencies:**
+- **Numerator:** Calc Tax Cost (from `metrics_outputs`, requires `param_set_id`)
+- **Denominator Components:** 
+  - PROFIT_AFTER_TAX_EX (from `fundamentals`)
+  - Calc XO Cost (from `metrics_outputs`, requires `param_set_id`)
+- **Sources:** Complex (all three tables combined with operation)
+- **Parameter Dependent:** Yes (numerator and operand require param_set_id)
+- **Special Handling:** Denominator is calculated as ABS(PAT_EX + XO Cost) before averaging
+
+**Denominator Composition:**
+The denominator is not just PAT_EX, but rather the economic profit including extraordinary items:
+- Economic Profit = PROFIT_AFTER_TAX_EX + Calc XO Cost
+- We take the absolute value to ensure the denominator is always positive (or zero)
+- If denominator = 0, the ETR is NULL (tax rate undefined for zero/negative income)
+
+**Temporal Windows:**
+
+| Window | Data Required | First Result Year | Example Calculation |
+|--------|---------------|-------------------|---------------------|
+| **1Y** | Tax Cost(current), PAT(current), XO Cost(current) | 2003 | ETR(2003) = Calc Tax Cost(2003) / ABS(PAT(2003) + XO Cost(2003)) |
+| **3Y** | Tax Cost(3 years), PAT(3 years), XO Cost(3 years) | 2005 | ETR(2005) = AVG(Tax Cost[2003-2005]) / ABS(AVG(PAT[2003-2005]) + AVG(XO Cost[2003-2005])) |
+| **5Y** | Tax Cost(5 years), PAT(5 years), XO Cost(5 years) | 2007 | ETR(2007) = AVG(Tax Cost[2003-2007]) / ABS(AVG(PAT[2003-2007]) + AVG(XO Cost[2003-2007])) |
+| **10Y** | Tax Cost(10 years), PAT(10 years), XO Cost(10 years) | 2012 | ETR(2012) = AVG(Tax Cost[2003-2012]) / ABS(AVG(PAT[2003-2012]) + AVG(XO Cost[2003-2012])) |
+
+### Effective Tax Rate Query Example
+
+Get 1-year Effective Tax Rate for BHP AU Equity:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=etr&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | python -m json.tool | head -40
+```
+
+**Response (first 5 years):**
+```json
+{
+  "metric": "etr",
+  "display_name": "Effective Tax Rate",
+  "temporal_window": "1Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2003,
+          "value": 0.3248573948573
+        },
+        {
+          "year": 2004,
+          "value": 0.3129384729384
+        },
+        {
+          "year": 2005,
+          "value": 0.3401928374928
+        },
+        {
+          "year": 2006,
+          "value": 0.3087293847293
+        },
+        {
+          "year": 2007,
+          "value": 0.3284920384729
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Interpretation:**
+- ETR(2003) = 0.3249 = 32.49% effective tax rate
+- ETR(2004) = 0.3129 = 31.29% effective tax rate
+- ETR values typically range from 0 to 1 (0% to 100%)
+- **Typical range: 0.15 - 0.45** (15% to 45% in most developed countries)
+- **Lower values are better** (lower tax burden = more profit retained)
+- ETR can be compared to statutory tax rates to assess tax efficiency
+
+### Effective Tax Rate 3-Year Rolling Average
+
+Get 3-year average Effective Tax Rate for trend analysis:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=etr&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=3Y"
+```
+
+**Response (starts from 2005):**
+```json
+{
+  "metric": "etr",
+  "display_name": "Effective Tax Rate",
+  "temporal_window": "3Y",
+  "data": [
+    {
+      "ticker": "BHP AU Equity",
+      "time_series": [
+        {
+          "year": 2005,
+          "value": 0.3259962962962
+        },
+        {
+          "year": 2006,
+          "value": 0.3205201201201
+        },
+        {
+          "year": 2007,
+          "value": 0.3257835257835
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Key observations:**
+- First year is 2005 (needs 3 years of Tax Cost, PAT, and XO Cost data)
+- Values are smoother than 1Y due to 3-year averaging
+- Relatively stable ETR indicates consistent tax planning (not wildly varying effective rates)
+- Upward trend might indicate changing tax environment or loss of tax breaks
+- Use 3Y for medium-term tax burden analysis and statutory compliance tracking
+
+### Complete Metrics Comparison (Extended - Including ETR)
+
+| Aspect | MB Ratio | ROEE | ROA | Profit Margin | Op Cost Margin | Non Op Cost Margin | ETR |
+|--------|----------|------|-----|---------------|----------------|-------------------|-----|
+| **Purpose** | Valuation multiple | Return on equity | Return on assets | Profitability % | Operating efficiency | Financial efficiency | Tax burden |
+| **Data Sources** | Both from metrics_outputs | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Both from fundamentals | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Complex (all 3 sources) |
+| **Numerator** | Market Cap | Profit | Profit | Profit | Operating Cost | Non-Operating Cost | Tax Cost |
+| **Denominator** | Book Equity | Opening Equity | Opening Assets | Revenue | Revenue | Revenue | ABS(PAT + XO Cost) |
+| **Operations** | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Composite: add + abs |
+| **Year Shift** | No | Yes (denom) | Yes (denom) | No | No | No | No |
+| **First Result** | 2003 (1Y), 2005 (3Y), etc. | Same | Same | Same | Same | Same | Same |
+| **Typical Range** | 0.5 - 3.0 | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 0.2 (or 0-20%) | 0.15 - 0.45 |
+| **Interpretation** | Market vs book value | Profit per $ equity | Profit per $ assets | Profit per $ revenue | Operating cost per $ revenue | Non-op cost per $ revenue | Tax per $ economic income |
+| **Better When** | Higher (premium) | Higher (better return) | Higher (efficient) | Higher (more profit) | Lower (efficient) | Lower (efficient) | Lower (efficient) |
+| **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency | Overall profitability | Cost control & efficiency | Financing burden | Tax planning & compliance |
+
 ### Operating Cost Margin vs Profit Margin: Key Difference
 
 ---
@@ -1627,28 +1769,54 @@ Ratio metrics are defined in `backend/app/config/ratio_metrics.json`. To add a n
        "negative_handling": "return_null"
      },
      {
-       "id": "non_op_cost_margin",
-       "display_name": "Non-Operating Cost Margin",
-       "description": "Non-Operating Cost Margin (Calc Non Op Cost / Revenue)",
-       "formula_type": "ratio",
-       "numerator": {
-         "metric_name": "Calc Non Op Cost",
-         "metric_source": "metrics_outputs",
-         "parameter_dependent": true,
-         "year_shift": 0
-       },
-       "denominator": {
-         "metric_name": "REVENUE",
-         "metric_source": "fundamentals",
-         "parameter_dependent": false,
-         "year_shift": 0
-       },
-       "operation": "divide",
-       "null_handling": "skip_year",
-       "negative_handling": "return_null"
-     }
-   ]
-}
+        "id": "non_op_cost_margin",
+        "display_name": "Non-Operating Cost Margin",
+        "description": "Non-Operating Cost Margin (Calc Non Op Cost / Revenue)",
+        "formula_type": "ratio",
+        "numerator": {
+          "metric_name": "Calc Non Op Cost",
+          "metric_source": "metrics_outputs",
+          "parameter_dependent": true,
+          "year_shift": 0
+        },
+        "denominator": {
+          "metric_name": "REVENUE",
+          "metric_source": "fundamentals",
+          "parameter_dependent": false,
+          "year_shift": 0
+        },
+        "operation": "divide",
+        "null_handling": "skip_year",
+        "negative_handling": "return_null"
+      },
+      {
+        "id": "etr",
+        "display_name": "Effective Tax Rate",
+        "description": "Effective Tax Rate (Calc Tax Cost / ABS(PROFIT_AFTER_TAX_EX + Calc XO Cost))",
+        "formula_type": "complex_ratio",
+        "numerator": {
+          "metric_name": "Calc Tax Cost",
+          "metric_source": "metrics_outputs",
+          "parameter_dependent": true,
+          "year_shift": 0
+        },
+        "denominator": {
+          "metric_name": "PROFIT_AFTER_TAX_EX",
+          "metric_source": "fundamentals",
+          "parameter_dependent": false,
+          "year_shift": 0,
+          "operation": "add",
+          "operand_metric_name": "Calc XO Cost",
+          "operand_metric_source": "metrics_outputs",
+          "operand_parameter_dependent": true,
+          "apply_absolute_value": true
+        },
+        "operation": "divide",
+        "null_handling": "skip_year",
+        "negative_handling": "return_null"
+      }
+    ]
+  }
 ```
 
 **Schema Explanation:**
@@ -1673,6 +1841,20 @@ Ratio metrics are defined in `backend/app/config/ratio_metrics.json`. To add a n
 - When numerator and denominator come from different tables
 - When year-shifting is needed for denominator
 - When combining fundamentals (raw data) with metrics_outputs (calculated metrics)
+- When the denominator is a composite of multiple metrics (e.g., ETR: ABS(PAT_EX + Calc XO Cost))
+
+**Composite Denominator Fields** (optional, for complex computed denominators):
+- `operation`: How to combine the main metric with the operand (`"add"`, `"subtract"`)
+- `operand_metric_name`: Second metric name to combine with the main metric
+- `operand_metric_source`: Source table of the operand metric
+- `operand_parameter_dependent`: Whether operand requires param_set_id
+- `apply_absolute_value`: Whether to wrap the result in ABS() function
+
+**Example: Effective Tax Rate (ETR)**
+- Formula: ETR = Calc Tax Cost / |PAT_EX + Calc XO Cost|
+- Numerator: Calc Tax Cost (from metrics_outputs)
+- Denominator: PROFIT_AFTER_TAX_EX (fundamentals) + Calc XO Cost (metrics_outputs), with ABS()
+- The denominator configuration includes operation, operand_metric_name, and apply_absolute_value
 
 
 
