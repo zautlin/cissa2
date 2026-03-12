@@ -106,6 +106,10 @@ class BetaCalculationService:
             global_min_begin_year = await self._fetch_global_min_begin_year()
             self.logger.info(f"Global minimum begin_year: {global_min_begin_year}")
             
+            
+            # 4c. Fetch ALL tickers from companies table for complete scaffold
+            all_tickers = await self._fetch_all_tickers()
+            self.logger.info(f"Loaded {len(all_tickers)} total tickers for scaffold")
             # 5. Calculate rolling OLS slopes
             self.logger.info("Calculating rolling OLS slopes (60-month window)...")
             ols_df = self._calculate_rolling_ols(monthly_df)
@@ -131,7 +135,7 @@ class BetaCalculationService:
             
             # 9. Scaffold and backfill: create complete (ticker, fiscal_year) coverage with fallback values
             self.logger.info(f"Creating complete (ticker, fiscal_year) scaffold ({global_min_begin_year}-2023) and backfilling missing years with fallback...")
-            scaffolded_df = self._scaffold_and_backfill_betas(annual_df, sector_slopes, begin_year_map, global_min_begin_year)
+            scaffolded_df = self._scaffold_and_backfill_betas(annual_df, sector_slopes, begin_year_map, global_min_begin_year, all_tickers)
             self.logger.info(f"Scaffolded to {len(scaffolded_df)} complete records ({len(annual_df)} calculated, {len(scaffolded_df) - len(annual_df)} backfilled)")
             
             # 10. Apply 4-tier fallback logic (now on complete scaffold)
@@ -412,9 +416,32 @@ class BetaCalculationService:
             
         except Exception as e:
             self.logger.error(f"Failed to fetch global min begin_year: {e}")
-            return 1981
+            return 1981    
+    async def _fetch_all_tickers(self) -> list:
+        """Fetch all tickers from companies table.
+        
+        Returns:
+            List of all ticker symbols
+        """
+        try:
+            query = text("""
+                SELECT DISTINCT ticker
+                FROM cissa.companies
+                ORDER BY ticker
+            """)
+            
+            result = await self.session.execute(query)
+            rows = result.fetchall()
+            
+            tickers = [row[0] for row in rows]
+            self.logger.info(f"Loaded {len(tickers)} total tickers from companies table")
+            return tickers
+            
+        except Exception as e:
+            self.logger.error(f"Failed to fetch all tickers: {e}")
+            return []
      
-    def _scaffold_and_backfill_betas(self, annual_df: pd.DataFrame, sector_slopes: pd.DataFrame, begin_year_map: dict, global_min_begin_year: int) -> pd.DataFrame:
+    def _scaffold_and_backfill_betas(self, annual_df: pd.DataFrame, sector_slopes: pd.DataFrame, begin_year_map: dict, global_min_begin_year: int, all_tickers: list) -> pd.DataFrame:
         """Generate complete (ticker, fiscal_year) scaffold and fill missing years with fallback values.
         
         Algorithm:
@@ -439,13 +466,10 @@ class BetaCalculationService:
             # Determine year range
             max_year = int(annual_df['fiscal_year'].max()) if len(annual_df) > 0 else 2023
             
-            # Get all unique tickers in annual_df
-            tickers = annual_df['ticker'].unique()
-            
             # Create complete scaffold: all (ticker, fiscal_year) from GLOBAL MIN begin_year to max_year
-            # This ensures every ticker has full coverage from the earliest begin_year in the dataset
+            # This ensures EVERY ticker has full coverage from the earliest begin_year in the dataset
             scaffold_rows = []
-            for ticker in tickers:
+            for ticker in all_tickers:
                 for year in range(global_min_begin_year, max_year + 1):
                     scaffold_rows.append({'ticker': ticker, 'fiscal_year': year})
             
