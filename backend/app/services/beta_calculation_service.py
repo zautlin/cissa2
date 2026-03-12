@@ -241,7 +241,11 @@ class BetaCalculationService:
             return 0
     
     async def _fetch_monthly_returns(self, dataset_id: UUID) -> pd.DataFrame:
-        """Fetch COMPANY_TSR and INDEX_TSR from fundamentals table."""
+        """Fetch COMPANY_TSR and INDEX_TSR from fundamentals table.
+        
+        Excludes index tickers (e.g., 'AEX Index', 'DAX Index') which don't have
+        meaningful fiscal year ends and are not actual companies.
+        """
         try:
             query = text("""
                 SELECT
@@ -257,6 +261,7 @@ class BetaCalculationService:
                 WHERE c.dataset_id = :dataset_id
                 AND c.metric_name = 'COMPANY_TSR'
                 AND c.period_type = 'MONTHLY'
+                AND c.ticker NOT LIKE '%Index%'
                 AND i.dataset_id = :dataset_id
                 AND i.ticker = 'AS30 Index'
                 AND i.metric_name = 'INDEX_TSR'
