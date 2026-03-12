@@ -121,91 +121,91 @@
   },
   {
     "metric_name": "Calc MC",
-    "database_name": "C_MC",
+    "database_name": "Calc MC",
     "unit": "millions",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc Assets",
-    "database_name": "C_ASSETS",
+    "database_name": "Calc Assets",
     "unit": "millions",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc OA",
-    "database_name": "OA",
+    "database_name": "Calc OA",
     "unit": "millions",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc OP Cost",
-    "database_name": "OP_COST",
+    "database_name": "Calc Op Cost",
     "unit": "millions",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc NON OP Cost",
-    "database_name": "NON_OP_COST",
+    "database_name": "Calc Non OP Cost",
     "unit": "millions",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc TAX Cost",
-    "database_name": "TAX_COST",
+    "database_name": "Calc Tax Cost",
     "unit": "millions",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc XO Cost",
-    "database_name": "XO_COST",
+    "database_name": "Calc XO Cost",
     "unit": "millions",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc ECF",
-    "database_name": "ECF",
+    "database_name": "Calc ECF",
     "unit": "millions",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc NON DIV ECF",
-    "database_name": "NON_DIV_ECF",
+    "database_name": "Non Div ECF",
     "unit": "millions",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc EE",
-    "database_name": "EE",
+    "database_name": "Calc EE",
     "unit": "millions",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc FY TSR",
-    "database_name": "FY_TSR",
+    "database_name": "Calc FY TSR",
     "unit": "dimensionless",
     "is_output_metric": true
   },
   {
     "metric_name": "Calc FY TSR PREL",
-    "database_name": "FY_TSR_PREL",
+    "database_name": "Calc FY TSR PREL",
     "unit": "dimensionless",
     "is_output_metric": true
   },
   {
     "metric_name": "Beta",
-    "database_name": "BETA",
+    "database_name": "Calc Beta",
     "unit": "%",
     "is_output_metric": true
   },
    {
      "metric_name": "Calc KE",
-     "database_name": "CALC_KE",
+     "database_name": "Calc KE",
      "unit": "%",
      "is_output_metric": true
    },
    {
      "metric_name": "EP",
-     "database_name": "EP",
+     "database_name": "Calc EP",
      "unit": "millions",
      "is_output_metric": true,
      "metric_level": "L2",
@@ -213,7 +213,7 @@
    },
    {
      "metric_name": "PAT_EX",
-     "database_name": "PAT_EX",
+     "database_name": "Calc PAT Ex",
      "unit": "millions",
      "is_output_metric": true,
      "metric_level": "L2",
@@ -221,7 +221,7 @@
    },
    {
      "metric_name": "XO_COST_EX",
-     "database_name": "XO_COST_EX",
+     "database_name": "Calc XO Ex Cost",
      "unit": "millions",
      "is_output_metric": true,
      "metric_level": "L2",
@@ -229,7 +229,7 @@
    },
     {
       "metric_name": "FC",
-      "database_name": "FC",
+      "database_name": "Calc FC",
       "unit": "millions",
       "is_output_metric": true,
       "metric_level": "L2",
@@ -237,7 +237,7 @@
     },
     {
       "metric_name": "FV_ECF_1Y",
-      "database_name": "FV_ECF_1Y",
+      "database_name": "Calc 1Y FV ECF",
       "unit": "millions",
       "is_output_metric": true,
       "metric_level": "L2",
@@ -245,7 +245,7 @@
     },
     {
       "metric_name": "FV_ECF_3Y",
-      "database_name": "FV_ECF_3Y",
+      "database_name": "Calc 3Y FV ECF",
       "unit": "millions",
       "is_output_metric": true,
       "metric_level": "L2",
@@ -253,7 +253,7 @@
     },
     {
       "metric_name": "FV_ECF_5Y",
-      "database_name": "FV_ECF_5Y",
+      "database_name": "Calc 5Y FV ECF",
       "unit": "millions",
       "is_output_metric": true,
       "metric_level": "L2",
@@ -261,7 +261,7 @@
     },
     {
       "metric_name": "FV_ECF_10Y",
-      "database_name": "FV_ECF_10Y",
+      "database_name": "Calc 10Y FV ECF",
       "unit": "millions",
       "is_output_metric": true,
       "metric_level": "L2",
