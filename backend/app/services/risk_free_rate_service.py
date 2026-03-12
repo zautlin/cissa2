@@ -61,10 +61,19 @@ class RiskFreeRateCalculationService:
         country_code: str = 'AU',
     ) -> dict:
         """
-        Main orchestration method for risk-free rate calculation.
+        Main orchestration method for risk-free rate calculation with ticker-specific FY end dates.
         
-        Uses ROLLING 12-MONTH geometric mean approach for accurate monthly Rf values.
-        Stores only December values for each year.
+        Flow:
+        1. Load parameters (approach, rounding, benchmark, risk_premium)
+        2. Determine currency from country (AU -> AUD)
+        3. Fetch bond ticker for currency (AUD -> GACGB10 Index)
+        4. Fetch monthly bond yields for bond index
+        5. Calculate rolling 12-month geometric mean (Rf_1Y_Raw)
+        6. Apply approach logic to get Calc Rf (Fixed or Floating)
+        7. Fetch all company tickers for the currency
+        8. Fetch FY end dates for each company ticker
+        9. Extract Calc Rf values using each ticker's specific FY end date
+        10. Format and store results (~21,000 records)
         
         Args:
             dataset_id: Dataset ID for the calculation
@@ -79,33 +88,50 @@ class RiskFreeRateCalculationService:
             }
         """
         try:
-            self.logger.info(f"Starting risk-free rate calculation (Phase 08): dataset={dataset_id}, param_set={param_set_id}, country={country_code}")
+            self.logger.info(f"Starting risk-free rate calculation with ticker-specific FY dates (Phase 08): dataset={dataset_id}, param_set={param_set_id}, country={country_code}")
+            
+            # Determine currency from country code
+            currency_map = {'AU': 'AUD', 'US': 'USD', 'UK': 'GBP'}
+            currency = currency_map.get(country_code, 'AUD')
+            self.logger.info(f"Using currency: {currency}")
             
             # 1. Load parameters
             self.logger.info("Loading parameters...")
             params = await self._load_parameters_from_db(param_set_id)
-            self.logger.info(f"Parameters loaded: bond_ticker={params['bond_ticker']}, "
-                           f"rounding={params['beta_rounding']}, approach={params['cost_of_equity_approach']}")
+            self.logger.info(f"Parameters loaded: approach={params['cost_of_equity_approach']}, "
+                           f"rounding={params['beta_rounding']}")
             
-            # 2. Get bond index ticker from dataset
-            self.logger.info("Fetching bond index ticker from dataset...")
-            bond_ticker = await self._get_bond_ticker_from_dataset(dataset_id)
+            # 2. Fetch bond ticker for currency (e.g., AUD -> GACGB10 Index)
+            self.logger.info(f"Fetching bond ticker for currency {currency}...")
+            bond_ticker = await self._fetch_bond_ticker_by_currency(currency)
             if not bond_ticker:
-                bond_ticker = params['bond_ticker']
+                return {
+                    "status": "error",
+                    "results_count": 0,
+                    "message": f"No bond ticker found for currency {currency}"
+                }
             self.logger.info(f"Using bond ticker: {bond_ticker}")
             
-            # 3. Check if results already exist and clear them
-            existing_count = await self._count_existing_rf_results(bond_ticker, param_set_id)
-            if existing_count > 0:
-                self.logger.info(f"Risk-free rate results already exist ({existing_count} records) - clearing")
-                await self._clear_existing_rf_results(bond_ticker, param_set_id)
+            # 3. Fetch all company tickers for currency
+            self.logger.info(f"Fetching all company tickers for currency {currency}...")
+            all_tickers = await self._fetch_all_company_tickers_by_currency(currency)
+            if not all_tickers:
+                return {
+                    "status": "error",
+                    "results_count": 0,
+                    "message": f"No company tickers found for currency {currency}"
+                }
             
-            # 4. Fetch monthly bond yields (full history)
+            # 4. Clear existing results for all company tickers
+            existing_count = await self._clear_all_company_rf_results(all_tickers, param_set_id)
+            if existing_count > 0:
+                self.logger.info(f"Cleared {existing_count} existing Rf results for {len(all_tickers)} company tickers")
+            
+            # 5. Fetch monthly bond yields (full history)
             self.logger.info(f"Fetching monthly bond yields for {bond_ticker}...")
             monthly_rf_df = await self._fetch_monthly_bond_yields(bond_ticker)
             
             if monthly_rf_df.empty:
-                self.logger.warning(f"No monthly bond yield data found for {bond_ticker}")
                 return {
                     "status": "error",
                     "results_count": 0,
@@ -114,12 +140,12 @@ class RiskFreeRateCalculationService:
             
             self.logger.info(f"Fetched {len(monthly_rf_df)} monthly bond yield records")
             
-            # 5. Calculate ROLLING 12-month geometric mean for each calendar month
+            # 6. Calculate ROLLING 12-month geometric mean for each calendar month
             self.logger.info("Calculating rolling 12-month geometric mean (Rf_1Y_Raw)...")
             rf_monthly_df = self._calculate_rolling_geometric_mean(monthly_rf_df)
             self.logger.info(f"Calculated rolling geometric mean for {len(rf_monthly_df)} calendar months")
             
-            # 6. Calculate Calc Rf (apply approach logic: Fixed or Floating)
+            # 7. Calculate Calc Rf (apply approach logic: Fixed or Floating)
             self.logger.info(f"Calculating Calc Rf with approach ({params['cost_of_equity_approach']})...")
             rf_monthly_calc_df = self._calculate_calc_rf(
                 rf_monthly_df,
@@ -129,16 +155,28 @@ class RiskFreeRateCalculationService:
                 params['beta_rounding']
             )
             
-            # 7. Extract December values for each year
-            self.logger.info("Extracting December values for each year...")
-            rf_yearly_df = self._extract_december_values(rf_monthly_calc_df)
-            self.logger.info(f"Extracted {len(rf_yearly_df)} yearly values (December only)")
+            # 8. Fetch FY end dates for all company tickers
+            self.logger.info(f"Fetching FY end dates for {len(all_tickers)} company tickers...")
+            fy_dates_dict = await self._fetch_fy_end_dates_for_tickers(all_tickers)
+            self.logger.info(f"Fetched FY end dates for {len(fy_dates_dict)} tickers")
             
-            # 8. Format and store results
-            self.logger.info("Storing results in metrics_outputs...")
+            # 9. Extract Calc Rf using each ticker's specific FY end date
+            self.logger.info("Extracting Calc Rf by ticker-specific FY end dates...")
+            rf_expanded_df = self._extract_rf_by_fy_end_date(rf_monthly_calc_df, fy_dates_dict)
+            
+            if rf_expanded_df.empty:
+                return {
+                    "status": "error",
+                    "results_count": 0,
+                    "message": "Failed to extract Calc Rf by FY end dates"
+                }
+            
+            self.logger.info(f"Extracted {len(rf_expanded_df)} Calc Rf values for company tickers")
+            
+            # 10. Format and store results
+            self.logger.info("Formatting and storing results in metrics_outputs...")
             results_to_store = self._format_results_for_storage(
-                rf_yearly_df,
-                bond_ticker,
+                rf_expanded_df,
                 dataset_id,
                 param_set_id
             )
@@ -147,14 +185,14 @@ class RiskFreeRateCalculationService:
             stored_count = await self._store_results_raw_sql(results_to_store)
             await self.session.commit()
             
-            self.logger.info(f"Risk-free rate calculation complete: {stored_count} results stored for {bond_ticker}")
+            self.logger.info(f"Risk-free rate calculation complete: {stored_count} results stored for company tickers")
             
             return {
                 "status": "success",
                 "results_count": stored_count,
-                "message": f"Calculated risk-free rate for {bond_ticker} using rolling 12-month geometric mean ({stored_count} total records)"
+                "message": f"Calculated Calc Rf for {len(all_tickers)} tickers using ticker-specific FY end dates ({stored_count} total records)"
             }
-            
+        
         except Exception as e:
             self.logger.error(f"Risk-free rate calculation failed: {e}", exc_info=True)
             return {
@@ -162,7 +200,7 @@ class RiskFreeRateCalculationService:
                 "results_count": 0,
                 "message": f"Calculation failed: {str(e)}"
             }
-    
+
     async def _load_parameters_from_db(self, param_set_id: UUID) -> dict:
         """Load calculation parameters from database (from param_overrides JSONB)."""
         try:
@@ -267,6 +305,76 @@ class RiskFreeRateCalculationService:
             return deleted
         except Exception as e:
             self.logger.error(f"Failed to clear existing results: {e}")
+            raise
+
+    async def _fetch_bond_ticker_by_currency(self, currency: str) -> str:
+        """Fetch bond ticker for a given currency from fundamentals."""
+        try:
+            query = text("""
+                SELECT DISTINCT ticker
+                FROM cissa.fundamentals
+                WHERE metric_name = 'RISK_FREE_RATE'
+                AND currency = :currency
+                LIMIT 1
+            """)
+            
+            result = await self.session.execute(query, {"currency": currency})
+            row = result.fetchone()
+            
+            if row:
+                ticker = row[0]
+                self.logger.info(f"Found bond ticker for currency {currency}: {ticker}")
+                return ticker
+            else:
+                self.logger.warning(f"No bond ticker found for currency {currency}")
+                return None
+        except Exception as e:
+            self.logger.error(f"Failed to fetch bond ticker by currency: {e}")
+            raise
+    
+    async def _fetch_all_company_tickers_by_currency(self, currency: str) -> list:
+        """Fetch all company tickers for a given currency."""
+        try:
+            query = text("""
+                SELECT DISTINCT ticker
+                FROM cissa.companies
+                WHERE currency = :currency
+                ORDER BY ticker
+            """)
+            
+            result = await self.session.execute(query, {"currency": currency})
+            rows = result.fetchall()
+            tickers = [row[0] for row in rows]
+            
+            self.logger.info(f"Fetched {len(tickers)} company tickers for currency {currency}")
+            return tickers
+        except Exception as e:
+            self.logger.error(f"Failed to fetch company tickers by currency: {e}")
+            raise
+    
+    async def _clear_all_company_rf_results(self, tickers: list, param_set_id: UUID) -> int:
+        """Delete existing Rf results for all company tickers before recalculation."""
+        try:
+            if not tickers:
+                return 0
+            
+            # Create placeholders for SQL IN clause
+            placeholders = ', '.join([f"'{ticker}'" for ticker in tickers])
+            
+            query = text(f"""
+                DELETE FROM cissa.metrics_outputs
+                WHERE ticker IN ({placeholders})
+                AND param_set_id = :param_set_id
+                AND output_metric_name = 'Calc Rf'
+            """)
+            
+            result = await self.session.execute(query, {"param_set_id": param_set_id})
+            
+            deleted = result.rowcount
+            self.logger.info(f"Deleted {deleted} existing Rf results for {len(tickers)} company tickers")
+            return deleted
+        except Exception as e:
+            self.logger.error(f"Failed to clear existing company results: {e}")
             raise
     
     async def _fetch_monthly_bond_yields(self, bond_ticker: str) -> pd.DataFrame:
@@ -429,18 +537,162 @@ class RiskFreeRateCalculationService:
         except Exception as e:
             self.logger.error(f"Failed to extract December values: {e}")
             raise
-    
+
+    async def _fetch_fy_end_dates_for_tickers(self, tickers: list) -> dict:
+        """
+        Fetch fiscal year end dates for all company tickers.
+        
+        Returns:
+            dict: {ticker: {fiscal_year: fy_period_date (date object)}}
+            Example: {'BHP AU Equity': {2002: date(2002, 6, 30), 2003: date(2003, 6, 30), ...}, ...}
+        """
+        try:
+            if not tickers:
+                return {}
+            
+            # Create placeholders for SQL IN clause
+            placeholders = ', '.join([f"'{ticker}'" for ticker in tickers])
+            
+            query = text(f"""
+                SELECT ticker, fiscal_year, fy_period_date
+                FROM cissa.fiscal_year_mapping
+                WHERE ticker IN ({placeholders})
+                ORDER BY ticker, fiscal_year
+            """)
+            
+            result = await self.session.execute(query)
+            rows = result.fetchall()
+            
+            # Build dictionary structure
+            fy_dates_dict = {}
+            for row in rows:
+                ticker, fiscal_year, fy_period_date = row
+                if ticker not in fy_dates_dict:
+                    fy_dates_dict[ticker] = {}
+                fy_dates_dict[ticker][int(fiscal_year)] = fy_period_date
+            
+            self.logger.info(f"Fetched FY end dates for {len(fy_dates_dict)} tickers with {sum(len(v) for v in fy_dates_dict.values())} total entries")
+            return fy_dates_dict
+            
+        except Exception as e:
+            self.logger.error(f"Failed to fetch FY end dates for tickers: {e}")
+            raise
+
+    def _extract_rf_by_fy_end_date(self, rf_monthly_calc_df: pd.DataFrame, fy_dates_dict: dict) -> pd.DataFrame:
+        """
+        Extract Calc Rf values using each ticker's specific FY end date.
+        
+        For each ticker and fiscal_year, extracts the Calc Rf value for the month matching the FY end date.
+        
+        Args:
+            rf_monthly_calc_df: DataFrame with columns [fiscal_year, fiscal_month, calc_rf]
+            fy_dates_dict: dict structure {ticker: {fiscal_year: fy_period_date}}
+        
+        Returns:
+            DataFrame with columns [ticker, fiscal_year, calc_rf]
+            Returns NULL for calc_rf if the required month has no data
+        """
+        try:
+            extracted_records = []
+            
+            for ticker, fy_years_dict in fy_dates_dict.items():
+                for fiscal_year, fy_period_date in fy_years_dict.items():
+                    # Extract month from the FY period date
+                    fy_month = fy_period_date.month
+                    
+                    # Find matching row in rf_monthly_calc_df
+                    matching_rows = rf_monthly_calc_df[
+                        (rf_monthly_calc_df['fiscal_year'] == fiscal_year) &
+                        (rf_monthly_calc_df['fiscal_month'] == fy_month)
+                    ]
+                    
+                    if not matching_rows.empty:
+                        calc_rf = float(matching_rows.iloc[0]['calc_rf'])
+                    else:
+                        # No data for this month - set to NULL
+                        calc_rf = None
+                    
+                    extracted_records.append({
+                        "ticker": ticker,
+                        "fiscal_year": int(fiscal_year),
+                        "calc_rf": calc_rf
+                    })
+            
+            result_df = pd.DataFrame(extracted_records)
+            
+            # Log statistics
+            total_records = len(result_df)
+            null_records = result_df['calc_rf'].isna().sum()
+            valid_records = total_records - null_records
+            
+            self.logger.info(f"Extracted {total_records} Calc Rf records by FY end date:")
+            self.logger.info(f"  - Valid records: {valid_records}")
+            self.logger.info(f"  - NULL records: {null_records}")
+            
+            return result_df
+            
+        except Exception as e:
+            self.logger.error(f"Failed to extract Calc Rf by FY end date: {e}")
+            raise
+
+    def _scaffold_and_replicate_calc_rf(self, rf_yearly_df: pd.DataFrame, all_tickers: list) -> pd.DataFrame:
+        """
+        Scaffold Calc Rf across all company tickers for all fiscal years.
+        
+        Creates a complete (ticker, fiscal_year) matrix by replicating the
+        bond index Calc Rf value to all company tickers.
+        
+        Input: rf_yearly_df with columns [fiscal_year, calc_rf] (one row per year)
+        Output: DataFrame with columns [fiscal_year, calc_rf, ticker] replicated to all tickers
+        
+        Example:
+          Input:  fiscal_year=2023, calc_rf=0.0525
+          Output: fiscal_year=2023, calc_rf=0.0525, ticker=BHP AU Equity
+                  fiscal_year=2023, calc_rf=0.0525, ticker=CBA AU Equity
+                  ... (500+ tickers)
+        """
+        try:
+            if rf_yearly_df.empty or not all_tickers:
+                self.logger.warning("No fiscal years or tickers to scaffold")
+                return pd.DataFrame()
+            
+            # Create scaffold: replicate each (fiscal_year, calc_rf) pair for all tickers
+            scaffolded_records = []
+            
+            for _, row in rf_yearly_df.iterrows():
+                fiscal_year = int(row['fiscal_year'])
+                calc_rf = float(row['calc_rf'])
+                
+                # Replicate this Calc Rf value to all company tickers
+                for ticker in all_tickers:
+                    scaffolded_records.append({
+                        "fiscal_year": fiscal_year,
+                        "calc_rf": calc_rf,
+                        "ticker": ticker
+                    })
+            
+            result_df = pd.DataFrame(scaffolded_records)
+            self.logger.info(f"Scaffolded Calc Rf to {len(result_df)} (ticker, fiscal_year) combinations")
+            self.logger.info(f"  - Fiscal years: {result_df['fiscal_year'].min()}-{result_df['fiscal_year'].max()}")
+            self.logger.info(f"  - Company tickers: {len(all_tickers)}")
+            
+            return result_df
+            
+        except Exception as e:
+            self.logger.error(f"Failed to scaffold and replicate Calc Rf: {e}")
+            raise
+
     def _format_results_for_storage(
         self,
         rf_df: pd.DataFrame,
-        bond_ticker: str,
         dataset_id: UUID,
         param_set_id: UUID
     ) -> list[dict]:
         """
         Format results for storage in metrics_outputs table.
         
-        Creates 1 row per fiscal year containing only the final Calc Rf metric.
+        Creates 1 row per (ticker, fiscal_year) containing only the final Calc Rf metric.
+        rf_df should have columns: [fiscal_year, calc_rf, ticker]
         Simple metadata structure: {"metric_level": "L1"}
         """
         try:
@@ -449,25 +701,26 @@ class RiskFreeRateCalculationService:
             for _, row in rf_df.iterrows():
                 fiscal_year = int(row['fiscal_year'])
                 calc_rf = float(row['calc_rf']) if pd.notna(row['calc_rf']) else None
+                ticker = str(row['ticker'])
                 
                 records.append({
                     "dataset_id": dataset_id,
                     "param_set_id": param_set_id,
-                    "ticker": bond_ticker,
+                    "ticker": ticker,
                     "fiscal_year": fiscal_year,
                     "output_metric_name": "Calc Rf",
                     "output_metric_value": calc_rf,
                     "metadata": {"metric_level": "L1"}
                 })
             
-            self.logger.info(f"Formatted {len(records)} records for storage ({len(rf_df)} years × 1 metric)")
+            self.logger.info(f"Formatted {len(records)} records for storage ({len(rf_df)} ticker-year combinations)")
             
             return records
             
         except Exception as e:
             self.logger.error(f"Failed to format results: {e}")
             raise
-    
+
     async def _store_results_raw_sql(self, results: list[dict]) -> int:
         """
         Store results using raw SQL with UPSERT logic.
