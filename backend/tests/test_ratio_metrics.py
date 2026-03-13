@@ -809,6 +809,115 @@ class TestRatioMetricsCalculator:
         # For 3Y window: min_years_required=3, base threshold=4, year_shift=1
         # Adjusted threshold = max(1, 4-1) = 3
         assert params["min_year_threshold"] == 3
+    
+    def test_econ_eq_mult_complex_ratio_query_generation(self):
+        """Test SQL query generation for Econ Eq Mult (both metrics_outputs with year-shift and ABS)"""
+        metric_def = MetricDefinition(
+            id="econ_eq_mult",
+            display_name="Economic Equity Multiple",
+            description="Test",
+            formula_type="complex_ratio",
+            numerator=MetricComponent(
+                metric_name="Calc Assets",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=True,
+                year_shift=1
+            ),
+            denominator=MetricComponent(
+                metric_name="Calc EE",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=True,
+                year_shift=1,
+                apply_absolute_value=True
+            ),
+            operation="divide",
+            null_handling="skip_year",
+            negative_handling="return_null"
+        )
+        
+        calc = RatioMetricsCalculator(metric_def, "1Y")
+        
+        tickers = ["BHP"]
+        dataset_id = UUID("12345678-1234-1234-1234-123456789012")
+        param_set_id = UUID("87654321-4321-4321-4321-210987654321")
+        
+        sql, params = calc.build_query(tickers, dataset_id, param_set_id)
+        
+        # Verify SQL structure
+        assert "numerator_raw" in sql
+        assert "numerator_shifted" in sql  # Year-shift applied to numerator
+        assert "numerator_rolling" in sql
+        assert "denominator_raw" in sql
+        assert "denominator_shifted" in sql  # Year-shift applied to denominator
+        assert "denominator_rolling" in sql
+        assert "FULL OUTER JOIN" in sql
+        
+        # Verify both use metrics_outputs
+        assert sql.count("cissa.metrics_outputs") >= 2
+        
+        # Verify column names from metrics_outputs
+        assert "output_metric_value" in sql
+        assert "output_metric_name" in sql
+        
+        # Verify year-shift logic is present for both
+        # Should have "fiscal_year + 1" for both numerator and denominator shifts
+        assert sql.count("fiscal_year + 1") >= 2
+        
+        # Verify ABS() is applied to denominator
+        assert "ABS(" in sql
+        
+        # Verify year_rank is calculated before year_shift
+        assert "ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank" in sql
+        
+        # Verify threshold is adjusted for year_shift
+        # For 1Y window: min_years_required=1, base threshold=2, year_shift=1
+        # Adjusted threshold = max(1, 2-1) = 1
+        assert params["min_year_threshold"] == 1
+        
+        # Verify parameters
+        assert params["dataset_id"] == str(dataset_id)
+        # param_set_id SHOULD be in params since both metrics are parameter_dependent
+        assert params["param_set_id"] == str(param_set_id)
+        assert params["numerator_metric"] == "Calc Assets"
+        assert params["denominator_metric"] == "Calc EE"
+        assert params["ticker_0"] == "BHP"
+    
+    def test_econ_eq_mult_3y_window_threshold_adjustment(self):
+        """Test that Econ Eq Mult threshold is correctly adjusted for 3Y window"""
+        metric_def = MetricDefinition(
+            id="econ_eq_mult",
+            display_name="Economic Equity Multiple",
+            description="Test",
+            formula_type="complex_ratio",
+            numerator=MetricComponent(
+                metric_name="Calc Assets",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=True,
+                year_shift=1
+            ),
+            denominator=MetricComponent(
+                metric_name="Calc EE",
+                metric_source=MetricSource.METRICS_OUTPUTS,
+                parameter_dependent=True,
+                year_shift=1,
+                apply_absolute_value=True
+            ),
+            operation="divide",
+            null_handling="skip_year",
+            negative_handling="return_null"
+        )
+        
+        calc = RatioMetricsCalculator(metric_def, "3Y")
+        
+        tickers = ["BHP"]
+        dataset_id = UUID("12345678-1234-1234-1234-123456789012")
+        param_set_id = UUID("87654321-4321-4321-4321-210987654321")
+        
+        sql, params = calc.build_query(tickers, dataset_id, param_set_id)
+        
+        # For 3Y window: min_years_required=3, base threshold=4, year_shift=1
+        # Adjusted threshold = max(1, 4-1) = 3
+        assert params["min_year_threshold"] == 3
 
 class TestRatioMetricsService:
     """Test service layer (requires async context)"""

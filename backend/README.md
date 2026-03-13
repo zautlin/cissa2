@@ -515,6 +515,7 @@ Calculate financial ratio metrics with rolling averages over temporal windows (1
 - `gw_intensity`: Goodwill Intensity = GOODWILL_Open (1-year shifted) / Revenue
 - `oa_intensity`: OA Intensity = Calc OA_Open (1-year shifted) / Revenue
 - `asset_intensity`: Asset Intensity = Calc Assets_Open (1-year shifted) / Revenue
+- `econ_eq_mult`: Economic Equity Multiple = Calc Assets_Open (1-year shifted) / ABS(Calc EE_Open (1-year shifted))
 
 **Temporal Window Definitions:**
 
@@ -1031,6 +1032,46 @@ Compare multiple companies' Asset Intensity:
 
 ```bash
 curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=asset_intensity&tickers=BHP%20AU%20Equity,RIO%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | python -m json.tool | head -60
+```
+
+---
+
+## Economic Equity Multiple (Econ Eq Mult)
+
+### Overview
+
+Economic Equity Multiple measures the relationship between total operating assets and economic equity (both at opening values). This metric uses year-shifted values from metrics_outputs for both numerator and denominator:
+
+- **Numerator**: `Calc Assets` from `cissa.metrics_outputs` table, **shifted by 1 year** (prior year's value represents opening total assets)
+- **Denominator**: `Calc EE` from `cissa.metrics_outputs` table, **shifted by 1 year**, with **absolute value applied** (prior year's opening equity, absolute value to handle negative equity)
+- **Formula**: Econ Eq Mult = Average(Assets_Opening) / ABS(Average(EE_Opening))
+
+This metric captures the leverage and capital structure by showing how much total capital (assets) supports each unit of economic equity. Both metrics are parameter-dependent, reflecting their calculation under specific parameter sets.
+
+### Econ Eq Mult Query Example
+
+Get 1-year Economic Equity Multiple for BHP AU Equity:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=econ_eq_mult&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y"
+```
+
+Get 3-year rolling average:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=econ_eq_mult&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=3Y"
+```
+
+Get 5-year rolling average:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=econ_eq_mult&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=5Y"
+```
+
+Compare multiple companies' Economic Equity Multiple:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=econ_eq_mult&tickers=BHP%20AU%20Equity,RIO%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y" | python -m json.tool | head -60
 ```
 
 ---
@@ -1912,19 +1953,20 @@ curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=etr&tickers=BHP%
 
 ### Complete Metrics Comparison (Extended - Including All Metrics)
 
-| Aspect | MB Ratio | ROEE | ROA | Profit Margin | Op Cost Margin | Non Op Cost Margin | XO Cost Margin | ETR | FA Intensity | GW Intensity | OA Intensity | Asset Intensity |
-|--------|----------|------|-----|---------------|----------------|-------------------|----------------|-----|--------------|--------------|--------------|-----------------|
-| **Purpose** | Valuation multiple | Return on equity | Return on assets | Profitability % | Operating efficiency | Financial efficiency | Extraordinary cost burden | Tax burden | Asset efficiency | Goodwill intensity | Operating asset efficiency | Total asset efficiency |
-| **Data Sources** | Both from metrics_outputs | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Both from fundamentals | metrics_outputs + fundamentals | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Complex (all 3 sources) | Both from fundamentals | Both from fundamentals | metrics_outputs + fundamentals | metrics_outputs + fundamentals |
-| **Numerator** | Market Cap | Profit | Profit | Profit | Operating Cost | Non-Operating Cost | Extraordinary Cost | Tax Cost | Fixed Assets (Open) | Goodwill (Open) | Operating Assets (Open) | Total Assets (Open) |
-| **Denominator** | Book Equity | Opening Equity | Opening Assets | Revenue | Revenue | Revenue | Revenue | ABS(PAT + XO Cost) | Revenue | Revenue | Revenue | Revenue |
-| **Operations** | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Composite: add + abs | Simple divide | Simple divide | Simple divide | Simple divide |
-| **Year Shift** | No | Yes (denom) | Yes (denom) | No | No | No | No | No | Yes (numer) | Yes (numer) | Yes (numer) | Yes (numer) |
-| **First Result** | 2003 (1Y), 2005 (3Y), etc. | Same | Same | Same | Same | Same | Same | Same | Same | Same | Same | Same |
-| **Typical Range** | 0.5 - 3.0 | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 0.2 (or 0-20%) | 0 - 0.1 (or 0-10%) | 0.15 - 0.45 | 0.3 - 2.0 | 0.0 - 0.5 | 0.2 - 1.5 | 0.3 - 2.0 |
-| **Interpretation** | Market vs book value | Profit per $ equity | Profit per $ assets | Profit per $ revenue | Operating cost per $ revenue | Non-op cost per $ revenue | Extraordinary cost per $ revenue | Tax per $ economic income | Fixed assets per $ revenue | Goodwill per $ revenue | Operating assets per $ revenue | Total assets per $ revenue |
-| **Better When** | Higher (premium) | Higher (better return) | Higher (efficient) | Higher (more profit) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) |
-| **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency | Overall profitability | Cost control & efficiency | Financing burden | Earnings quality & stability | Tax planning & compliance | Capital intensity analysis | Intangible asset intensity | Operational asset intensity | Total capital intensity |
+| Aspect | MB Ratio | ROEE | ROA | Profit Margin | Op Cost Margin | Non Op Cost Margin | XO Cost Margin | ETR | FA Intensity | GW Intensity | OA Intensity | Asset Intensity | Econ Eq Mult |
+|--------|----------|------|-----|---------------|----------------|-------------------|----------------|-----|--------------|--------------|--------------|-----------------|--------------|
+| **Purpose** | Valuation multiple | Return on equity | Return on assets | Profitability % | Operating efficiency | Financial efficiency | Extraordinary cost burden | Tax burden | Asset efficiency | Goodwill intensity | Operating asset efficiency | Total asset efficiency | Capital structure leverage |
+| **Data Sources** | Both from metrics_outputs | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Both from fundamentals | metrics_outputs + fundamentals | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Complex (all 3 sources) | Both from fundamentals | Both from fundamentals | metrics_outputs + fundamentals | metrics_outputs + fundamentals | Both from metrics_outputs |
+| **Numerator** | Market Cap | Profit | Profit | Profit | Operating Cost | Non-Operating Cost | Extraordinary Cost | Tax Cost | Fixed Assets (Open) | Goodwill (Open) | Operating Assets (Open) | Total Assets (Open) | Total Assets (Open) |
+| **Denominator** | Book Equity | Opening Equity | Opening Assets | Revenue | Revenue | Revenue | Revenue | ABS(PAT + XO Cost) | Revenue | Revenue | Revenue | Revenue | ABS(Economic Equity Open) |
+| **Operations** | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide | Composite: add + abs | Simple divide | Simple divide | Simple divide | Simple divide | Simple divide with ABS |
+| **Year Shift** | No | Yes (denom) | Yes (denom) | No | No | No | No | No | Yes (numer) | Yes (numer) | Yes (numer) | Yes (numer) | Yes (both) |
+| **ABS Applied** | No | No | No | No | No | No | No | Yes | No | No | No | No | Yes |
+| **First Result** | 2003 (1Y), 2005 (3Y), etc. | Same | Same | Same | Same | Same | Same | Same | Same | Same | Same | Same | Same |
+| **Typical Range** | 0.5 - 3.0 | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 1.0 (or 0-100%) | 0 - 0.2 (or 0-20%) | 0 - 0.1 (or 0-10%) | 0.15 - 0.45 | 0.3 - 2.0 | 0.0 - 0.5 | 0.2 - 1.5 | 0.3 - 2.0 | 0.5 - 4.0 |
+| **Interpretation** | Market vs book value | Profit per $ equity | Profit per $ assets | Profit per $ revenue | Operating cost per $ revenue | Non-op cost per $ revenue | Extraordinary cost per $ revenue | Tax per $ economic income | Fixed assets per $ revenue | Goodwill per $ revenue | Operating assets per $ revenue | Total assets per $ revenue | Assets per $ of equity |
+| **Better When** | Higher (premium) | Higher (better return) | Higher (efficient) | Higher (more profit) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (efficient) | Lower (less leverage) |
+| **Use Case** | Valuation analysis | Shareholder returns | Asset efficiency | Overall profitability | Cost control & efficiency | Financing burden | Earnings quality & stability | Tax planning & compliance | Capital intensity analysis | Intangible asset intensity | Operational asset intensity | Total capital intensity | Financial leverage analysis |
 
 ### Operating Cost Margin vs Profit Margin: Key Difference
 

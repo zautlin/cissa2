@@ -402,19 +402,23 @@ class RatioMetricsCalculator:
         else:
             # Simple denominator (e.g., ROEE: Calc EE with year shift, or FA Intensity: REVENUE with year shift)
             year_shift = denominator.year_shift or 0
+            apply_abs = denominator.apply_absolute_value or False
+            abs_wrapper = "ABS(" if apply_abs else ""
+            abs_closer = ")" if apply_abs else ""
             
             if denominator.metric_source == MetricSource.METRICS_OUTPUTS:
-                # Denominator from metrics_outputs (e.g., ROEE: Calc EE)
+                # Denominator from metrics_outputs (e.g., ROEE: Calc EE, or Econ Eq Mult: ABS(Calc EE))
                 param_filter = ""
                 if denominator.parameter_dependent:
                     param_filter = "\n                AND param_set_id = :param_set_id"
                 
-                denominator_cte = f"""
+                if year_shift != 0:
+                    denominator_cte = f"""
         denominator_raw AS (
             SELECT
                 ticker,
                 fiscal_year,
-                output_metric_value
+                {abs_wrapper}output_metric_value{abs_closer} AS denominator_raw_value
             FROM cissa.metrics_outputs
             WHERE dataset_id = :dataset_id{param_filter}
                 AND output_metric_name = :denominator_metric
@@ -424,48 +428,14 @@ class RatioMetricsCalculator:
             SELECT
                 ticker,
                 fiscal_year + {year_shift} AS fiscal_year,
-                output_metric_value AS ee_open_value
+                denominator_raw_value
             FROM denominator_raw
         ),
         denominator_rolling AS (
             SELECT
                 ticker,
                 fiscal_year,
-                AVG(ee_open_value) 
-                    OVER (
-                        PARTITION BY ticker 
-                        ORDER BY fiscal_year 
-                        {self.rows_between}
-                    ) AS denominator_value
-            FROM denominator_shifted
-        )
-        """
-            else:
-                # Denominator from fundamentals (e.g., FA Intensity: REVENUE)
-                if year_shift != 0:
-                    denominator_cte = f"""
-        denominator_raw AS (
-            SELECT
-                ticker,
-                fiscal_year,
-                numeric_value
-            FROM cissa.fundamentals
-            WHERE dataset_id = :dataset_id
-                AND metric_name = :denominator_metric
-                AND ticker IN ({ticker_placeholders})
-        ),
-        denominator_shifted AS (
-            SELECT
-                ticker,
-                fiscal_year + {year_shift} AS fiscal_year,
-                numeric_value AS revenue_value
-            FROM denominator_raw
-        ),
-        denominator_rolling AS (
-            SELECT
-                ticker,
-                fiscal_year,
-                AVG(revenue_value) 
+                AVG(denominator_raw_value) 
                     OVER (
                         PARTITION BY ticker 
                         ORDER BY fiscal_year 
@@ -480,7 +450,66 @@ class RatioMetricsCalculator:
             SELECT
                 ticker,
                 fiscal_year,
-                numeric_value
+                {abs_wrapper}output_metric_value{abs_closer} AS denominator_raw_value
+            FROM cissa.metrics_outputs
+            WHERE dataset_id = :dataset_id{param_filter}
+                AND output_metric_name = :denominator_metric
+                AND ticker IN ({ticker_placeholders})
+        ),
+        denominator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(denominator_raw_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS denominator_value
+            FROM denominator_raw
+        )
+        """
+            else:
+                # Denominator from fundamentals (e.g., FA Intensity: REVENUE, or future ABS(metric))
+                if year_shift != 0:
+                    denominator_cte = f"""
+        denominator_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                {abs_wrapper}numeric_value{abs_closer} AS denominator_raw_value
+            FROM cissa.fundamentals
+            WHERE dataset_id = :dataset_id
+                AND metric_name = :denominator_metric
+                AND ticker IN ({ticker_placeholders})
+        ),
+        denominator_shifted AS (
+            SELECT
+                ticker,
+                fiscal_year + {year_shift} AS fiscal_year,
+                denominator_raw_value
+            FROM denominator_raw
+        ),
+        denominator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(denominator_raw_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS denominator_value
+            FROM denominator_shifted
+        )
+        """
+                else:
+                    denominator_cte = f"""
+        denominator_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                {abs_wrapper}numeric_value{abs_closer} AS denominator_raw_value
             FROM cissa.fundamentals
             WHERE dataset_id = :dataset_id
                 AND metric_name = :denominator_metric
@@ -490,7 +519,7 @@ class RatioMetricsCalculator:
             SELECT
                 ticker,
                 fiscal_year,
-                AVG(numeric_value) 
+                AVG(denominator_raw_value) 
                     OVER (
                         PARTITION BY ticker 
                         ORDER BY fiscal_year 

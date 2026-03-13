@@ -256,6 +256,28 @@
           "operation": "divide",
           "null_handling": "skip_year",
           "negative_handling": "return_null"
+        },
+        {
+          "id": "econ_eq_mult",
+          "display_name": "Economic Equity Multiple",
+          "description": "Economic Equity Multiple (Calc Assets Open / ABS(Calc EE Open))",
+          "formula_type": "complex_ratio",
+          "numerator": {
+            "metric_name": "Calc Assets",
+            "metric_source": "metrics_outputs",
+            "parameter_dependent": true,
+            "year_shift": 1
+          },
+          "denominator": {
+            "metric_name": "Calc EE",
+            "metric_source": "metrics_outputs",
+            "parameter_dependent": true,
+            "year_shift": 1,
+            "apply_absolute_value": true
+          },
+          "operation": "divide",
+          "null_handling": "skip_year",
+          "negative_handling": "return_null"
         }
       ]
     }
