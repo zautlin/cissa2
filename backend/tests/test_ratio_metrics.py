@@ -443,6 +443,10 @@ class TestRatioMetricsCalculator:
         # The shifted CTE should have "fiscal_year + 1" for the numerator
         assert "fiscal_year + 1" in sql
         
+        # Verify year_rank is calculated before year_shift (in numerator_raw)
+        # This ensures the threshold filtering works correctly with shifted data
+        assert "ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank" in sql
+        
         # Verify parameters
         assert params["dataset_id"] == str(dataset_id)
         # param_set_id should NOT be in params since both metrics have parameter_dependent=False
