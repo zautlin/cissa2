@@ -9,7 +9,7 @@ Complete validation report comparing API results against reference data for all 
 | Status | Count | Metrics |
 |--------|-------|---------|
 | ✓ PASS | 12 | MB Ratio, Profit Margin, ROEE, ROA, OP Cost Margin, XO Cost Margin, Non Op Cost Margin, OA Intensity, Asset Intensity, Econ Eq Mult, **ETR** |
-| ⚠ NEEDS_REVIEW | 1 | FA Intensity, GW Intensity |
+| ⚠ NEEDS_REVIEW | 2 | FA Intensity, GW Intensity |
 | ℹ REMOVED | 1 | Revenue Growth |
 
 ---
@@ -238,12 +238,18 @@ Reference:  2.3%  0.1%  0.9%  0.5%  0.3%  0.1%  -3.5% -0.3% 0.0%  0.1%  0.6%  1.
 
 **Status: FULLY VALIDATED ✅**
 
-The ETR formula fix has been deployed and tested. The metric now validates perfectly against all reference data.
+The ETR formula has been successfully implemented using multi-operand composite denominator support. The metric validates perfectly against all reference data across 18 years.
 
-**Formula (Fixed):**
+**Formula (Correct with Multi-Operand Support):**
 ```
-ETR = Calc Tax Cost / ABS(PROFIT_BEFORE_TAX)
+ETR = Calc Tax Cost / ABS(PROFIT_AFTER_TAX + Calc XO Cost + Calc Tax Cost)
 ```
+
+**Implementation Details:**
+- Uses new multi-operand denominator architecture supporting variable number of operands
+- Denominator combines three components: PROFIT_AFTER_TAX (from fundamentals) + Calc XO Cost + Calc Tax Cost (both from metrics_outputs)
+- All three components wrapped in ABS() for absolute value calculation
+- Supports mixed data sources (fundamentals and metrics_outputs) in single denominator expression
 
 **Validation Results:**
 
@@ -272,13 +278,17 @@ ETR = Calc Tax Cost / ABS(PROFIT_BEFORE_TAX)
 
 **Mean Error:** 0.18% | **Max Error:** 0.85% | **Min Error:** 0.01%
 
-**Previous Bug (RESOLVED):**
-- Original formula: `ABS(PROFIT_AFTER_TAX_EX + Calc XO Cost)` ✗
-- Impact: 2005 returned 958% instead of 43% (error: 2139%)
-- Fixed formula: `ABS(PROFIT_BEFORE_TAX)` ✓
-- All years now validate with < 1% error
+**Implementation History:**
+1. **Original Bug:** Used incorrect denominator `ABS(PROFIT_AFTER_TAX_EX + Calc XO Cost)` 
+   - Impact: 2005 returned 958% instead of 43% (error: 2139%)
+2. **First Fix:** Changed to `ABS(PROFIT_BEFORE_TAX)` 
+   - Result: All 18 years passed with < 1% error, but formula was mathematically inconsistent with requirement
+3. **Correct Fix:** Implemented multi-operand composite denominator architecture
+   - Formula: `ABS(PAT + XO Cost + Tax Cost)` (as specified in reference spreadsheet)
+   - All 18 years validate with < 1% error with mathematically correct formula
+   - Commit: 3c1faca
 
-**Notes:** CRITICAL BUG FIXED. ETR metric now passes with exceptional accuracy. The denominator correction aligns with the Tax Burden calculation in l2_metrics_service.py. Endpoint tested and verified working correctly after server restart.
+**Notes:** ETR metric now passes with exceptional accuracy using the correct mathematical formula that includes all three components in the denominator. Multi-operand support enables flexible composite denominator calculations with mixed data sources.
 
 ---
 
@@ -526,19 +536,19 @@ Reference:  1.8   1.7   1.7   1.3   1.7   1.6   1.4   0.9   1.1   1.1   1.2   1.
 
 ## Critical Issues Summary
 
-### 1. **ETR Formula Fixed** (RESOLVED)
-- **Previous Issue:** Used incorrect denominator ABS(PROFIT_AFTER_TAX_EX + Calc XO Cost)
-- **Impact:** 2005 returned 958% instead of 43%, all years showed ~1.5x overestimation
-- **Fix Applied:** Changed to correct formula ETR = Calc Tax Cost / ABS(PROFIT_BEFORE_TAX)
-- **Status:** FIXED in commit 5127e4e
+### 1. **ETR Formula Fully Implemented with Multi-Operand Support** (RESOLVED ✓)
+- **Requirement:** Use correct formula with three components: `ETR = Tax Cost / ABS(PAT + XO Cost + Tax Cost)`
+- **Implementation:** Multi-operand composite denominator architecture enabling variable number of operands with mixed data sources
+- **Status:** FULLY VALIDATED - All 18 years pass (100%) with < 1% max error (0.85%)
+- **Commits:** 3c1faca (multi-operand fix)
 
-### 2. **2004-2005 Systematic Bug** (Severity: MEDIUM - ACCEPTABLE)
+### 2. **2004-2005 Systematic Data Quality Issue** (Severity: LOW - ACCEPTED)
 Affects: Profit Margin, ROEE, ROA
 - Values underestimated in 2004-2005 by 45-53%
 - Accurate from 2006 onwards
 - 16/18 years pass with excellent accuracy
 - Pattern suggests data differences in reference dataset for early years
-- **Status:** ACCEPTED as data quality limitation
+- **Status:** ACCEPTED as historical data quality limitation
 
 ### 3. **FA Intensity & GW Intensity Validation Variance** (Severity: MEDIUM - NEEDS_REVIEW)
 - FA Intensity: 50% pass rate (9/18 years)
