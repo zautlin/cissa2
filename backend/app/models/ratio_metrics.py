@@ -32,6 +32,20 @@ class MetricSource(str, Enum):
     FUNDAMENTALS = "fundamentals"
 
 
+class OperandComponent(BaseModel):
+    """Represents an operand in a composite metric operation"""
+    metric_name: str = Field(..., description="Name of the operand metric")
+    metric_source: MetricSource = Field(
+        default=MetricSource.METRICS_OUTPUTS,
+        description="Source table (metrics_outputs or fundamentals)"
+    )
+    parameter_dependent: bool = Field(
+        default=False,
+        description="Whether metric depends on param_set_id"
+    )
+    operation: str = Field(..., description="Operation to apply (add, subtract)")
+
+
 class MetricComponent(BaseModel):
     """Represents numerator or denominator component in a ratio"""
     metric_name: str = Field(..., description="Name of the metric")
@@ -48,25 +62,31 @@ class MetricComponent(BaseModel):
         description="Number of years to shift (for year-shift ratios like ROEE)"
     )
     # Composite operation support (for metrics like Effective Tax Rate)
-    operation: Optional[str] = Field(
+    operands: Optional[List[OperandComponent]] = Field(
         default=None,
-        description="Operation to combine with operand_metric (e.g., 'add', 'subtract'). If set, operand_metric_name and operand_metric_source are required."
-    )
-    operand_metric_name: Optional[str] = Field(
-        default=None,
-        description="Second metric name for composite operations (e.g., 'Calc XO Cost' in ETR denominator)"
-    )
-    operand_metric_source: Optional[MetricSource] = Field(
-        default=None,
-        description="Source of the operand metric"
-    )
-    operand_parameter_dependent: Optional[bool] = Field(
-        default=False,
-        description="Whether operand metric depends on param_set_id"
+        description="List of operands for composite operations (e.g., ['+Calc XO Cost', '+Calc Tax Cost'])"
     )
     apply_absolute_value: bool = Field(
         default=False,
         description="Whether to apply ABS() to the final component value (for composite results)"
+    )
+    
+    # Legacy single-operand support (deprecated, for backward compatibility)
+    operation: Optional[str] = Field(
+        default=None,
+        description="[DEPRECATED] Operation to combine with operand_metric (use operands list instead)"
+    )
+    operand_metric_name: Optional[str] = Field(
+        default=None,
+        description="[DEPRECATED] Second metric name (use operands list instead)"
+    )
+    operand_metric_source: Optional[MetricSource] = Field(
+        default=None,
+        description="[DEPRECATED] Source of the operand metric (use operands list instead)"
+    )
+    operand_parameter_dependent: Optional[bool] = Field(
+        default=False,
+        description="[DEPRECATED] Whether operand metric depends on param_set_id (use operands list instead)"
     )
 
 

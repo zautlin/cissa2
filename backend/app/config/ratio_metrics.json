@@ -129,7 +129,7 @@
       {
         "id": "etr",
         "display_name": "Effective Tax Rate",
-        "description": "Effective Tax Rate (Calc Tax Cost / ABS(PROFIT_BEFORE_TAX))",
+        "description": "Effective Tax Rate (Calc Tax Cost / ABS(PROFIT_AFTER_TAX + Calc XO Cost + Calc Tax Cost))",
         "formula_type": "complex_ratio",
         "numerator": {
           "metric_name": "Calc Tax Cost",
@@ -138,10 +138,24 @@
           "year_shift": 0
         },
         "denominator": {
-          "metric_name": "PROFIT_BEFORE_TAX",
+          "metric_name": "PROFIT_AFTER_TAX",
           "metric_source": "fundamentals",
           "parameter_dependent": false,
           "year_shift": 0,
+          "operands": [
+            {
+              "metric_name": "Calc XO Cost",
+              "metric_source": "metrics_outputs",
+              "parameter_dependent": true,
+              "operation": "add"
+            },
+            {
+              "metric_name": "Calc Tax Cost",
+              "metric_source": "metrics_outputs",
+              "parameter_dependent": true,
+              "operation": "add"
+            }
+          ],
           "apply_absolute_value": true
         },
         "operation": "divide",
