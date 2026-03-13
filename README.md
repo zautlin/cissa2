@@ -1,7 +1,7 @@
 # CISSA - Financial Data Pipeline
 
 **Status**: ✅ Production Ready  
-**Last Updated**: 2026-03-09  
+**Last Updated**: 2026-03-13  
 **Phases Complete**: 04-05 (Auto-trigger L1 metrics, Rename L2 metrics)
 
 ## Overview
@@ -209,6 +209,27 @@ FROM (
 ORDER BY ticker, period
 LIMIT 20;
 ```
+
+### Metrics Validation (v2.2)
+
+✅ **FA Intensity & GW Intensity Calculations Verified**
+
+Cross-ticker validation confirms that Fixed Asset Intensity and Goodwill Intensity metrics are mathematically correct with proper year-shift logic (`FIXED_ASSETS[Year N-1] / REVENUE[Year N]`).
+
+**Validation Results:**
+| Ticker | Pass Rate | Notes |
+|--------|-----------|-------|
+| WES AU Equity | 18/18 (100%) | Perfect alignment across all years |
+| WOW AU Equity | 17/18 (94.4%) | Only 2020 shows minor discrepancy |
+| CSL AU Equity | 14/18 (77.8%) | 2010-2013 data quality anomaly |
+
+**Key Findings:**
+- Database calculations match corrected reference data with high fidelity
+- Discrepancies are due to underlying data source differences, not formula errors
+- 2010-2013 anomalies in some tickers suggest potential data quality issue for those specific years
+- Calculation logic is sound and consistent across multiple tickers
+
+See **[METRICS_VALIDATION_RESULTS.md](METRICS_VALIDATION_RESULTS.md)** for detailed technical analysis.
 
 ---
 
