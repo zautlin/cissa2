@@ -260,7 +260,47 @@ class RatioMetricsCalculator:
             if numerator.parameter_dependent:
                 param_filter = "\n                AND param_set_id = :param_set_id"
             
-            numerator_cte = f"""
+            year_shift = numerator.year_shift or 0
+            
+            if year_shift != 0:
+                # When year_shift is applied to metrics_outputs numerator, calculate year_rank BEFORE shifting
+                # so the threshold filtering works correctly
+                numerator_cte = f"""
+        numerator_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                output_metric_value AS numerator_raw_value,
+                ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank
+            FROM cissa.metrics_outputs
+            WHERE dataset_id = :dataset_id{param_filter}
+                AND output_metric_name = :numerator_metric
+                AND ticker IN ({ticker_placeholders})
+        ),
+        numerator_shifted AS (
+            SELECT
+                ticker,
+                fiscal_year + {year_shift} AS fiscal_year,
+                numerator_raw_value,
+                year_rank
+            FROM numerator_raw
+        ),
+        numerator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(numerator_raw_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS numerator_value,
+                year_rank
+            FROM numerator_shifted
+        )
+        """
+            else:
+                numerator_cte = f"""
         numerator_raw AS (
             SELECT
                 ticker,

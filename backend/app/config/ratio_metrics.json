@@ -194,26 +194,47 @@
          "null_handling": "skip_year",
          "negative_handling": "return_null"
        },
-       {
-         "id": "gw_intensity",
-         "display_name": "Goodwill Intensity",
-         "description": "Goodwill Intensity (GOODWILL Open / Revenue)",
-         "formula_type": "complex_ratio",
-         "numerator": {
-           "metric_name": "GOODWILL",
-           "metric_source": "fundamentals",
-           "parameter_dependent": false,
-           "year_shift": 1
-         },
-         "denominator": {
-           "metric_name": "REVENUE",
-           "metric_source": "fundamentals",
-           "parameter_dependent": false,
-           "year_shift": 0
-         },
-         "operation": "divide",
-         "null_handling": "skip_year",
-         "negative_handling": "return_null"
-       }
-     ]
-   }
+        {
+          "id": "gw_intensity",
+          "display_name": "Goodwill Intensity",
+          "description": "Goodwill Intensity (GOODWILL Open / Revenue)",
+          "formula_type": "complex_ratio",
+          "numerator": {
+            "metric_name": "GOODWILL",
+            "metric_source": "fundamentals",
+            "parameter_dependent": false,
+            "year_shift": 1
+          },
+          "denominator": {
+            "metric_name": "REVENUE",
+            "metric_source": "fundamentals",
+            "parameter_dependent": false,
+            "year_shift": 0
+          },
+          "operation": "divide",
+          "null_handling": "skip_year",
+          "negative_handling": "return_null"
+        },
+        {
+          "id": "oa_intensity",
+          "display_name": "OA Intensity",
+          "description": "Operating Assets Intensity (Calc OA Open / Revenue)",
+          "formula_type": "complex_ratio",
+          "numerator": {
+            "metric_name": "Calc OA",
+            "metric_source": "metrics_outputs",
+            "parameter_dependent": true,
+            "year_shift": 1
+          },
+          "denominator": {
+            "metric_name": "REVENUE",
+            "metric_source": "fundamentals",
+            "parameter_dependent": false,
+            "year_shift": 0
+          },
+          "operation": "divide",
+          "null_handling": "skip_year",
+          "negative_handling": "return_null"
+        }
+      ]
+    }
