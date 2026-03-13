@@ -392,6 +392,65 @@ class TestRatioMetricsCalculator:
         # Verify param_set_id is in SQL (for numerator from metrics_outputs)
         assert "param_set_id = :param_set_id" in sql
 
+    def test_fa_intensity_complex_ratio_query_generation(self):
+        """Test SQL query generation for Fixed Asset Intensity (complex_ratio with year-shift)"""
+        metric_def = MetricDefinition(
+            id="fa_intensity",
+            display_name="Fixed Asset Intensity",
+            description="Test",
+            formula_type="complex_ratio",
+            numerator=MetricComponent(
+                metric_name="FIXED_ASSETS",
+                metric_source=MetricSource.FUNDAMENTALS,
+                parameter_dependent=False,
+                year_shift=1
+            ),
+            denominator=MetricComponent(
+                metric_name="REVENUE",
+                metric_source=MetricSource.FUNDAMENTALS,
+                parameter_dependent=False,
+                year_shift=0
+            ),
+            operation="divide",
+            null_handling="skip_year",
+            negative_handling="return_null"
+        )
+        
+        calc = RatioMetricsCalculator(metric_def, "1Y")
+        
+        tickers = ["BHP"]
+        dataset_id = UUID("12345678-1234-1234-1234-123456789012")
+        param_set_id = UUID("87654321-4321-4321-4321-210987654321")
+        
+        sql, params = calc.build_query(tickers, dataset_id, param_set_id)
+        
+        # Verify SQL structure
+        assert "numerator_raw" in sql
+        assert "numerator_shifted" in sql  # Year-shift applied to numerator
+        assert "numerator_rolling" in sql
+        assert "denominator_raw" in sql
+        assert "denominator_rolling" in sql
+        assert "FULL OUTER JOIN" in sql
+        
+        # Verify both numerator and denominator use fundamentals
+        assert sql.count("cissa.fundamentals") >= 2
+        
+        # Verify column names from fundamentals
+        assert "numeric_value" in sql
+        assert "metric_name" in sql
+        
+        # Verify year-shift logic is present for numerator
+        # The shifted CTE should have "fiscal_year + 1" for the numerator
+        assert "fiscal_year + 1" in sql
+        
+        # Verify parameters
+        assert params["dataset_id"] == str(dataset_id)
+        # param_set_id should NOT be in params since both metrics have parameter_dependent=False
+        assert "param_set_id" not in params
+        assert params["numerator_metric"] == "FIXED_ASSETS"
+        assert params["denominator_metric"] == "REVENUE"
+        assert params["ticker_0"] == "BHP"
+
 class TestRatioMetricsService:
     """Test service layer (requires async context)"""
     

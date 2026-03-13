@@ -286,7 +286,44 @@ class RatioMetricsCalculator:
         )
         """
         else:  # fundamentals
-            numerator_cte = f"""
+            # Handle year_shift for numerator from fundamentals
+            year_shift = numerator.year_shift or 0
+            
+            if year_shift != 0:
+                numerator_cte = f"""
+        numerator_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                numeric_value AS numerator_raw_value
+            FROM cissa.fundamentals
+            WHERE dataset_id = :dataset_id
+                AND metric_name = :numerator_metric
+                AND ticker IN ({ticker_placeholders})
+        ),
+        numerator_shifted AS (
+            SELECT
+                ticker,
+                fiscal_year + {year_shift} AS fiscal_year,
+                numerator_raw_value
+            FROM numerator_raw
+        ),
+        numerator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(numerator_raw_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS numerator_value,
+                ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank
+            FROM numerator_shifted
+        )
+        """
+            else:
+                numerator_cte = f"""
         numerator_raw AS (
             SELECT
                 ticker,
@@ -319,17 +356,23 @@ class RatioMetricsCalculator:
                 ticker_placeholders, ticker_params, denominator
             )
         else:
-            # Simple denominator (e.g., ROEE: Calc EE with year shift)
-            year_shift = denominator.year_shift
-            denominator_cte = f"""
+            # Simple denominator (e.g., ROEE: Calc EE with year shift, or FA Intensity: REVENUE with year shift)
+            year_shift = denominator.year_shift or 0
+            
+            if denominator.metric_source == MetricSource.METRICS_OUTPUTS:
+                # Denominator from metrics_outputs (e.g., ROEE: Calc EE)
+                param_filter = ""
+                if denominator.parameter_dependent:
+                    param_filter = "\n                AND param_set_id = :param_set_id"
+                
+                denominator_cte = f"""
         denominator_raw AS (
             SELECT
                 ticker,
                 fiscal_year,
                 output_metric_value
             FROM cissa.metrics_outputs
-            WHERE dataset_id = :dataset_id
-                AND param_set_id = :param_set_id
+            WHERE dataset_id = :dataset_id{param_filter}
                 AND output_metric_name = :denominator_metric
                 AND ticker IN ({ticker_placeholders})
         ),
@@ -351,6 +394,65 @@ class RatioMetricsCalculator:
                         {self.rows_between}
                     ) AS denominator_value
             FROM denominator_shifted
+        )
+        """
+            else:
+                # Denominator from fundamentals (e.g., FA Intensity: REVENUE)
+                if year_shift != 0:
+                    denominator_cte = f"""
+        denominator_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                numeric_value
+            FROM cissa.fundamentals
+            WHERE dataset_id = :dataset_id
+                AND metric_name = :denominator_metric
+                AND ticker IN ({ticker_placeholders})
+        ),
+        denominator_shifted AS (
+            SELECT
+                ticker,
+                fiscal_year + {year_shift} AS fiscal_year,
+                numeric_value AS revenue_value
+            FROM denominator_raw
+        ),
+        denominator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(revenue_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS denominator_value
+            FROM denominator_shifted
+        )
+        """
+                else:
+                    denominator_cte = f"""
+        denominator_raw AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                numeric_value
+            FROM cissa.fundamentals
+            WHERE dataset_id = :dataset_id
+                AND metric_name = :denominator_metric
+                AND ticker IN ({ticker_placeholders})
+        ),
+        denominator_rolling AS (
+            SELECT
+                ticker,
+                fiscal_year,
+                AVG(numeric_value) 
+                    OVER (
+                        PARTITION BY ticker 
+                        ORDER BY fiscal_year 
+                        {self.rows_between}
+                    ) AS denominator_value
+            FROM denominator_raw
         )
         """
         
