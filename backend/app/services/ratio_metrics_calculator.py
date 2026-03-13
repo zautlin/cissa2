@@ -480,10 +480,16 @@ class RatioMetricsCalculator:
         ORDER BY m.ticker, m.fiscal_year;
         """
         
+        # Calculate adjusted threshold if numerator has year_shift
+        # When numerator is year-shifted forward, we need to reduce the threshold
+        # to account for the shifted data starting earlier than the original data
+        numerator_year_shift = numerator.year_shift or 0
+        adjusted_threshold = max(1, (self.min_years_required + 1) - numerator_year_shift)
+        
         params = {
             "dataset_id": str(dataset_id),
             "numerator_metric": numerator.metric_name,
-            "min_year_threshold": self.min_years_required + 1,  # year_shift doesn't affect threshold, only data filtering
+            "min_year_threshold": adjusted_threshold,
             **ticker_params
         }
         

@@ -447,6 +447,11 @@ class TestRatioMetricsCalculator:
         # This ensures the threshold filtering works correctly with shifted data
         assert "ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY fiscal_year) AS year_rank" in sql
         
+        # Verify threshold is adjusted for year_shift
+        # For 1Y window: min_years_required=1, base threshold=2, year_shift=1
+        # Adjusted threshold = max(1, 2-1) = 1
+        assert params["min_year_threshold"] == 1
+        
         # Verify parameters
         assert params["dataset_id"] == str(dataset_id)
         # param_set_id should NOT be in params since both metrics have parameter_dependent=False
@@ -454,6 +459,42 @@ class TestRatioMetricsCalculator:
         assert params["numerator_metric"] == "FIXED_ASSETS"
         assert params["denominator_metric"] == "REVENUE"
         assert params["ticker_0"] == "BHP"
+    
+    def test_fa_intensity_3y_window_threshold_adjustment(self):
+        """Test that FA Intensity threshold is correctly adjusted for 3Y window"""
+        metric_def = MetricDefinition(
+            id="fa_intensity",
+            display_name="Fixed Asset Intensity",
+            description="Test",
+            formula_type="complex_ratio",
+            numerator=MetricComponent(
+                metric_name="FIXED_ASSETS",
+                metric_source=MetricSource.FUNDAMENTALS,
+                parameter_dependent=False,
+                year_shift=1
+            ),
+            denominator=MetricComponent(
+                metric_name="REVENUE",
+                metric_source=MetricSource.FUNDAMENTALS,
+                parameter_dependent=False,
+                year_shift=0
+            ),
+            operation="divide",
+            null_handling="skip_year",
+            negative_handling="return_null"
+        )
+        
+        calc = RatioMetricsCalculator(metric_def, "3Y")
+        
+        tickers = ["BHP"]
+        dataset_id = UUID("12345678-1234-1234-1234-123456789012")
+        param_set_id = UUID("87654321-4321-4321-4321-210987654321")
+        
+        sql, params = calc.build_query(tickers, dataset_id, param_set_id)
+        
+        # For 3Y window: min_years_required=3, base threshold=4, year_shift=1
+        # Adjusted threshold = max(1, 4-1) = 3
+        assert params["min_year_threshold"] == 3
 
 class TestRatioMetricsService:
     """Test service layer (requires async context)"""
