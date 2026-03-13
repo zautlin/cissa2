@@ -393,9 +393,12 @@ class RatioMetricsCalculator:
         )
         """
         
-        # Check if denominator is composite (has operand_metric_name)
-        if denominator.operation and denominator.operand_metric_name:
-            # Composite denominator (e.g., ETR: ABS(PAT_EX + Calc XO Cost))
+        # Check if denominator is composite (has operand_metric_name or operands list)
+        has_operands = denominator.operands is not None and len(denominator.operands) > 0
+        has_legacy_operand = denominator.operation is not None and denominator.operand_metric_name is not None
+        
+        if has_operands or has_legacy_operand:
+            # Composite denominator (e.g., ETR: ABS(PAT_EX + Calc XO Cost + Calc Tax Cost))
             denominator_cte = self._build_composite_denominator_cte(
                 ticker_placeholders, ticker_params, denominator
             )
@@ -566,16 +569,28 @@ class RatioMetricsCalculator:
         needs_param_set_id = (
             numerator.parameter_dependent or 
             denominator.parameter_dependent or 
-            (denominator.operation and denominator.operand_parameter_dependent)
+            (denominator.operation and denominator.operand_parameter_dependent) or
+            (denominator.operands is not None and any(op.parameter_dependent for op in denominator.operands))
         )
         if needs_param_set_id:
             params["param_set_id"] = str(param_set_id)
         
         # Add denominator metric names
-        if denominator.operation and denominator.operand_metric_name:
+        # Check if using new multi-operand format or legacy format
+        has_operands = denominator.operands is not None and len(denominator.operands) > 0
+        has_legacy_operand = denominator.operation is not None and denominator.operand_metric_name is not None
+        
+        if has_operands or has_legacy_operand:
             # Composite denominator
             params["denominator_metric"] = denominator.metric_name
-            params["operand_metric"] = denominator.operand_metric_name
+            
+            if has_operands and denominator.operands:
+                # New format: multiple operands
+                for i, operand in enumerate(denominator.operands):
+                    params[f"operand_metric_{i}"] = operand.metric_name
+            else:
+                # Legacy format: single operand
+                params["operand_metric_0"] = denominator.operand_metric_name or ""
         else:
             # Simple denominator
             params["denominator_metric"] = denominator.metric_name
@@ -589,41 +604,30 @@ class RatioMetricsCalculator:
         denominator: MetricComponent
     ) -> str:
         """
-        Build CTE for composite denominator (e.g., ABS(PAT_EX + Calc XO Cost)).
+        Build CTE for composite denominator (e.g., ABS(PAT + Calc XO Cost + Calc Tax Cost)).
         
         Handles:
         - Multiple metric sources (fundamentals + metrics_outputs)
-        - Composite operations (add, subtract)
+        - Multiple operands with composite operations (add, subtract)
         - Optional absolute value wrapping
+        
+        Supports both legacy single-operand format and new multi-operand format.
         """
-        if not denominator.operation:
-            raise ValueError("Composite denominator requires 'operation' to be set")
+        # Check if using new operands format or legacy format
+        has_operands = denominator.operands is not None and len(denominator.operands) > 0
+        has_legacy_operand = denominator.operation is not None and denominator.operand_metric_name is not None
         
-        operation = denominator.operation.lower()
+        if not has_operands and not has_legacy_operand:
+            raise ValueError("Composite denominator requires either 'operands' list or legacy 'operation'/'operand_metric_name'")
         
-        # Map operation to SQL operator
-        op_map = {
-            "add": "+",
-            "subtract": "-"
-        }
-        
-        if operation not in op_map:
-            raise ValueError(f"Unknown operation: {operation}. Must be one of: {', '.join(op_map.keys())}")
-        
-        sql_op = op_map[operation]
-        
-        # Determine main metric source (typically fundamentals in ETR case)
-        main_is_metrics_outputs = (denominator.metric_source == MetricSource.METRICS_OUTPUTS)
-        operand_is_metrics_outputs = (denominator.operand_metric_source == MetricSource.METRICS_OUTPUTS)
-        
-        # Build raw CTEs for both components
-        if main_is_metrics_outputs:
+        # Build main metric CTE
+        if denominator.metric_source == MetricSource.METRICS_OUTPUTS:
             main_cte = f"""
         denominator_main_raw AS (
-            SELECT
+             SELECT
                 ticker,
                 fiscal_year,
-                output_metric_value AS main_value
+                output_metric_value AS value_0
             FROM cissa.metrics_outputs
             WHERE dataset_id = :dataset_id
                 AND param_set_id = :param_set_id
@@ -636,55 +640,95 @@ class RatioMetricsCalculator:
             SELECT
                 ticker,
                 fiscal_year,
-                numeric_value AS main_value
+                numeric_value AS value_0
             FROM cissa.fundamentals
             WHERE dataset_id = :dataset_id
                 AND metric_name = :denominator_metric
                 AND ticker IN ({ticker_placeholders})
         )"""
         
-        if operand_is_metrics_outputs:
-            operand_param_filter = ""
-            if denominator.operand_parameter_dependent:
-                operand_param_filter = "\n                AND param_set_id = :param_set_id"
+        # Build operand CTEs
+        operand_ctes = []
+        operand_list: List[Any] = []
+        
+        if has_operands and denominator.operands:
+            operand_list = denominator.operands
+        elif has_legacy_operand:
+            # Convert legacy format to new format
+            class LegacyOperand:
+                def __init__(self, name: str, source: MetricSource, param_dep: bool, op: str):
+                    self.metric_name = name
+                    self.metric_source = source
+                    self.parameter_dependent = param_dep
+                    self.operation = op
             
-            operand_cte = f"""
-        denominator_operand_raw AS (
+            operand_name = denominator.operand_metric_name or ""
+            operand_source = denominator.operand_metric_source or MetricSource.METRICS_OUTPUTS
+            operand_param_dep = denominator.operand_parameter_dependent or False
+            operand_op = denominator.operation or "add"
+            
+            operand_list = [LegacyOperand(operand_name, operand_source, operand_param_dep, operand_op)]
+        
+        for i, operand in enumerate(operand_list):
+            if operand.metric_source == MetricSource.METRICS_OUTPUTS:
+                param_filter = ""
+                if operand.parameter_dependent:
+                    param_filter = "\n                AND param_set_id = :param_set_id"
+                
+                operand_cte = f"""
+        denominator_operand_{i}_raw AS (
             SELECT
                 ticker,
                 fiscal_year,
-                output_metric_value AS operand_value
+                output_metric_value AS value_{i+1}
             FROM cissa.metrics_outputs
-            WHERE dataset_id = :dataset_id{operand_param_filter}
-                AND output_metric_name = :operand_metric
+            WHERE dataset_id = :dataset_id{param_filter}
+                AND output_metric_name = :operand_metric_{i}
                 AND ticker IN ({ticker_placeholders})
         )"""
-        else:  # fundamentals
-            operand_cte = f"""
-        denominator_operand_raw AS (
+            else:  # fundamentals
+                operand_cte = f"""
+        denominator_operand_{i}_raw AS (
             SELECT
                 ticker,
                 fiscal_year,
-                numeric_value AS operand_value
+                numeric_value AS value_{i+1}
             FROM cissa.fundamentals
             WHERE dataset_id = :dataset_id
-                AND metric_name = :operand_metric
+                AND metric_name = :operand_metric_{i}
                 AND ticker IN ({ticker_placeholders})
         )"""
+            operand_ctes.append(operand_cte)
         
-        # Build combined CTE with operation and optional ABS
+        # Build the combined expression with all operands
+        # Start with main_value and apply operations in order
+        num_operands = len(operand_list)
+        combined_expression = "COALESCE(m.value_0, 0)"
+        
+        join_clauses = []
+        for i, operand in enumerate(operand_list):
+            op = operand.operation.lower()
+            
+            op_map = {"add": "+", "subtract": "-"}
+            if op not in op_map:
+                raise ValueError(f"Unknown operation: {op}. Must be one of: {', '.join(op_map.keys())}")
+            
+            sql_op = op_map[op]
+            combined_expression += f" {sql_op} COALESCE(o{i}.value_{i+1}, 0)"
+            join_clauses.append(f"LEFT JOIN denominator_operand_{i}_raw o{i} ON m.ticker = o{i}.ticker AND m.fiscal_year = o{i}.fiscal_year")
+        
+        # Wrap with ABS if needed
         abs_wrapper = "ABS(" if denominator.apply_absolute_value else ""
         abs_closer = ")" if denominator.apply_absolute_value else ""
         
         combined_cte = f"""
         denominator_combined AS (
             SELECT
-                COALESCE(m.ticker, o.ticker) AS ticker,
-                COALESCE(m.fiscal_year, o.fiscal_year) AS fiscal_year,
-                {abs_wrapper}COALESCE(m.main_value, 0) {sql_op} COALESCE(o.operand_value, 0){abs_closer} AS combined_value
+                m.ticker,
+                m.fiscal_year,
+                {abs_wrapper}{combined_expression}{abs_closer} AS combined_value
             FROM denominator_main_raw m
-            FULL OUTER JOIN denominator_operand_raw o
-                ON m.ticker = o.ticker AND m.fiscal_year = o.fiscal_year
+            {chr(10).join(join_clauses)}
         ),
         denominator_rolling AS (
             SELECT
@@ -700,4 +744,5 @@ class RatioMetricsCalculator:
         )
         """
         
-        return f"{main_cte},\n{operand_cte},\n{combined_cte}"
+        all_ctes = [main_cte] + operand_ctes + [combined_cte]
+        return ",\n".join(all_ctes)
