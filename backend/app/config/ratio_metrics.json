@@ -267,27 +267,57 @@
           "null_handling": "skip_year",
           "negative_handling": "return_null"
         },
-        {
-          "id": "econ_eq_mult",
-          "display_name": "Economic Equity Multiple",
-          "description": "Economic Equity Multiple (Calc Assets Open / ABS(Calc EE Open))",
-          "formula_type": "complex_ratio",
-          "numerator": {
-            "metric_name": "Calc Assets",
-            "metric_source": "metrics_outputs",
-            "parameter_dependent": true,
-            "year_shift": 1
-          },
-          "denominator": {
-            "metric_name": "Calc EE",
-            "metric_source": "metrics_outputs",
-            "parameter_dependent": true,
-            "year_shift": 1,
-            "apply_absolute_value": true
-          },
-          "operation": "divide",
-          "null_handling": "skip_year",
-          "negative_handling": "return_null"
-        }
-      ]
-    }
+         {
+           "id": "econ_eq_mult",
+           "display_name": "Economic Equity Multiple",
+           "description": "Economic Equity Multiple (Calc Assets Open / ABS(Calc EE Open))",
+           "formula_type": "complex_ratio",
+           "numerator": {
+             "metric_name": "Calc Assets",
+             "metric_source": "metrics_outputs",
+             "parameter_dependent": true,
+             "year_shift": 1
+           },
+           "denominator": {
+             "metric_name": "Calc EE",
+             "metric_source": "metrics_outputs",
+             "parameter_dependent": true,
+             "year_shift": 1,
+             "apply_absolute_value": true
+           },
+           "operation": "divide",
+           "null_handling": "skip_year",
+           "negative_handling": "return_null"
+         },
+       {
+         "id": "revenue_growth",
+         "display_name": "Revenue Growth",
+         "description": "Year-over-year revenue growth based on rolling averages",
+         "formula_type": "revenue_growth",
+         "data_source": "fundamentals",
+         "data_source_field": "numeric_value",
+         "metric_name": "REVENUE",
+         "metric_source": "fundamentals",
+         "parameter_dependent": false,
+         "operation": "growth",
+         "null_handling": "skip_year",
+         "negative_handling": "use_absolute",
+         "requires_prior_year": true
+       },
+       {
+         "id": "ee_growth",
+         "display_name": "EE Growth",
+         "description": "Year-over-year Economic Equity growth based on rolling averages",
+         "formula_type": "ee_growth",
+         "data_source": "metrics_outputs",
+         "data_source_field": "output_metric_value",
+         "metric_name": "Calc EE",
+         "metric_source": "metrics_outputs",
+         "parameter_dependent": true,
+         "operation": "growth",
+         "null_handling": "skip_year",
+         "negative_handling": "use_absolute",
+         "requires_prior_year": true
+       }
+        ]
+      }

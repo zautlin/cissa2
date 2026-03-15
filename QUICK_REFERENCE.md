@@ -12,6 +12,9 @@
 | **Request/Response Models** | `/home/ubuntu/cissa/backend/app/models/schemas.py` |
 | **FastAPI Setup** | `/home/ubuntu/cissa/backend/app/main.py` |
 | **Database Connection** | `/home/ubuntu/cissa/backend/app/core/database.py` |
+| **Unit Tests** | `/home/ubuntu/cissa/backend/tests/unit/` |
+| **Integration Tests** | `/home/ubuntu/cissa/backend/tests/integration/` |
+| **Validation Tests** | `/home/ubuntu/cissa/backend/tests/validation/` |
 
 ---
 
@@ -271,6 +274,18 @@ curl "http://localhost:8000/api/v1/metrics/get_metrics/?dataset_id=<UUID>&parame
 ### Health Check
 ```bash
 curl "http://localhost:8000/api/v1/metrics/health"
+```
+
+### Run Tests
+```bash
+# All unit tests
+cd /home/ubuntu/cissa && python -m pytest backend/tests/unit/ -v
+
+# All integration tests (as Python scripts)
+cd /home/ubuntu/cissa && python backend/tests/integration/test_ee_growth_manual.py
+
+# All validation tests
+cd /home/ubuntu/cissa && python backend/tests/validation/test_ee_growth_3y_validation.py
 ```
 
 ---

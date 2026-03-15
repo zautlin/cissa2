@@ -15,18 +15,24 @@ from ..models.ratio_metrics import (
     TimeSeries
 )
 from ..repositories.ratio_metrics_repository import RatioMetricsRepository
+from ..repositories.revenue_growth_repository import RevenueGrowthRepository
+from ..repositories.ee_growth_repository import EEGrowthRepository
 from ..services.ratio_metrics_calculator import RatioMetricsCalculator
+from ..services.revenue_growth_calculator import RevenueGrowthCalculator
+from ..services.ee_growth_calculator import EEGrowthCalculator
 from ..core.config import get_logger
 
 logger = get_logger(__name__)
 
 
 class RatioMetricsService:
-    """Service layer for calculating ratio metrics on-the-fly"""
+    """Service layer for calculating ratio metrics and revenue growth on-the-fly"""
     
     def __init__(self, session: AsyncSession):
         self.session = session
-        self.repo = RatioMetricsRepository(session)
+        self.ratio_repo = RatioMetricsRepository(session)
+        self.revenue_growth_repo = RevenueGrowthRepository(session)
+        self.ee_growth_repo = EEGrowthRepository(session)
         self.metric_config = self._load_ratio_metrics_config()
     
     @staticmethod
@@ -83,14 +89,14 @@ class RatioMetricsService:
         end_year: Optional[int] = None
     ) -> RatioMetricsResponse:
         """
-        Calculate a ratio metric for given tickers and temporal window.
+        Calculate a ratio metric or revenue growth for given tickers and temporal window.
         
         Args:
-            metric_id: Metric identifier (e.g., 'mb_ratio')
+            metric_id: Metric identifier (e.g., 'mb_ratio', 'revenue_growth')
             tickers: List of stock tickers
             dataset_id: Dataset UUID
             temporal_window: "1Y", "3Y", "5Y", or "10Y"
-            param_set_id: Parameter set UUID (defaults to base_case)
+            param_set_id: Parameter set UUID (defaults to base_case for ratio metrics)
             start_year: Optional start year filter
             end_year: Optional end year filter
         
@@ -113,15 +119,145 @@ class RatioMetricsService:
         if temporal_window not in ["1Y", "3Y", "5Y", "10Y"]:
             raise ValueError(f"Invalid temporal window: {temporal_window}. Must be 1Y, 3Y, 5Y, or 10Y")
         
-        # Step 3: Resolve param_set_id if needed
+        logger.info(f"Calculating {metric_id} for tickers {tickers}, window={temporal_window}")
+        
+        # Step 3: Route to appropriate calculator based on formula_type
+        if metric_def.formula_type == "revenue_growth":
+            return await self._calculate_revenue_growth(
+                metric_def=metric_def,
+                tickers=tickers,
+                dataset_id=dataset_id,
+                temporal_window=temporal_window,
+                start_year=start_year,
+                end_year=end_year
+            )
+        elif metric_def.formula_type == "ee_growth":
+            return await self._calculate_ee_growth(
+                metric_def=metric_def,
+                tickers=tickers,
+                dataset_id=dataset_id,
+                temporal_window=temporal_window,
+                param_set_id=param_set_id,
+                start_year=start_year,
+                end_year=end_year
+            )
+        else:
+            # Standard ratio metric (ratio or complex_ratio)
+            return await self._calculate_ratio_metric_internal(
+                metric_def=metric_def,
+                tickers=tickers,
+                dataset_id=dataset_id,
+                temporal_window=temporal_window,
+                param_set_id=param_set_id,
+                start_year=start_year,
+                end_year=end_year
+            )
+    
+    async def _calculate_revenue_growth(
+        self,
+        metric_def: MetricDefinition,
+        tickers: List[str],
+        dataset_id: UUID,
+        temporal_window: str,
+        start_year: Optional[int],
+        end_year: Optional[int]
+    ) -> RatioMetricsResponse:
+        """Calculate revenue growth metric"""
+        
+        # Build SQL query using revenue growth calculator
+        calculator = RevenueGrowthCalculator(metric_def, temporal_window)
+        sql_query, params = calculator.build_query(
+            tickers=tickers,
+            dataset_id=dataset_id,
+            start_year=start_year,
+            end_year=end_year
+        )
+        
+        logger.debug(f"Revenue Growth SQL:\n{sql_query}")
+        logger.debug(f"Revenue Growth params: {params}")
+        
+        # Execute query
+        results = await self.revenue_growth_repo.execute_revenue_growth_query(sql_query, params)
+        
+        # Format results: convert revenue_growth -> value for consistent response format
+        formatted_results = [
+            {
+                "ticker": row["ticker"],
+                "fiscal_year": row["fiscal_year"],
+                "value": row["revenue_growth"]
+            }
+            for row in results
+        ]
+        
+        # Format response
+        return self._format_response(metric_def, temporal_window, formatted_results)
+    
+    async def _calculate_ee_growth(
+        self,
+        metric_def: MetricDefinition,
+        tickers: List[str],
+        dataset_id: UUID,
+        temporal_window: str,
+        param_set_id: Optional[UUID],
+        start_year: Optional[int],
+        end_year: Optional[int]
+    ) -> RatioMetricsResponse:
+        """Calculate EE growth metric"""
+        
+        # Resolve param_set_id if needed
         if param_set_id is None:
             param_set_id = await self._get_default_param_set_id()
             if param_set_id is None:
                 raise ValueError("No parameter set ID provided and no default parameter set found")
         
-        logger.info(f"Calculating {metric_id} for tickers {tickers}, window={temporal_window}")
+        # Build SQL query using EE growth calculator
+        calculator = EEGrowthCalculator(metric_def, temporal_window)
+        sql_query, params = calculator.build_query(
+            tickers=tickers,
+            dataset_id=dataset_id,
+            param_set_id=param_set_id,
+            start_year=start_year,
+            end_year=end_year
+        )
         
-        # Step 4: Build SQL query
+        logger.debug(f"EE Growth SQL:\n{sql_query}")
+        logger.debug(f"EE Growth params: {params}")
+        
+        # Execute query
+        results = await self.ee_growth_repo.execute_ee_growth_query(sql_query, params)
+        
+        # Format results: convert ee_growth -> value for consistent response format
+        formatted_results = [
+            {
+                "ticker": row["ticker"],
+                "fiscal_year": row["fiscal_year"],
+                "value": row["ee_growth"]
+            }
+            for row in results
+        ]
+        
+        # Format response
+        return self._format_response(metric_def, temporal_window, formatted_results)
+    
+    async def _calculate_ratio_metric_internal(
+        self,
+        metric_def: MetricDefinition,
+        tickers: List[str],
+        dataset_id: UUID,
+        temporal_window: str,
+        param_set_id: Optional[UUID],
+        start_year: Optional[int],
+        end_year: Optional[int]
+    ) -> RatioMetricsResponse:
+        """Calculate standard ratio metric"""
+        
+        # Resolve param_set_id if needed
+        if param_set_id is None:
+            param_set_id = await self._get_default_param_set_id()
+            if param_set_id is None:
+                raise ValueError("No parameter set ID provided and no default parameter set found")
+        
+        # Build SQL query
         calculator = RatioMetricsCalculator(metric_def, temporal_window)
         sql_query, params = calculator.build_query(
             tickers=tickers,
@@ -131,12 +267,12 @@ class RatioMetricsService:
             end_year=end_year
         )
         
-        logger.debug(f"Generated SQL query:\n{sql_query}")
+        logger.debug(f"Ratio Metric SQL:\n{sql_query}")
         
-        # Step 5: Execute query
-        results = await self.repo.execute_ratio_query(sql_query, params)
+        # Execute query
+        results = await self.ratio_repo.execute_ratio_query(sql_query, params)
         
-        # Step 6: Format response
+        # Format response
         return self._format_response(metric_def, temporal_window, results)
     
     def _format_response(

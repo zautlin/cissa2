@@ -95,9 +95,20 @@ class MetricDefinition(BaseModel):
     id: str = Field(..., description="Unique metric identifier")
     display_name: str = Field(..., description="Human-readable name")
     description: str = Field(..., description="Metric documentation")
-    formula_type: Literal["ratio", "complex_ratio"] = Field(..., description="Formula type")
-    numerator: MetricComponent = Field(..., description="Numerator metric")
-    denominator: MetricComponent = Field(..., description="Denominator metric")
-    operation: str = Field(..., description="Operation to perform (divide, etc.)")
+    formula_type: Literal["ratio", "complex_ratio", "revenue_growth", "ee_growth"] = Field(..., description="Formula type")
+    
+    # Numerator and denominator (for ratio-based metrics)
+    numerator: Optional[MetricComponent] = Field(None, description="Numerator metric")
+    denominator: Optional[MetricComponent] = Field(None, description="Denominator metric")
+    
+    # Revenue Growth specific fields
+    metric_name: Optional[str] = Field(None, description="Metric name for revenue_growth (e.g., 'REVENUE')")
+    metric_source: Optional[MetricSource] = Field(None, description="Source table for revenue_growth")
+    data_source: Optional[str] = Field(None, description="Data source designation (e.g., 'fundamentals')")
+    data_source_field: Optional[str] = Field(None, description="Column name in source table (e.g., 'numeric_value')")
+    parameter_dependent: Optional[bool] = Field(False, description="Whether metric depends on param_set_id")
+    requires_prior_year: Optional[bool] = Field(False, description="Whether calculation requires prior year data")
+    
+    operation: str = Field(..., description="Operation to perform (divide, growth, etc.)")
     null_handling: Literal["skip_year", "use_zero"] = Field(..., description="How to handle NULL values")
     negative_handling: Literal["skip_year", "return_null", "use_absolute"] = Field(..., description="How to handle negative values")

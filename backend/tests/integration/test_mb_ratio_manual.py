@@ -16,7 +16,7 @@ from pathlib import Path
 from uuid import UUID
 
 # Add backend to path
-sys.path.insert(0, str(Path(__file__).parent / "backend"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.models.ratio_metrics import MetricDefinition, RatioMetricsResponse
 from app.services.ratio_metrics_calculator import RatioMetricsCalculator
