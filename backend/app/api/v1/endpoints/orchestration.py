@@ -203,37 +203,7 @@ async def orchestrate_l1_metrics_async(
     logger.info(f"Phase 2 complete: {len(phase_2_successful)}/1 successful in {phase_2_time:.1f}s")
     
     # ========================================================================
-    # Phase 3: Cost of Equity (Sequential, depends on Phase 2)
-    # ========================================================================
-    
-    logger.info("Phase 3: Starting cost of equity calculation...")
-    phase_3_start = time.time()
-    phase_3_successful = []
-    phase_3_failed = {}
-    phase_3_records = 0
-    
-    if "Calc Beta" not in phase_2_successful:
-        logger.warning("  ⚠ Skipping Phase 3: Beta not available from Phase 2")
-        phase_3_failed["Calc KE"] = "Phase 2 Beta dependency not met"
-    else:
-        try:
-            result = await call_metric_api("/api/v1/metrics/cost-of-equity/calculate")
-            if isinstance(result, dict) and result.get("status") == "error":
-                phase_3_failed["Calc KE"] = result.get("message", "Unknown error")
-                logger.warning(f"  ✗ Calc KE: {result.get('message', 'Unknown')[:60]}")
-            elif isinstance(result, dict):
-                phase_3_successful.append("Calc KE")
-                phase_3_records = result.get("results_count", 0)
-                logger.info(f"  ✓ Calc KE: {phase_3_records} records")
-        except Exception as e:
-            phase_3_failed["Calc KE"] = str(e)
-            logger.warning(f"  ✗ Calc KE: {str(e)[:60]}")
-    
-    phase_3_time = time.time() - phase_3_start
-    logger.info(f"Phase 3 complete: {len(phase_3_successful)}/1 successful in {phase_3_time:.1f}s")
-    
-    # ========================================================================
-    # Phase 4: Risk-Free Rate (Sequential)
+    # Phase 4: Risk-Free Rate (Sequential) - RUN BEFORE Phase 3
     # ========================================================================
     
     logger.info("Phase 4: Starting risk-free rate calculation...")
@@ -257,6 +227,39 @@ async def orchestrate_l1_metrics_async(
     
     phase_4_time = time.time() - phase_4_start
     logger.info(f"Phase 4 complete: {len(phase_4_successful)}/1 successful in {phase_4_time:.1f}s")
+    
+    # ========================================================================
+    # Phase 3: Cost of Equity (Sequential, depends on Phase 2 AND Phase 4)
+    # ========================================================================
+    
+    logger.info("Phase 3: Starting cost of equity calculation...")
+    phase_3_start = time.time()
+    phase_3_successful = []
+    phase_3_failed = {}
+    phase_3_records = 0
+    
+    if "Calc Beta" not in phase_2_successful:
+        logger.warning("  ⚠ Skipping Phase 3: Beta not available from Phase 2")
+        phase_3_failed["Calc KE"] = "Phase 2 Beta dependency not met"
+    elif "Calc Rf" not in phase_4_successful:
+        logger.warning("  ⚠ Skipping Phase 3: Risk-Free Rate not available from Phase 4")
+        phase_3_failed["Calc KE"] = "Phase 4 Risk-Free Rate dependency not met"
+    else:
+        try:
+            result = await call_metric_api("/api/v1/metrics/cost-of-equity/calculate")
+            if isinstance(result, dict) and result.get("status") == "error":
+                phase_3_failed["Calc KE"] = result.get("message", "Unknown error")
+                logger.warning(f"  ✗ Calc KE: {result.get('message', 'Unknown')[:60]}")
+            elif isinstance(result, dict):
+                phase_3_successful.append("Calc KE")
+                phase_3_records = result.get("results_count", 0)
+                logger.info(f"  ✓ Calc KE: {phase_3_records} records")
+        except Exception as e:
+            phase_3_failed["Calc KE"] = str(e)
+            logger.warning(f"  ✗ Calc KE: {str(e)[:60]}")
+    
+    phase_3_time = time.time() - phase_3_start
+    logger.info(f"Phase 3 complete: {len(phase_3_successful)}/1 successful in {phase_3_time:.1f}s")
     
     # ========================================================================
     # Compile Results
