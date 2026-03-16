@@ -28,7 +28,7 @@ class StatisticsRepository:
             query = text("""
                 SELECT COUNT(DISTINCT ticker)
                 FROM cissa.fundamentals
-                WHERE dataset_id = :dataset_id
+                WHERE dataset_id = :dataset_id and period_type = 'FISCAL'
             """)
             result = await self.db.execute(query, {"dataset_id": str(dataset_id)})
             count = result.scalar()
@@ -51,7 +51,7 @@ class StatisticsRepository:
                 WHERE c.ticker IN (
                     SELECT DISTINCT ticker
                     FROM cissa.fundamentals
-                    WHERE dataset_id = :dataset_id
+                    WHERE dataset_id = :dataset_id and period_type = 'FISCAL'
                 )
             """)
             result = await self.db.execute(query, {"dataset_id": str(dataset_id)})
@@ -67,7 +67,7 @@ class StatisticsRepository:
             query = text("""
                 SELECT COUNT(DISTINCT metric_name)
                 FROM cissa.fundamentals
-                WHERE dataset_id = :dataset_id
+                WHERE dataset_id = :dataset_id and period_type = 'FISCAL'
             """)
             result = await self.db.execute(query, {"dataset_id": str(dataset_id)})
             count = result.scalar()
@@ -82,8 +82,9 @@ class StatisticsRepository:
             query = text("""
                 SELECT MIN(fiscal_year), MAX(fiscal_year)
                 FROM cissa.fundamentals
-                WHERE dataset_id = :dataset_id
+                WHERE dataset_id = :dataset_id and period_type = 'FISCAL'
             """)
+            # The above is the hack way to only consider annual data, rather than considering monthly data back to 1981.
             result = await self.db.execute(query, {"dataset_id": str(dataset_id)})
             row = result.fetchone()
             if row:
@@ -118,7 +119,7 @@ class StatisticsRepository:
                 WHERE c.ticker IN (
                     SELECT DISTINCT ticker
                     FROM cissa.fundamentals
-                    WHERE dataset_id = :dataset_id
+                    WHERE dataset_id = :dataset_id and period_type = 'FISCAL'
                 )
                 LIMIT 1
             """)
