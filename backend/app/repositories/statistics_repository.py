@@ -67,7 +67,7 @@ class StatisticsRepository:
             query = text("""
                 SELECT COUNT(DISTINCT metric_name)
                 FROM cissa.fundamentals
-                WHERE dataset_id = :dataset_id and period_type = 'FISCAL'
+                WHERE dataset_id = :dataset_id
             """)
             result = await self.db.execute(query, {"dataset_id": str(dataset_id)})
             count = result.scalar()
