@@ -7,10 +7,19 @@ Placeholder metrics have been inserted into `cissa.metrics_outputs` to allow UI 
 ## Data Details
 
 - **Company**: CSL AU Equity
-- **Time Period**: 2003-2022 (20 years)
+- **Time Period**: 2003-2022 (20 years of actual data)
+- **Year Range**: 2002-2022 (but 2002 values are skipped as None)
 - **Temporal Window**: 1Y only
-- **Total Records**: 200 (10 metrics × 20 years)
+- **Total Records**: 300 (15 metrics × 20 years)
 - **Status**: All marked as "temporary" in metadata
+
+### Data Characteristics
+
+**All Metrics (1-15):**
+- **Data Years**: 2003-2022 (20 years)
+- **Year Configuration**: 2002 value is None and skipped during insertion
+- **Type**: Mix of percentage values (metrics 1-10) and absolute numeric values (metrics 11-15)
+- **No NULL values**: Database constraint requires values, so 2002 entries are skipped entirely
 
 ## Metrics Included
 
@@ -26,6 +35,11 @@ Placeholder metrics have been inserted into `cissa.metrics_outputs` to allow UI 
 | RA MM | Percentage | -30.5% to 23.0% | Risk Adjusted Market Model |
 | TSR | Percentage | -62.2% to 90.2% | Total Shareholder Return |
 | EP PCT | Percentage | -3.8% to 58.7% | Earnings Per Share Percentage |
+| Calc EP | Absolute | -1 to 2,748 | Earnings Per Share |
+| Calc PAT_Ex | Absolute | 70 to 3,136 | PAT Excluding |
+| Calc XO_Cost_Ex | Absolute | -253 to 0 | Extraordinary Cost Excluding |
+| Calc FC | Absolute | 0 | Free Cash Flow |
+| Calc 1Y FV ECF | Absolute | -1,316 to 2,037 | 1-Year Forward Value ECF |
 
 ## Database Information
 
@@ -72,8 +86,12 @@ When actual calculation logic is implemented:
 
 ## Notes
 
-- All percentage values are stored as decimals (e.g., 15.5% = 0.155)
-- All absolute values are stored as floats
+- All metrics span 2003-2022 (20 years of inserted data)
+- Year 2002 was defined in the data structure but is skipped (None values not inserted)
+- Percentage values (metrics 1-10) stored as decimals (e.g., 0.454 = 45.4%)
+- Absolute values (metrics 11-15) stored as integers/floats
 - Negative values are represented as negative numbers (not parentheses)
 - Metadata includes creation timestamp and notes about placeholder status
+- All records marked with `metadata->>'type' = 'temporary'` for easy identification
+- **Database Constraint**: `output_metric_value` column is NOT NULL, so 2002 entries could not be inserted
 
