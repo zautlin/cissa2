@@ -6,30 +6,31 @@ Placeholder metrics have been inserted into `cissa.metrics_outputs` to allow UI 
 
 ## Data Details
 
-- **Company**: BHP AU Equity
+- **Company**: CSL AU Equity
 - **Time Period**: 2003-2022 (20 years)
 - **Temporal Window**: 1Y only
-- **Total Records**: 180 (9 metrics × 20 years)
+- **Total Records**: 200 (10 metrics × 20 years)
 - **Status**: All marked as "temporary" in metadata
 
 ## Metrics Included
 
 | Metric | Type | Values | Notes |
 |--------|------|--------|-------|
-| TER | Percentage | -27.7% to 62.8% | Total Economic Return |
-| TER-Ke | Percentage | -37.2% to 51.8% | TER minus Cost of Equity |
-| TERA | Percentage | -33.1% to 48.1% | Total Economic Return Adjusted |
-| TRTE | Absolute | -61,003 to 69,018 | Total Return To Equity |
-| WP | Absolute | 39,407 to 272,370 | Weighted Price |
-| WC | Absolute | -86,647 to 56,930 | Weighted Cost |
-| WC TERA | Absolute | -57,883 to 95,327 | Weighted Cost TERA |
-| RA MM | Percentage | -33.2% to 28.2% | Risk Adjusted Market Model |
-| TSR | Percentage | -27.7% to 62.8% | Total Shareholder Return |
+| TER | Percentage | -62.2% to 90.2% | Total Economic Return |
+| TER-Ke | Percentage | -71.7% to 80.7% | TER minus Cost of Equity |
+| TERA | Percentage | -65.4% to 70.9% | Total Economic Return Adjusted |
+| TRTE | Absolute | -3,173 to 34,067 | Total Return To Equity |
+| WP | Absolute | 2,093 to 103,757 | Weighted Price |
+| WC | Absolute | -3,959 to 27,735 | Weighted Cost |
+| WC TERA | Absolute | -3,338 to 35,740 | Weighted Cost TERA |
+| RA MM | Percentage | -30.5% to 23.0% | Risk Adjusted Market Model |
+| TSR | Percentage | -62.2% to 90.2% | Total Shareholder Return |
+| EP PCT | Percentage | -3.8% to 58.7% | Earnings Per Share Percentage |
 
 ## Database Information
 
-- **Dataset ID**: `523eeffd-9220-4d27-927b-e418f9c21d8a`
-- **Parameter Set ID**: `71a0caa6-b52c-4c5e-b550-1048b7329719`
+- **Dataset ID**: `13d1f4ca-6c72-4be2-9d21-b86bf685ceb2`
+- **Parameter Set ID**: `15d7dc52-4e6f-44ec-9aff-0be42ff11031`
 - **Table**: `cissa.metrics_outputs`
 - **Identification**: All records have `metadata->>'type' = 'temporary'`
 
@@ -39,7 +40,7 @@ Placeholder metrics have been inserted into `cissa.metrics_outputs` to allow UI 
 ```sql
 SELECT output_metric_name, output_metric_value
 FROM cissa.metrics_outputs
-WHERE ticker = 'BHP AU Equity'
+WHERE ticker = 'CSL AU Equity'
   AND fiscal_year = 2023
   AND metadata->>'type' = 'temporary'
 ORDER BY output_metric_name;
@@ -49,7 +50,7 @@ ORDER BY output_metric_name;
 ```sql
 SELECT fiscal_year, output_metric_value
 FROM cissa.metrics_outputs
-WHERE ticker = 'BHP AU Equity'
+WHERE ticker = 'CSL AU Equity'
   AND output_metric_name = 'TSR'
   AND metadata->>'type' = 'temporary'
 ORDER BY fiscal_year;
