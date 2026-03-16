@@ -19,11 +19,25 @@ class TickerData(BaseModel):
 
 
 class RatioMetricsResponse(BaseModel):
-    """Response for ratio metrics calculation"""
+    """Response for single-window ratio metrics calculation (backward compatible)"""
     metric: str = Field(..., description="Metric ID (e.g., 'mb_ratio')")
     display_name: str = Field(..., description="Human-readable metric name")
     temporal_window: str = Field(..., description="Temporal window (1Y, 3Y, 5Y, 10Y)")
     data: List[TickerData] = Field(..., description="Time-series data per ticker")
+
+
+class WindowData(BaseModel):
+    """Time-series data for a ticker within a specific temporal window"""
+    temporal_window: str = Field(..., description="Temporal window (1Y, 3Y, 5Y, 10Y)")
+    tickers: List[TickerData] = Field(..., description="Time-series data per ticker")
+
+
+class RatioMetricsMultiWindowResponse(BaseModel):
+    """Response for multi-window ratio metrics calculation"""
+    metric: str = Field(..., description="Metric ID (e.g., 'mb_ratio')")
+    display_name: str = Field(..., description="Human-readable metric name")
+    temporal_windows: List[str] = Field(..., description="List of temporal windows (e.g., ['1Y', '3Y', '5Y'])")
+    data: List[WindowData] = Field(..., description="Time-series data grouped by window then ticker")
 
 
 class MetricSource(str, Enum):

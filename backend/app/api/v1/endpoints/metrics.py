@@ -4,7 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
-from typing import Optional
+from typing import Optional, Union
 
 from ....core.database import get_db
 from ....models import (
@@ -27,7 +27,10 @@ from ....services.beta_calculation_service import BetaCalculationService
 from ....services.risk_free_rate_service import RiskFreeRateCalculationService
 from ....services.ratio_metrics_service import RatioMetricsService
 from ....repositories.metrics_query_repository import MetricsQueryRepository
-from ....models.ratio_metrics import RatioMetricsResponse
+from ....models.ratio_metrics import (
+    RatioMetricsResponse,
+    RatioMetricsMultiWindowResponse
+)
 from ....core.config import get_logger
 
 logger = get_logger(__name__)
@@ -772,31 +775,34 @@ async def get_metrics(
         )
 
 
-@router.get("/ratio-metrics", response_model=RatioMetricsResponse)
+@router.get("/ratio-metrics", response_model=Union[RatioMetricsResponse, RatioMetricsMultiWindowResponse])
 async def get_ratio_metrics(
     metric: str = Query(..., description="Metric ID (e.g., 'mb_ratio')"),
     tickers: str = Query(..., description="Comma-separated ticker list (e.g., 'AAPL,MSFT')"),
     dataset_id: UUID = Query(..., description="Dataset ID"),
-    temporal_window: str = Query("1Y", regex="^(1Y|3Y|5Y|10Y)$", description="Temporal window"),
+    temporal_window: str = Query("1Y", description="Temporal window(s): single value (1Y) or comma-separated (1Y,3Y,5Y)"),
     param_set_id: Optional[UUID] = Query(None, description="Parameter set ID (defaults to base_case)"),
     start_year: Optional[int] = Query(None, description="Optional start year filter"),
     end_year: Optional[int] = Query(None, description="Optional end year filter"),
     db: AsyncSession = Depends(get_db)
-) -> RatioMetricsResponse:
+) -> Union[RatioMetricsResponse, RatioMetricsMultiWindowResponse]:
     """
     Calculate ratio metrics with rolling averages.
     
-    Supported metrics:
+    **Supported metrics:**
     - mb_ratio: Market-to-Book Ratio (Market Cap / Economic Equity)
     
-    Temporal windows:
+    **Temporal windows:**
     - 1Y: Annual values (current year only)
     - 3Y: 3-year rolling average (starts year 2003 if data from 2001)
     - 5Y: 5-year rolling average (starts year 2005)
     - 10Y: 10-year rolling average (starts year 2010)
     
-    Example:
+    **Single window (backward compatible):**
         GET /api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=AAPL,MSFT&temporal_window=3Y&dataset_id=...
+    
+    **Multiple windows (new):**
+        GET /api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=AAPL,MSFT&temporal_window=1Y,3Y,5Y&dataset_id=...
     """
     
     try:
@@ -805,21 +811,41 @@ async def get_ratio_metrics(
         if not ticker_list or any(not t for t in ticker_list):
             raise ValueError("Invalid ticker list")
         
-        logger.info(f"Calculating {metric} for tickers {ticker_list}, window={temporal_window}")
+        # Parse temporal window(s)
+        window_list = [w.strip() for w in temporal_window.split(",")]
+        is_multi_window = len(window_list) > 1
+        
+        logger.info(
+            f"Calculating {metric} for tickers {ticker_list}, "
+            f"windows={window_list} ({'multi-window' if is_multi_window else 'single-window'})"
+        )
         
         # Initialize service
         service = RatioMetricsService(db)
         
         # Calculate metric
-        result = await service.calculate_ratio_metric(
-            metric_id=metric,
-            tickers=ticker_list,
-            dataset_id=dataset_id,
-            temporal_window=temporal_window,
-            param_set_id=param_set_id,
-            start_year=start_year,
-            end_year=end_year
-        )
+        if is_multi_window:
+            # Multi-window query
+            result = await service.calculate_ratio_metric_multi_window(
+                metric_id=metric,
+                tickers=ticker_list,
+                dataset_id=dataset_id,
+                temporal_windows=window_list,
+                param_set_id=param_set_id,
+                start_year=start_year,
+                end_year=end_year
+            )
+        else:
+            # Single-window query (backward compatible)
+            result = await service.calculate_ratio_metric(
+                metric_id=metric,
+                tickers=ticker_list,
+                dataset_id=dataset_id,
+                temporal_window=window_list[0],
+                param_set_id=param_set_id,
+                start_year=start_year,
+                end_year=end_year
+            )
         
         return result
         

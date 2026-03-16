@@ -11,8 +11,10 @@ from sqlalchemy import text
 from ..models.ratio_metrics import (
     MetricDefinition,
     RatioMetricsResponse,
+    RatioMetricsMultiWindowResponse,
     TickerData,
-    TimeSeries
+    TimeSeries,
+    WindowData
 )
 from ..repositories.ratio_metrics_repository import RatioMetricsRepository
 from ..repositories.revenue_growth_repository import RevenueGrowthRepository
@@ -152,6 +154,100 @@ class RatioMetricsService:
                 start_year=start_year,
                 end_year=end_year
             )
+    
+    async def calculate_ratio_metric_multi_window(
+        self,
+        metric_id: str,
+        tickers: List[str],
+        dataset_id: UUID,
+        temporal_windows: List[str],
+        param_set_id: Optional[UUID] = None,
+        start_year: Optional[int] = None,
+        end_year: Optional[int] = None
+    ) -> RatioMetricsMultiWindowResponse:
+        """
+        Calculate a ratio metric for given tickers across multiple temporal windows.
+        
+        Args:
+            metric_id: Metric identifier (e.g., 'mb_ratio', 'revenue_growth')
+            tickers: List of stock tickers
+            dataset_id: Dataset UUID
+            temporal_windows: List of temporal windows (e.g., ["1Y", "3Y", "5Y"])
+            param_set_id: Parameter set UUID (defaults to base_case for ratio metrics)
+            start_year: Optional start year filter
+            end_year: Optional end year filter
+        
+        Returns:
+            RatioMetricsMultiWindowResponse with time-series data for each window
+        
+        Raises:
+            ValueError: If metric not found or no valid windows provided
+        """
+        
+        # Step 1: Validate metric exists
+        if metric_id not in self.metric_config:
+            raise ValueError(
+                f"Unknown metric: {metric_id}. Available metrics: {', '.join(self.metric_config.keys())}"
+            )
+        
+        metric_def = self.metric_config[metric_id]
+        
+        # Step 2: Validate and filter temporal windows
+        valid_windows = ["1Y", "3Y", "5Y", "10Y"]
+        requested_windows = [w.strip().upper() for w in temporal_windows]
+        
+        # Track invalid windows for logging
+        invalid_windows = [w for w in requested_windows if w not in valid_windows]
+        valid_requested_windows = [w for w in requested_windows if w in valid_windows]
+        
+        if invalid_windows:
+            logger.warning(f"Skipping invalid temporal windows: {invalid_windows}")
+        
+        if not valid_requested_windows:
+            raise ValueError(
+                f"No valid temporal windows provided. Valid options: {', '.join(valid_windows)}"
+            )
+        
+        logger.info(f"Calculating {metric_id} for tickers {tickers}, windows={valid_requested_windows}")
+        
+        # Step 3: Calculate metric for each valid window
+        window_results = []
+        
+        for window in valid_requested_windows:
+            try:
+                # Reuse existing single-window calculation logic
+                single_response = await self.calculate_ratio_metric(
+                    metric_id=metric_id,
+                    tickers=tickers,
+                    dataset_id=dataset_id,
+                    temporal_window=window,
+                    param_set_id=param_set_id,
+                    start_year=start_year,
+                    end_year=end_year
+                )
+                
+                # Extract ticker data from single-window response
+                window_data = WindowData(
+                    temporal_window=window,
+                    tickers=single_response.data
+                )
+                window_results.append(window_data)
+                
+            except Exception as e:
+                logger.error(f"Error calculating window {window} for {metric_id}: {str(e)}")
+                # Continue with next window instead of failing entire request
+                continue
+        
+        if not window_results:
+            raise ValueError(f"Failed to calculate {metric_id} for any of the requested windows")
+        
+        # Step 4: Build multi-window response
+        return RatioMetricsMultiWindowResponse(
+            metric=metric_def.id,
+            display_name=metric_def.display_name,
+            temporal_windows=[w.temporal_window for w in window_results],
+            data=window_results
+        )
     
     async def _calculate_revenue_growth(
         self,
