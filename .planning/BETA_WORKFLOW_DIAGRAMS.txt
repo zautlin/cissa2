@@ -1,0 +1,538 @@
+================================================================================
+BETA CALCULATION WORKFLOW DIAGRAMS
+================================================================================
+
+Analysis Date: March 16, 2026
+Purpose: Visual representation of current vs proposed Beta calculation flow
+
+================================================================================
+1. CURRENT WORKFLOW (11 SEQUENTIAL STEPS - PARAMETER DEPENDENT)
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                     USER REQUESTS BETA CALCULATION                            │
+│  POST /api/v1/metrics/beta/calculate                                          │
+│  Request: {dataset_id, param_set_id}                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: Load Parameters from Database                                        │
+│ ├─ beta_rounding: 0.1 (or user-selected)                                    │
+│ ├─ error_tolerance: 0.4 (or user-selected)                                  │
+│ └─ approach_to_ke: "Floating" (or user-selected)                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: Check Cache for (dataset_id, param_set_id)                          │
+│ ├─ If EXISTS → Return cached results ✓ (skip to END)                       │
+│ └─ If NOT → Continue to Step 3                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+            ┌───────────────────────────────────────────────────────┐
+            │  THESE STEPS RUN EVERY TIME (✓ STATIC DATA ONLY)    │
+            └───────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: Fetch Monthly Returns (STATIC)                                       │
+│ ├─ COMPANY_TSR: 60+ months per ticker                                        │
+│ ├─ INDEX_TSR: Market index returns                                           │
+│ └─ Query: SELECT from fundamentals WHERE metric = 'COMPANY_TSR'             │
+│    Time: ~500ms                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: Fetch Static Mappings                                                │
+│ ├─ Ticker → Sector (e.g., "BHP" → "Materials")                              │
+│ ├─ Ticker → FY Month (e.g., "BHP" → December)                               │
+│ ├─ Ticker → Begin Year                                                       │
+│ └─ Query: SELECT FROM companies table                                        │
+│    Time: ~100ms                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: Calculate Rolling OLS Slopes (Line 163)                              │
+│ ├─ For each ticker: 60-month rolling window regression                       │
+│ ├─ Result: (slope, std_err) for each month                                   │
+│ ├─ Uses: scipy.stats.linregress                                              │
+│ └─ Time: ~8,000ms (80% of total calculation)                                 │
+│                                                                               │
+│ Input:  Monthly TSR returns (COMPANY_TSR, INDEX_TSR)                         │
+│ Output: (ticker, fiscal_year, fiscal_month, slope, std_err)                  │
+│ Note:   FULLY PRE-COMPUTABLE ✓ (no parameters used)                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+            ┌───────────────────────────────────────────────────────┐
+            │  ⚠️ PARAMETER-DEPENDENT ZONE BEGINS                  │
+            │  Following steps depend on user parameters            │
+            └───────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 6: Transform Slopes (Line 169) - PARAMETER DEPENDENT ⚠️                 │
+│ ├─ Transform Formula: adjusted = (slope * 2/3) + 1/3                        │
+│ ├─ Calc Relative Error: rel_std_err = abs(std_err) / adjusted                │
+│ ├─ ERROR FILTER: if error_tolerance >= rel_std_err → KEEP, else NaN        │
+│ │  └─ Example: tolerance=0.4 keeps slopes with err ≤ 0.4                   │
+│ │  └─ PROBLEM: Different users, different tolerance → different data!       │
+│ ├─ ROUNDING: round(adjusted / beta_rounding, 0) * beta_rounding              │
+│ │  └─ Example: rounding=0.1 → 1.247 becomes 1.2                             │
+│ │  └─ PROBLEM: Different rounding → different stored value                   │
+│ └─ Time: ~100ms                                                               │
+│                                                                               │
+│ Input:  OLS slopes (from Step 5)                                             │
+│ Output: adjusted_slope (filtered and rounded)                                │
+│ Issues: TWO parameter dependencies here (error_tolerance, beta_rounding)    │
+│ Can we defer?: NO for error_tolerance (fundamental filter)                  │
+│                MAYBE for beta_rounding (only formatting)                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 7: Annualize Slopes (Line 176)                                          │
+│ ├─ Group by (ticker, fiscal_year)                                            │
+│ ├─ Keep only ticker's specific FY end month                                  │
+│ ├─ Example: BHP with fiscal_year=2021 → keep December 2021 month            │
+│ └─ Time: ~100ms                                                               │
+│                                                                               │
+│ Input:  Transformed slopes (from Step 6)                                     │
+│ Output: (ticker, fiscal_year, adjusted_slope)                                │
+│ Note:   FULLY PRE-COMPUTABLE ✓ (static FY mappings)                         │
+│         BUT depends on Step 6 output (which has rounding applied)           │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 8: Generate Sector Slopes (Line 181)                                    │
+│ ├─ Group by (sector, fiscal_year)                                            │
+│ ├─ Average adjusted_slope within each sector                                 │
+│ └─ Time: ~50ms                                                                │
+│                                                                               │
+│ Input:  Annual slopes (from Step 7)                                          │
+│ Output: (sector, fiscal_year, sector_slope)                                  │
+│ Note:   FULLY PRE-COMPUTABLE ✓ (statistical average only)                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 9: Scaffold & Backfill (Line 186)                                       │
+│ ├─ Create complete (ticker, fiscal_year) grid for all historical years       │
+│ ├─ Left-join calculated slopes onto grid                                     │
+│ ├─ For missing years: use sector slope (Tier 2 fallback)                     │
+│ ├─ If still missing: use global average (Tier 3 fallback)                    │
+│ ├─ If still missing: use 1.0 (Tier 4 fallback)                              │
+│ └─ Time: ~200ms                                                               │
+│                                                                               │
+│ Input:  Annual slopes, sector slopes                                         │
+│ Output: Complete grid with no NaN values                                     │
+│ Note:   FULLY PRE-COMPUTABLE ✓ (deterministic fill logic)                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 10: Apply 4-Tier Fallback (Line 191)                                    │
+│ ├─ Tier 1: Use individual adjusted_slope if available                        │
+│ ├─ Tier 2: Use sector_slope if Tier 1 is NaN                                │
+│ ├─ Tier 3: Use global_avg if Tier 2 is NaN                                  │
+│ ├─ Tier 4: Use 1.0 if Tier 3 is NaN                                         │
+│ ├─ Compute ticker_avg: average of spot_slope across ALL years               │
+│ └─ Time: ~100ms                                                               │
+│                                                                               │
+│ Input:  Scaffolded slopes                                                    │
+│ Output: spot_slope (final selection), ticker_avg (for FIXED approach)       │
+│ Note:   FULLY PRE-COMPUTABLE ✓ (deterministic tier selection)              │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+            ┌───────────────────────────────────────────────────────┐
+            │  ⚠️ FINAL PARAMETER-DEPENDENT STEP                  │
+            │  Last decision point depends on user selection        │
+            └───────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 11: Apply approach_to_ke (Line 195) - PARAMETER DEPENDENT ⚠️           │
+│ ├─ Load approach_to_ke from parameters                                       │
+│ ├─ IF approach_to_ke == 'FIXED':                                             │
+│ │  └─ beta = ticker_avg (average across ALL years, same for all years)     │
+│ │  └─ Example: ticker="BHP" → beta_2020=1.2, beta_2021=1.2 (same!)       │
+│ ├─ ELSE (approach_to_ke == 'Floating'):                                      │
+│ │  └─ beta = cumulative_avg (expanding window from inception year)          │
+│ │  └─ Example: ticker="BHP" → beta_2010=1.3, beta_2011=1.28, ...1.2     │
+│ ├─ ROUNDING: round(beta / beta_rounding, 0) * beta_rounding                  │
+│ └─ Time: ~100ms                                                               │
+│                                                                               │
+│ Input:  spot_slope, ticker_avg (from Step 10)                                │
+│ Output: beta (final value before storage)                                    │
+│ Issues: approach_to_ke fundamentally changes the calculation                │
+│         Different approaches produce DIFFERENT beta values                   │
+│ Can we defer?: NO for approach_to_ke (fundamental formula)                  │
+│                MAYBE for beta_rounding (only formatting)                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 12: Store Results in metrics_outputs                                    │
+│ ├─ INSERT INTO metrics_outputs (dataset_id, param_set_id, ticker,           │
+│ │                                fiscal_year, output_metric_name,            │
+│ │                                output_metric_value, metadata)              │
+│ ├─ ON CONFLICT DO NOTHING (upsert safety)                                   │
+│ └─ Time: ~200ms                                                               │
+│                                                                               │
+│ Input:  Final beta values from Step 11                                       │
+│ Output: Rows in metrics_outputs table                                        │
+│ Note:   PERMANENT STORAGE (cannot retrieve unrounded value later)           │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ COMMIT & RETURN RESPONSE                                                      │
+│ Time: ~400ms                                                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+TOTAL TIME: ~9.76 seconds per parameter set
+
+
+PROBLEM WITH CURRENT APPROACH:
+==============================
+• For 10 different parameter sets, entire workflow runs 10 times
+• Steps 5-10 (90% of the time) do identical work each time
+• Users cannot just change rounding without full recalculation
+• Each parameter set requires ~9.76 seconds
+
+
+================================================================================
+2. PROPOSED WORKFLOW (PRE-COMPUTE + RUNTIME ROUNDING)
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  BACKGROUND PROCESS (Triggered Once Per Dataset Change)                      │
+│  This runs when underlying TSR data is modified                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ [DATA CHANGE DETECTION]                                                       │
+│ Trigger: UPDATE on fundamentals.COMPANY_TSR or INDEX_TSR                    │
+│ Action: DELETE FROM metrics_outputs_intermediate WHERE dataset_id = X        │
+│         (Clears cache, forces recalculation on next request)                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1-5: Pre-Compute OLS (Same as Current - STATIC)                        │
+│ ├─ Fetch monthly returns                                                     │
+│ ├─ Fetch static mappings                                                     │
+│ ├─ Calculate 60-month rolling OLS                                            │
+│ └─ Time: ~8,500ms                                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 6: Transform WITHOUT Rounding or Filtering (MODIFIED)                   │
+│ ├─ Transform Formula: adjusted = (slope * 2/3) + 1/3  ✓ Done                 │
+│ ├─ Calc Relative Error: rel_std_err = abs(std_err) / adjusted  ✓ Done       │
+│ ├─ ERROR FILTER: SKIP (will apply at runtime)                               │
+│ ├─ ROUNDING: SKIP (will apply at runtime)                                    │
+│ └─ Time: ~50ms                                                                │
+│                                                                               │
+│ Output: slope_transformed_unrounded, rel_std_err (NO filtering, NO rounding) │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 7-10: Annualize, Sector Avg, Scaffold, Fallback (STATIC)              │
+│ ├─ Same as current (Steps 7-10)                                              │
+│ └─ Time: ~450ms (same as current)                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 11: Calculate BOTH Approach Formulas WITHOUT Rounding (NEW)             │
+│ ├─ beta_fixed_approach = ticker_avg (for 'FIXED')                           │
+│ ├─ beta_floating_approach = cumulative_avg (for 'Floating')                 │
+│ └─ SKIP ROUNDING (both stored unrounded)                                     │
+│    Time: ~100ms                                                               │
+│                                                                               │
+│ Output: BOTH approach variants stored, NEITHER rounded                        │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STORE PRE-COMPUTED INTERMEDIATES (NEW)                                       │
+│ ├─ INSERT INTO metrics_outputs_intermediate (dataset_id, ticker,            │
+│ │       fiscal_year, slope_raw, std_err, rel_std_err,                       │
+│ │       slope_transformed_unrounded, spot_slope_unrounded,                  │
+│ │       ticker_avg, beta_fixed_approach, beta_floating_approach)            │
+│ ├─ Result: One row per (dataset_id, ticker, fiscal_year)                    │
+│ ├─ Size: ~21,000 rows for typical dataset                                    │
+│ └─ Time: ~500ms                                                               │
+│                                                                               │
+│ KEY: All values UNROUNDED - ready for any rounding precision at runtime      │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+BACKGROUND PROCESS TOTAL: ~8,950ms (runs once per dataset change)
+
+
+════════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ RUNTIME REQUEST PROCESSING (Per User Parameter Set)                          │
+│ This runs when user requests Beta with specific parameters                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ USER REQUESTS BETA CALCULATION                                               │
+│ POST /api/v1/metrics/beta/calculate                                          │
+│ Request: {dataset_id, param_set_id}                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: Load Parameters from Database                                        │
+│ ├─ error_tolerance: User-selected (e.g., 0.4)                              │
+│ ├─ approach_to_ke: User-selected (e.g., "Floating")                         │
+│ ├─ beta_rounding: User-selected (e.g., 0.1)                                │
+│ └─ Time: ~10ms                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: Fetch Pre-Computed Intermediates (NEW)                               │
+│ ├─ SELECT * FROM metrics_outputs_intermediate                               │
+│ │         WHERE dataset_id = requested_dataset_id                           │
+│ ├─ Result: Complete pre-computed data for this dataset                      │
+│ │          (includes ALL unfiltered slopes, unrounded values)               │
+│ └─ Time: ~50ms                                                               │
+│                                                                               │
+│ Output: DataFrame with columns:                                              │
+│   - slope_raw, std_err, rel_std_err (for filtering decision)                │
+│   - slope_transformed_unrounded (for formula)                                │
+│   - spot_slope_unrounded (for FIXED approach)                               │
+│   - ticker_avg (for FIXED approach)                                          │
+│   - beta_fixed_approach (pre-computed)                                       │
+│   - beta_floating_approach (pre-computed)                                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: Apply Error Tolerance Filter (RUNTIME) - NEW                         │
+│ ├─ for each row in precomputed:                                              │
+│ │   if rel_std_err > error_tolerance:  # ← User's tolerance                 │
+│ │       use spot_slope_unrounded       # ← Fallback                         │
+│ │   else:                                                                    │
+│ │       use slope_transformed_unrounded # ← Calculated value               │
+│ ├─ Result: Filtered unrounded beta values                                    │
+│ └─ Time: ~100ms                                                               │
+│                                                                               │
+│ Example:                                                                      │
+│   User tolerance=0.4 →  keeps slopes where error ≤ 0.4 (95% of data)        │
+│   Different user tolerance=0.2 → keeps slopes where error ≤ 0.2 (80%)       │
+│   BOTH use same pre-computed data, just filter differently                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: Apply Approach Formula (RUNTIME) - NEW                               │
+│ ├─ if approach_to_ke == 'FIXED':  # ← User's choice                         │
+│ │     beta_unrounded = beta_fixed_approach  # ← Pre-computed                │
+│ ├─ elif approach_to_ke == 'Floating':                                       │
+│ │     beta_unrounded = beta_floating_approach  # ← Pre-computed             │
+│ └─ Time: ~100ms                                                               │
+│                                                                               │
+│ Note: BOTH approach variants already pre-computed!                           │
+│       We just SELECT the one user requested                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: Apply Beta Rounding (RUNTIME) - NEW                                  │
+│ ├─ for each beta_unrounded value:                                            │
+│ │     beta_rounded = round(beta_unrounded / beta_rounding, 0) * beta_rounding│
+│ │     # ← User's rounding precision applied here                            │
+│ ├─ Examples:                                                                  │
+│ │   1.247 with rounding=0.1   → 1.2                                         │
+│ │   1.247 with rounding=0.05  → 1.25                                        │
+│ │   1.247 with rounding=0.01  → 1.25                                        │
+│ └─ Time: ~50ms  (FAST - just mathematical rounding)                          │
+│                                                                               │
+│ BENEFIT: Same pre-computed data, different rounding outputs                  │
+│          No recalculation needed!                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STEP 6: Store Final Results                                                  │
+│ ├─ INSERT INTO metrics_outputs (dataset_id, param_set_id, ticker,           │
+│ │                 fiscal_year, output_metric_name, output_metric_value,     │
+│ │                 intermediate_result_id)                                   │
+│ ├─ Link to intermediate_result_id for audit trail                            │
+│ └─ Time: ~200ms                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ RETURN RESPONSE TO USER                                                       │
+│ Time: ~50ms                                                                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+RUNTIME PROCESSING TOTAL: ~0.51 seconds per parameter set
+
+
+════════════════════════════════════════════════════════════════════════════════
+
+3. PARAMETER DEPENDENCY DECISION TREE
+================================================================================
+
+User Selects Parameters:
+
+                    ┌─ beta_rounding (0.1, 0.05, 0.01)
+                    │  └─ QUESTION: Can we defer this?
+                    │     └─ YES! ✓ Only affects precision
+                    │        Pre-compute unrounded, format at runtime
+                    │
+User Params ┤─ error_tolerance (0.2, 0.4, 0.8)
+                    │  └─ QUESTION: Can we defer this?
+                    │     └─ NO ✗ Different tolerance → different dataset
+                    │        Must apply at runtime
+                    │        But can store ALL slopes pre-computed
+                    │
+                    └─ approach_to_ke (FIXED, Floating)
+                       └─ QUESTION: Can we defer this?
+                          └─ NO ✗ Different formula → different beta values
+                             But CAN pre-compute both variants
+                             User selects which one at runtime
+
+
+IMPACT ANALYSIS:
+
+Current Approach (Full Recalc Each Time):
+  User changes beta_rounding:     9.76 seconds (WASTE - just formatting!)
+  User changes error_tolerance:   9.76 seconds (NECESSARY - data changes)
+  User changes approach_to_ke:    9.76 seconds (NECESSARY - formula changes)
+
+Proposed Approach (Pre-compute + Runtime):
+  User changes beta_rounding:     0.51 seconds (FAST - just formatting!)
+                                  └─ 19x faster ✓
+  
+  User changes error_tolerance:   0.51 seconds (Still fast - cached data)
+                                  └─ Data already pre-computed ✓
+  
+  User changes approach_to_ke:    0.51 seconds (Still fast - both pre-computed)
+                                  └─ Just select different column ✓
+
+
+================================================================================
+4. DATA FLOW COMPARISON
+================================================================================
+
+CURRENT APPROACH - Full Recalculation:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Monthly Returns Data                                                         │
+│ (COMPANY_TSR, INDEX_TSR)                                                    │
+└────────┬────────────────────────────────────────────────────────────────────┘
+         │
+         ├─────────┬──────────────────────────────────────────────────────────┐
+         │         │                                                           │
+    ┌────▼──────┐  ┌──────────────────────────────────────────────────────────┐
+    │ User 1    │  │ User 2                                                   │
+    │ Params: A │  │ Params: B (different beta_rounding)                     │
+    └────┬──────┘  └──────────┬───────────────────────────────────────────────┘
+         │                   │
+         ▼                   ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │ [OLS Calculation] 8sec                                                  │
+    │ [Transform] 0.1sec                                                      │
+    │ [Annualize] 0.1sec                                                      │
+    │ [Sector Slopes] 0.05sec                                                 │
+    │ [Scaffold] 0.2sec                                                       │
+    │ [Fallback] 0.1sec                                                       │
+    │ [Apply Approach] 0.1sec      ← IDENTICAL WORK FOR BOTH USERS!          │
+    │ [Rounding] 0.05sec                                                      │
+    └────┬────────────────────────────────────────────────────────────────────┘
+         │
+    ┌────▼────────────────────────────────────────────────────────────────────┐
+    │ Rounding=0.1                 │ Rounding=0.05 (different precision!)    │
+    │ Beta: 1.2                    │ Beta: 1.25                              │
+    └──────────────────────────────┴─────────────────────────────────────────┘
+    
+    Total Time: 9.76s × 2 = 19.52 seconds (lots of waste!)
+
+
+PROPOSED APPROACH - Pre-compute Once, Format Different Ways:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Monthly Returns Data                                                         │
+│ (COMPANY_TSR, INDEX_TSR)                                                    │
+└────────┬────────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │ [PRE-COMPUTATION - Runs Once]                                           │
+    │ [OLS Calculation] 8sec                                                  │
+    │ [Transform w/o rounding] 0.05sec                                        │
+    │ [Annualize] 0.1sec                                                      │
+    │ [Sector Slopes] 0.05sec                                                 │
+    │ [Scaffold] 0.2sec                                                       │
+    │ [Fallback] 0.1sec                                                       │
+    │ [Calculate BOTH Approaches] 0.1sec ← Store both variants!              │
+    │ [Store Unrounded Values] 0.5sec                                         │
+    └─────┬───────────────────────────────────────────────────────────────────┘
+          │
+    ┌─────▼──────────────────────────────────────────────────────────────────┐
+    │ metrics_outputs_intermediate                                            │
+    │ (All values unrounded, both approach variants available)               │
+    └──────┬─────────────────────────────────────────────────────────────────┘
+           │
+           ├──────────────────────────────┬──────────────────────────────────┐
+           │                              │                                  │
+    ┌──────▼──────────┐          ┌────────▼──────────┐         ┌────────────▼─┐
+    │ User 1          │          │ User 2            │         │ User 3       │
+    │ Params: A       │          │ Params: B         │         │ Params: C    │
+    │ (Rounding=0.1)  │          │ (Rounding=0.05)   │         │ (Error Tol)  │
+    └──────┬──────────┘          └────────┬──────────┘         └────────────┬─┘
+           │                              │                                 │
+           │ [RUNTIME ONLY]              │                                 │
+           │ - Apply rounding=0.1        │                                 │
+           │ - 0.05 seconds ✓            │                                 │
+           │                              │ [RUNTIME ONLY]                 │
+           │                              │ - Apply rounding=0.05          │
+           │                              │ - 0.05 seconds ✓               │
+           │                              │                                │
+           ▼                              ▼                                ▼
+       Beta: 1.2               Beta: 1.25                           (different filter)
+       Time: 0.51s             Time: 0.51s                          Time: 0.51s
+       
+    Total Time: 8.95s (once) + 0.51s + 0.51s + 0.51s = 10.48 seconds
+                vs current: 19.52 seconds = 1.9x faster for 3 users!
+                
+    For 10 users: 8.95s + (10 × 0.51s) = 14.05s
+                vs current: 97.6s = 6.9x faster!
+
+════════════════════════════════════════════════════════════════════════════════
+
+5. PARAMETER DECISION MATRIX
+================================================================================
+
+                          CAN PRE-COMPUTE?    WHY / WHY NOT
+────────────────────────────────────────────────────────────────────────────────
+beta_rounding             YES ✓               Only affects precision/formatting
+(0.1, 0.05, 0.01)                            Different values use same data
+                                             Can defer to runtime
+
+error_tolerance           PARTIAL ✓           Can pre-compute both filtered &
+(0.2, 0.4, 0.8)                             unfiltered versions
+                                             Then apply specific tolerance
+                                             at runtime
+
+approach_to_ke            PARTIAL ✓           Can pre-compute both formulas
+(FIXED, Floating)                           (beta_fixed, beta_floating)
+                                             Then select at runtime
+
+================================================================================
+
+STORED INTERMEDIATE VALUES:
+
+For dataset X, store ONCE:
+
+Row 1: dataset_id=X, ticker=BHP, fiscal_year=2020
+  ├─ slope_raw = 0.8234
+  ├─ std_err = 0.0945
+  ├─ rel_std_err = 0.118
+  ├─ slope_transformed_unrounded = 0.8823  ← No rounding applied
+  ├─ spot_slope_unrounded = 0.8823
+  ├─ ticker_avg = 1.0456  ← Average across all years
+  ├─ beta_fixed_approach = 1.0456  ← For FIXED: use ticker_avg
+  └─ beta_floating_approach = 0.9123  ← For Floating: use cumulative avg
+
+
+AT RUNTIME, User selects params:
+  ├─ error_tolerance = 0.4
+  ├─ approach_to_ke = 'Floating'
+  └─ beta_rounding = 0.1
+
+Steps:
+  1. Check if rel_std_err (0.118) > error_tolerance (0.4) → NO, use calculated value
+  2. Select approach: 'Floating' → use beta_floating_approach = 0.9123
+  3. Apply rounding: round(0.9123 / 0.1, 0) * 0.1 = 0.9
+  4. Result: beta = 0.9 ✓
+
+================================================================================

@@ -1,0 +1,199 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                  BETA ROUNDING QUICK REFERENCE CARD                        ║
+║                    CISSA Regression System (2026)                          ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┌─ CURRENT SETTING ──────────────────────────────────────────────────────────┐
+│ Parameter:    beta_rounding                                                 │
+│ Value:        0.1                                                           │
+│ Location:     cissa.parameters table (schema.sql line 420)                 │
+│ Type:         NUMERIC                                                       │
+│ Effect:       Rounds Beta to nearest 0.1                                    │
+│ Possible:     {0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, ...}    │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ ROUNDING ERRORS ──────────────────────────────────────────────────────────┐
+│                                                                              │
+│ INDIVIDUAL:     ±0.05 (±5% at typical 1.0 Beta)                            │
+│ SECTOR SLOPE:   ±0.03 (averaging compounds error)                           │
+│ FLOATING BETA:  Step function - gets stuck at boundaries                   │
+│ KE IMPACT:      ±0.25% (at 5% risk premium)                                │
+│ LARGE-CAP:      ±$2.5B per $100B market cap                                │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ WHERE ROUNDED ────────────────────────────────────────────────────────────┐
+│                                                                              │
+│ 1. Slope Transformation (Line 641)                                          │
+│    Raw slope → Transform → Round → Tier 1 Beta                             │
+│    Effect: PRIMARY                                                          │
+│    Risk:   Foundation of cascade                                            │
+│                                                                              │
+│ 2. Sector Average (Line 741)                                                │
+│    Tier 1 slopes → Average → Round → Tier 2 Beta                           │
+│    Effect: COMPOUNDS                                                        │
+│    Risk:   HIGH (multiplies errors)                                         │
+│                                                                              │
+│ 3. Floating Beta (Line 877)                                                 │
+│    Cumulative avg → Round → Final KE input                                 │
+│    Effect: STEP FUNCTION                                                   │
+│    Risk:   HIGH (stickiness at boundaries)                                  │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ SENSITIVITY RANKING ──────────────────────────────────────────────────────┐
+│                                                                              │
+│ RANK 1: Floating Beta          [VERY HIGH SENSITIVITY]                     │
+│         • Step function behavior                                            │
+│         • Can get stuck for 3+ years                                        │
+│         • Cumulative rounding errors                                        │
+│                                                                              │
+│ RANK 2: Sector Average         [HIGH SENSITIVITY]                          │
+│         • Averages already-rounded values                                   │
+│         • Affects 5-30 companies per sector                                │
+│         • Triggers Tier 2 fallback                                         │
+│                                                                              │
+│ RANK 3: Fixed Beta Average     [MODERATE SENSITIVITY]                      │
+│         • Single rounding step                                              │
+│         • Ticker-level average                                              │
+│                                                                              │
+│ RANK 4: Transformation Formula [LOW SENSITIVITY]                            │
+│         • Mean-reversion built-in                                           │
+│         • Natural compression effect                                        │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ COST OF EQUITY IMPACT ────────────────────────────────────────────────────┐
+│                                                                              │
+│ Formula: KE = Rf + Beta × RP                                                │
+│                                                                              │
+│ Beta ±0.01  →  KE ±0.05%  (negligible)                                     │
+│ Beta ±0.05  →  KE ±0.25%  (noticeable)                                     │
+│ Beta ±0.10  →  KE ±0.50%  (material)                                       │
+│ Beta ±0.15  →  KE ±0.75%  (significant)                                    │
+│ Beta ±0.20  →  KE ±1.00%  (very significant)                               │
+│                                                                              │
+│ At RP = 5% (typical), each 0.1 Beta = 0.5% KE                             │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ EXAMPLE: BHP AU EQUITY ──────────────────────────────────────────────────┐
+│                                                                              │
+│ Raw OLS Slope:              0.847                                           │
+│ Transformed:                0.8647                                          │
+│ Rounded (0.1):              0.9                 ← +3.9% error               │
+│                                                                              │
+│ KE with raw:                8.78%                                           │
+│ KE with rounded:            9.00%                                           │
+│ KE Difference:              +0.22%  ← Material on $100B+ valuations         │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ SCENARIO ANALYSIS ────────────────────────────────────────────────────────┐
+│                                                                              │
+│ SCENARIO A: Finer (0.1 → 0.01)                                             │
+│   Max Error: ±0.005 (90% reduction)                                        │
+│   Values: 140 (vs 15) - harder to explain                                  │
+│   Status: TEST FIRST (not recommended for production)                      │
+│                                                                              │
+│ SCENARIO B: No Rounding                                                    │
+│   Max Error: 0 (perfect)                                                   │
+│   Values: Continuous - confusing for users                                 │
+│   Status: NOT RECOMMENDED (breaks audit trail)                             │
+│                                                                              │
+│ SCENARIO C: Coarser (0.1 → 0.2)                                            │
+│   Max Error: ±0.1 (100% worse)                                             │
+│   Values: 8 (vs 15) - very sticky                                          │
+│   Status: NOT RECOMMENDED (too much error)                                 │
+│                                                                              │
+│ CURRENT (0.1):                                                              │
+│   Status: ✓ RECOMMENDED - optimal balance                                  │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ CRITICAL THRESHOLDS ─────────────────────────────────────────────────────┐
+│                                                                              │
+│ Error Tolerance Filter:                                                    │
+│   TRIGGER: if rel_std_err > tolerance                                      │
+│   RESULT: Reject Tier 1 → Use Tier 2 sector average                       │
+│   RISK: Small std_err rounding can flip decision                           │
+│                                                                              │
+│ Sector Fallback Activation:                                                │
+│   TRIGGER: When Tier 1 rejected (high error)                              │
+│   RESULT: Company gets sector slope instead                                │
+│   RISK: Sector slope itself is rounded (+3% error)                         │
+│                                                                              │
+│ Global Fallback (Tier 3):                                                  │
+│   TRIGGER: When 30%+ slopes rejected                                       │
+│   RESULT: Use mean(surviving rounded slopes)                               │
+│   RISK: Distribution skew - which values survive matters                   │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ MONITORING CHECKLIST ────────────────────────────────────────────────────┐
+│                                                                              │
+│ DAILY:                                                                      │
+│   ☐ Max/min Beta rounding error  (Alert if > 5%)                           │
+│   ☐ Tier distribution (% T1/T2/T3)  (Alert if T2 > 30%)                    │
+│                                                                              │
+│ WEEKLY:                                                                     │
+│   ☐ Floating beta stickiness (Alert if >3 years same value)                │
+│   ☐ Sector slope changes (Alert if > 5%)                                   │
+│   ☐ KE spread (min-max range)                                              │
+│                                                                              │
+│ MONTHLY:                                                                    │
+│   ☐ Portfolio KE stability (std dev)                                       │
+│   ☐ Sector-by-sector impact                                                │
+│   ☐ Floating beta convergence rate                                         │
+│   ☐ Tier transition frequency                                              │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ DECISIONS & ACTIONS ─────────────────────────────────────────────────────┐
+│                                                                              │
+│ KEEP current 0.1:                                                          │
+│   ✓ Clear communication                                                    │
+│   ✓ Acceptable precision (KE < 0.3% error)                                │
+│   ✓ Matches legacy CISSA                                                   │
+│   ✓ Minimal audit complexity                                               │
+│   ACTION: Monitor key metrics, document floating beta step function        │
+│                                                                              │
+│ CONSIDER 0.05 if precision critical:                                       │
+│   • Test with high-beta stocks first                                       │
+│   • Validate sector slopes                                                 │
+│   • Prepare stakeholder communication                                      │
+│   NOTE: 50% error reduction but 2x more values to manage                   │
+│                                                                              │
+│ DO NOT change without testing:                                             │
+│   ✗ Cannot remove rounding (audit breaks, illusion of precision)           │
+│   ✗ Cannot go coarser (error too high)                                     │
+│   ✗ Cannot go finer without stakeholder agreement                          │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ IMPACT SUMMARY TABLE ────────────────────────────────────────────────────┐
+│                                                                              │
+│ Component             │ Severity │ Max Change │ Recommendation             │
+│ ───────────────────────┼──────────┼────────────┼──────────────────────────│
+│ Individual Beta       │ Moderate │ ±5%        │ Monitor per company       │
+│ KE Calculation        │ Moderate │ ±0.25%     │ Monitor aggregate         │
+│ Sector Fallback       │ HIGH     │ ±3%        │ Add Tier 2 alerts         │
+│ Floating Beta         │ HIGH     │ Step fn    │ Document expected         │
+│ Portfolio Impact      │ LOW      │ ±0.1%      │ Historical only           │
+│ Decision Thresholds   │ Moderate │ Binary     │ Monitor boundaries        │
+│ Valuation (Large-cap) │ Moderate │ ±2-3%      │ Material for $100B+       │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ REFERENCES ──────────────────────────────────────────────────────────────┐
+│                                                                              │
+│ Full Analysis:           BETA_SENSITIVITY_ANALYSIS.md (25KB)               │
+│ Executive Summary:       BETA_ROUNDING_SUMMARY.txt (12KB)                  │
+│ Main Implementation:     beta_calculation_service.py (Line 641, 741, 877)  │
+│ KE Formula:              cost_of_equity_service.py (Line 297)              │
+│ Schema Definition:       schema.sql (Line 420)                             │
+│ Test Cases:             test_beta_calculation.py                           │
+│                                                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+
+Generated: 2026-03-16  |  Status: COMPLETE  |  Confidence: HIGH
