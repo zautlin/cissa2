@@ -22,7 +22,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # Configuration
 DATASET_ID = UUID("13d1f4ca-6c72-4be2-9d21-b86bf685ceb2")
 PARAM_SET_ID = UUID("15d7dc52-4e6f-44ec-9aff-0be42ff11031")
-TICKER = "CSL AU Equity"
+TICKER = "BHP AU Equity"
 YEAR_START = 2002
 YEAR_END = 2022
 
