@@ -780,7 +780,7 @@ async def get_ratio_metrics(
     metric: str = Query(..., description="Metric ID (e.g., 'mb_ratio')"),
     tickers: str = Query(..., description="Comma-separated ticker list (e.g., 'AAPL,MSFT')"),
     dataset_id: UUID = Query(..., description="Dataset ID"),
-    temporal_window: str = Query("1Y", description="Temporal window(s): single value (1Y) or comma-separated (1Y,3Y,5Y)"),
+    temporal_window: str = Query("1Y", min_length=2, max_length=50, description="Temporal window(s): single value (1Y) or comma-separated (1Y,3Y,5Y)"),
     param_set_id: Optional[UUID] = Query(None, description="Parameter set ID (defaults to base_case)"),
     start_year: Optional[int] = Query(None, description="Optional start year filter"),
     end_year: Optional[int] = Query(None, description="Optional end year filter"),
