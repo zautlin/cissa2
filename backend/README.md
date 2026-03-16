@@ -497,10 +497,19 @@ Calculate financial ratio metrics with rolling averages over temporal windows (1
 - `metric` (required, string): Metric ID (e.g., `mb_ratio`)
 - `tickers` (required, string): Comma-separated ticker list (e.g., `BHP AU Equity` or `AAPL,MSFT`)
 - `dataset_id` (required, UUID): Dataset UUID
-- `temporal_window` (optional, string, default="1Y"): One of `1Y`, `3Y`, `5Y`, `10Y`
+- `temporal_window` (optional, string, default="1Y"): Single window or comma-separated windows from `1Y`, `3Y`, `5Y`, `10Y`
+  - Single: `?temporal_window=1Y` (backward compatible)
+  - Multiple: `?temporal_window=1Y,3Y,5Y,10Y` (new multi-window feature)
 - `param_set_id` (optional, UUID): Parameter set UUID (defaults to base_case if not provided)
 - `start_year` (optional, integer): Filter results from this year onwards
 - `end_year` (optional, integer): Filter results up to this year
+
+**Multi-Window Feature:**
+Submit multiple temporal windows in a single request to get nested results by window and ticker. This eliminates the need for 4 separate API calls when charting multiple trend lines.
+
+- Invalid windows are skipped with warning logs; only valid windows are processed
+- Response format changes based on number of windows (see examples below)
+- Request fails only if ALL windows are invalid or data fetch fails
 
 **Supported Metrics:**
 - `mb_ratio`: Market-to-Book Ratio = Market Cap / Economic Equity
@@ -528,7 +537,7 @@ When data starts in fiscal year 2002:
 | **5Y** | 2007 | 5-year rolling average | 5 | Uses 2002-2006 to calculate 2007 |
 | **10Y** | 2012 | 10-year rolling average | 10 | Uses 2002-2011 to calculate 2012 |
 
-**Response Schema:**
+**Response Schema (Single Window):**
 ```json
 {
   "metric": "string (metric ID)",
@@ -546,6 +555,119 @@ When data starts in fiscal year 2002:
     }
   ]
 }
+```
+
+**Response Schema (Multiple Windows):**
+```json
+{
+  "metric": "string (metric ID)",
+  "display_name": "string",
+  "windows": [
+    {
+      "temporal_window": "string (1Y|3Y|5Y|10Y)",
+      "data": [
+        {
+          "ticker": "string",
+          "time_series": [
+            {
+              "year": "integer",
+              "value": "number or null"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+#### Example 0: Multiple Windows, Single Ticker, Single Request
+
+Query MB Ratio for all temporal windows in a single request instead of 4 separate calls:
+
+```bash
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity&dataset_id=523eeffd-9220-4d27-927b-e418f9c21d8a&param_set_id=71a0caa6-b52c-4c5e-b550-1048b7329719&temporal_window=1Y,3Y,5Y,10Y" | python -m json.tool
+```
+
+**Response (nested by window, then ticker):**
+```json
+{
+  "metric": "mb_ratio",
+  "display_name": "MB Ratio",
+  "windows": [
+    {
+      "temporal_window": "1Y",
+      "data": [
+        {
+          "ticker": "BHP AU Equity",
+          "time_series": [
+            {"year": 2003, "value": 1.2116482122958967},
+            {"year": 2004, "value": 1.6324947466480935},
+            {"year": 2005, "value": 2.1555443848919094}
+          ]
+        }
+      ]
+    },
+    {
+      "temporal_window": "3Y",
+      "data": [
+        {
+          "ticker": "BHP AU Equity",
+          "time_series": [
+            {"year": 2005, "value": 1.6902125865453},
+            {"year": 2006, "value": 1.9400939762113}
+          ]
+        }
+      ]
+    },
+    {
+      "temporal_window": "5Y",
+      "data": [
+        {
+          "ticker": "BHP AU Equity",
+          "time_series": [
+            {"year": 2007, "value": 1.8734982374982}
+          ]
+        }
+      ]
+    },
+    {
+      "temporal_window": "10Y",
+      "data": [
+        {
+          "ticker": "BHP AU Equity",
+          "time_series": [
+            {"year": 2012, "value": 2.4839283847829}
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Key benefits:**
+- Single API call retrieves all 4 windows instead of 4 separate requests
+- Nested structure makes it easy to chart multiple trend lines in one visualization
+- Reduces latency and server load
+- Invalid windows are skipped with warning logs; only valid windows appear in response
+
+**UI Application Example (Charting):**
+```javascript
+// Parse response and chart all windows for comparison
+const response = multiWindowData;
+response.windows.forEach(window => {
+  const ticker = window.data[0].ticker;
+  const series = window.data[0].time_series;
+  
+  // Add line to chart: {years, values} for this window
+  chart.addSeries({
+    name: `${ticker} (${window.temporal_window})`,
+    data: series.map(point => [point.year, point.value])
+  });
+});
 ```
 
 ---
