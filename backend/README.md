@@ -8,6 +8,8 @@ This is a **production-ready FastAPI backend** for multi-phase metric calculatio
 - ✅ Async-first architecture (AsyncPG, SQLAlchemy 2.0 async)
 - ✅ Clean 3-tier architecture: Repositories (data access) → Services (business logic) → API (HTTP)
 - ✅ Support for multiple metric phases: L1, L2, Beta, Risk-Free Rate, Cost of Equity
+- ✅ **Multi-window temporal queries** - Get 1Y, 3Y, 5Y, 10Y trends in single API call
+- ✅ **Dataset statistics** with 1-hour caching (company count, sectors, data coverage, etc.)
 - ✅ Flexible querying with `GET /api/v1/metrics/get_metrics/` endpoint
 - ✅ Pydantic v2 models with strict validation
 - ✅ Dependency injection pattern for database sessions
@@ -133,6 +135,68 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ---
 
+## Quick Start Examples
+
+### Example 1: Get Dataset Overview on Page Load
+
+UI initialization workflow:
+
+```bash
+# 1. Get dataset statistics (cached, < 1ms after first call)
+curl "http://localhost:8000/api/v1/metrics/statistics?dataset_id=550e8400-e29b-41d4-a716-446655440000"
+
+# 2. Get active parameters for calculations
+curl "http://localhost:8000/api/v1/parameters/active"
+
+# Response gives you:
+# - 535 companies, 12 sectors, data from 1981-2023
+# - Active parameter set for metric calculations
+# - Ready to render dashboard
+```
+
+### Example 2: Chart Multiple Trend Lines in One Request
+
+Compare 1Y, 3Y, 5Y, 10Y MB Ratio trends:
+
+```bash
+# Single request for all temporal windows (new multi-window feature)
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=BHP%20AU%20Equity,RIO%20AU%20Equity&temporal_window=1Y,3Y,5Y,10Y&dataset_id=550e8400-e29b-41d4-a716-446655440000"
+
+# Response structure enables easy charting:
+# {
+#   "windows": [
+#     {"temporal_window": "1Y", "data": [...first series...]},
+#     {"temporal_window": "3Y", "data": [...second series...]},
+#     ...
+#   ]
+# }
+```
+
+### Example 3: Compare Companies Across Metrics
+
+Get multiple ratios for analysis:
+
+```bash
+# Query all metrics for a specific ticker
+curl "http://localhost:8000/api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&ticker=BHP%20AU%20Equity"
+
+# Filter to specific metrics
+curl "http://localhost:8000/api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&ticker=BHP%20AU%20Equity&metric_name=Beta"
+```
+
+### Example 4: Fetch Profit Margin Trends
+
+Multi-window profit margin analysis:
+
+```bash
+# Get 1Y and 3Y profit margin for comparison
+curl "http://localhost:8000/api/v1/metrics/ratio-metrics?metric=profit_margin&tickers=AAPL,MSFT,GOOG&temporal_window=1Y,3Y&dataset_id=550e8400-e29b-41d4-a716-446655440000"
+
+# Shows volatility (1Y) vs medium-term trend (3Y)
+```
+
+---
+
 ## API Endpoints
 
 ### Health Check
@@ -151,6 +215,87 @@ curl http://localhost:8000/api/v1/metrics/health
   "database": "connected"
 }
 ```
+
+---
+
+### Dataset Statistics
+
+**GET** `/api/v1/metrics/statistics`
+
+Get comprehensive statistics about a dataset with **1-hour caching** for optimal performance. Perfect for UI initialization, dashboard summaries, and metadata displays.
+
+**Query Parameters:**
+- `dataset_id` (required, UUID): The dataset to retrieve statistics for
+
+**Statistics Included:**
+- **companies.count**: Total distinct companies (tickers) in dataset
+- **sectors.count**: Total distinct sectors
+- **raw_metrics.count**: Total distinct raw metric names
+- **data_coverage.min_year / max_year**: Time period covered
+- **country**: Geographic region/country
+- **dataset_created_at**: When dataset was ingested
+
+**Example Request:**
+```bash
+curl "http://localhost:8000/api/v1/metrics/statistics?dataset_id=550e8400-e29b-41d4-a716-446655440000"
+```
+
+**Example Response:**
+```json
+{
+  "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+  "dataset_created_at": "2026-03-16T03:59:42.223155Z",
+  "country": "Australia",
+  "companies": {
+    "count": 535
+  },
+  "sectors": {
+    "count": 12
+  },
+  "data_coverage": {
+    "min_year": 1981,
+    "max_year": 2023
+  },
+  "raw_metrics": {
+    "count": 20
+  }
+}
+```
+
+**Use Cases:**
+
+**Case 1: Dashboard Initialization**
+```bash
+# Get dataset summary when UI loads
+curl "http://localhost:8000/api/v1/metrics/statistics?dataset_id=550e8400-e29b-41d4-a716-446655440000"
+```
+
+**Case 2: Display in UI**
+```javascript
+// Use statistics in React component
+const { data: stats } = useQuery(['statistics', datasetId], 
+  () => fetch(`/api/v1/metrics/statistics?dataset_id=${datasetId}`).then(r => r.json())
+);
+
+return (
+  <div className="dataset-summary">
+    <p>Companies: {stats.companies.count}</p>
+    <p>Coverage: {stats.data_coverage.min_year} - {stats.data_coverage.max_year}</p>
+    <p>Country: {stats.country}</p>
+  </div>
+);
+```
+
+**Caching Behavior:**
+- First call for a dataset: ~800ms (database query)
+- Subsequent calls (within 1 hour): < 1ms (cached)
+- Cache automatically refreshed after 1 hour
+- Useful for reducing database load on high-traffic UIs
+
+**Error Handling:**
+- If dataset not found: Returns NULL for country and created_at
+- If no data for dataset: Returns 0 for all counts
+- Frontend receives valid response with NULL values (graceful degradation)
 
 ---
 
