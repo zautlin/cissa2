@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from uuid import UUID
 from typing import List, Dict, Any, Optional
+import json
 from ..models import MetricResultItem, CalculateMetricsResponse
 from ..core.config import get_logger
 
@@ -207,30 +208,30 @@ class MetricsService:
             DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
         """)
         
-        # Batch insert in groups to avoid overly large queries
+        # Batch insert in groups using PostgreSQL multi-row INSERT for performance
+        # This replaces individual INSERTs (10,000+ statements) with multi-row INSERT (1 statement)
         batch_size = 1000
         for i in range(0, len(results), batch_size):
             batch = results[i:i + batch_size]
             
-            # Prepare values for batch
-            values = [
-                {
-                    "dataset_id": str(dataset_id),
-                    "param_set_id": param_set_id,
-                    "ticker": item.ticker,
-                    "fiscal_year": item.fiscal_year,
-                    "output_metric_name": metric_name,
-                    "output_metric_value": item.value,
-                    "metadata": '{"metric_level": "L1"}'
-                }
+            # Build multi-row VALUES clause: (val1, val2, ...), (val1, val2, ...), ...
+            metadata_json = json.dumps({"metric_level": "L1"})
+            rows_sql = ", ".join([
+                f"('{str(dataset_id)}', '{param_set_id}', '{item.ticker}', {item.fiscal_year}, '{metric_name}', {item.value}, '{metadata_json}', now())"
                 for item in batch
-            ]
+            ])
             
-            # Execute batch insert
-            for value_dict in values:
-                await self.session.execute(insert_query, value_dict)
+            # Execute multi-row INSERT with ON CONFLICT UPSERT (all rows in single statement)
+            multi_row_insert = text(f"""
+                INSERT INTO cissa.metrics_outputs 
+                (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
+                VALUES {rows_sql}
+                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
+                DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value, updated_at = now()
+            """)
             
-            logger.info(f"Inserted batch of {len(batch)} metric results")
+            await self.session.execute(multi_row_insert)
+            logger.info(f"Inserted batch of {len(batch)} metric results (multi-row INSERT)")
         
         # Commit the transaction
         await self.session.commit()
@@ -368,32 +369,31 @@ class MetricsService:
             DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
         """)
         
-        # Batch insert in groups to avoid overly large queries
+        # Batch insert using PostgreSQL multi-row INSERT for performance
         batch_size = 1000
         for i in range(0, len(results), batch_size):
             batch = results[i:i + batch_size]
             
             # Prepare values for batch
-            import json
             metadata_str = json.dumps(metadata)
-            values = [
-                {
-                    "dataset_id": str(dataset_id),
-                    "param_set_id": param_set_id,
-                    "ticker": item.ticker,
-                    "fiscal_year": item.fiscal_year,
-                    "output_metric_name": metric_name,
-                    "output_metric_value": item.value,
-                    "metadata": metadata_str
-                }
+            
+            # Build multi-row VALUES clause for all records in batch
+            rows_sql = ", ".join([
+                f"('{str(dataset_id)}', '{param_set_id}', '{item.ticker}', {item.fiscal_year}, '{metric_name}', {item.value}, '{metadata_str}', now())"
                 for item in batch
-            ]
+            ])
             
-            # Execute batch insert
-            for value_dict in values:
-                await self.session.execute(insert_query, value_dict)
+            # Execute multi-row INSERT with ON CONFLICT UPSERT (single statement for entire batch)
+            multi_row_insert = text(f"""
+                INSERT INTO cissa.metrics_outputs 
+                (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
+                VALUES {rows_sql}
+                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
+                DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value, updated_at = now()
+            """)
             
-            logger.info(f"Inserted batch of {len(batch)} metric results")
+            await self.session.execute(multi_row_insert)
+            logger.info(f"Inserted batch of {len(batch)} metric results (multi-row INSERT)")
         
         # Commit the transaction
         await self.session.commit()

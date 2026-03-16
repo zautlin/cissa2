@@ -296,21 +296,13 @@ class CostOfEquityService:
         ke_df: pd.DataFrame
     ) -> int:
         """
-        Insert KE values in batches of 1000 using individual parameterized queries.
+        Insert KE values in batches of 1000 using PostgreSQL multi-row INSERT for performance.
         """
         if ke_df.empty:
             return 0
         
         batch_size = 1000
         total_inserted = 0
-        
-        insert_query = text("""
-            INSERT INTO cissa.metrics_outputs 
-            (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
-            VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata, now())
-            ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
-            DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value, created_at = now()
-        """)
         
         metadata = json.dumps({"metric_level": "L1", "calculation_source": "cost_of_equity_service"})
         
@@ -319,21 +311,25 @@ class CostOfEquityService:
             batch_num = i // batch_size + 1
             
             try:
-                # Execute individual inserts for this batch
-                for _, row in batch.iterrows():
-                    await self.session.execute(insert_query, {
-                        "dataset_id": str(dataset_id),
-                        "param_set_id": str(param_set_id),
-                        "ticker": str(row["ticker"]),
-                        "fiscal_year": int(row["fiscal_year"]),
-                        "output_metric_name": "Calc KE",
-                        "output_metric_value": float(row["ke"]),
-                        "metadata": metadata
-                    })
+                # Build multi-row VALUES clause for all rows in batch
+                rows_sql = ", ".join([
+                    f"('{str(dataset_id)}', '{str(param_set_id)}', '{str(row['ticker'])}', {int(row['fiscal_year'])}, 'Calc KE', {float(row['ke'])}, '{metadata}', now())"
+                    for _, row in batch.iterrows()
+                ])
                 
+                # Execute multi-row INSERT with ON CONFLICT UPSERT (single statement for entire batch)
+                multi_row_insert = text(f"""
+                    INSERT INTO cissa.metrics_outputs 
+                    (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
+                    VALUES {rows_sql}
+                    ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
+                    DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value, created_at = now()
+                """)
+                
+                await self.session.execute(multi_row_insert)
                 await self.session.commit()
                 total_inserted += len(batch)
-                logger.debug(f"    - Batch {batch_num}: inserted {len(batch)} records")
+                logger.debug(f"    - Batch {batch_num}: inserted {len(batch)} records (multi-row INSERT)")
             except Exception as e:
                 logger.error(f"    - Batch {batch_num} error: {str(e)}", exc_info=True)
                 await self.session.rollback()

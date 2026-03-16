@@ -723,43 +723,41 @@ class RiskFreeRateCalculationService:
 
     async def _store_results_raw_sql(self, results: list[dict]) -> int:
         """
-        Store results using raw SQL with UPSERT logic.
+        Store results using PostgreSQL multi-row INSERT with UPSERT logic.
         
         Uses DO UPDATE clause to handle conflicts on (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name).
+        Multi-row INSERT replaces individual INSERTs for much better performance.
         """
         try:
             if not results:
                 self.logger.warning("No results to store")
                 return 0
             
-            # Prepare data for bulk insert
-            insert_query = text("""
-                INSERT INTO cissa.metrics_outputs 
-                (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
-                VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata)
-                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
-                DO UPDATE SET
-                    output_metric_value = EXCLUDED.output_metric_value,
-                    metadata = EXCLUDED.metadata
-            """)
-            
-            # Insert records in batches
+            # Insert records in batches using multi-row INSERT
             batch_size = 1000
             for i in range(0, len(results), batch_size):
                 batch = results[i:i+batch_size]
                 
-                for record in batch:
-                    await self.session.execute(insert_query, {
-                        "dataset_id": record["dataset_id"],
-                        "param_set_id": record["param_set_id"],
-                        "ticker": record["ticker"],
-                        "fiscal_year": record["fiscal_year"],
-                        "output_metric_name": record["output_metric_name"],
-                        "output_metric_value": record["output_metric_value"],
-                        "metadata": json.dumps(record["metadata"])
-                    })
+                # Build multi-row VALUES clause for all records in batch
+                rows_sql = ", ".join([
+                    f"('{record['dataset_id']}', '{record['param_set_id']}', '{record['ticker']}', {record['fiscal_year']}, '{record['output_metric_name']}', {record['output_metric_value']}, '{json.dumps(record['metadata'])}')"
+                    for record in batch
+                ])
+                
+                # Execute multi-row INSERT with ON CONFLICT UPSERT (single statement for entire batch)
+                multi_row_insert = text(f"""
+                    INSERT INTO cissa.metrics_outputs 
+                    (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
+                    VALUES {rows_sql}
+                    ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
+                    DO UPDATE SET
+                        output_metric_value = EXCLUDED.output_metric_value,
+                        metadata = EXCLUDED.metadata
+                """)
+                
+                await self.session.execute(multi_row_insert)
             
-            self.logger.info(f"Stored {len(results)} records")
+            self.logger.info(f"Stored {len(results)} records (multi-row INSERT)")
             return len(results)
             
         except Exception as e:
