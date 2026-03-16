@@ -227,7 +227,7 @@ class MetricsService:
                 (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
                 VALUES {rows_sql}
                 ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
-                DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value, updated_at = now()
+                DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
             """)
             
             await self.session.execute(multi_row_insert)
@@ -389,7 +389,7 @@ class MetricsService:
                 (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
                 VALUES {rows_sql}
                 ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
-                DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value, updated_at = now()
+                DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
             """)
             
             await self.session.execute(multi_row_insert)
