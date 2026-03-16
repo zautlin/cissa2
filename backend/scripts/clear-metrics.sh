@@ -40,11 +40,11 @@ echo "  Total records: $CURRENT_COUNT"
 echo -e "\n${YELLOW}Records by metric:${NC}"
 psql "$DB_URL" << EOF
 SELECT 
-  metric_name,
+  output_metric_name,
   COUNT(*) as count
 FROM cissa.metrics_outputs
-GROUP BY metric_name
-ORDER BY metric_name;
+GROUP BY output_metric_name
+ORDER BY output_metric_name;
 EOF
 
 # Confirm before deletion

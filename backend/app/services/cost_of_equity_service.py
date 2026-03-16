@@ -258,8 +258,24 @@ class CostOfEquityService:
         
         logger.info(f"    - Using {approach} approach with RP={risk_premium:.4f}")
         
+        # Check if Beta and Rf data is available
+        if beta_df.empty:
+            logger.warning("    No Beta data available")
+            return pd.DataFrame()
+        
+        if rf_df.empty:
+            logger.warning("    No Risk-Free Rate data available")
+            return pd.DataFrame()
+        
+        logger.info(f"    - Beta records: {len(beta_df)}, Rf records: {len(rf_df)}")
+        
         # Merge Beta and Rf on ticker and fiscal_year (INNER join to get only matching records)
-        merged_df = beta_df.merge(rf_df, on=["ticker", "fiscal_year"], how="inner")
+        try:
+            merged_df = beta_df.merge(rf_df, on=["ticker", "fiscal_year"], how="inner")
+        except KeyError as e:
+            logger.error(f"    Merge failed - Beta columns: {beta_df.columns.tolist()}, Rf columns: {rf_df.columns.tolist()}")
+            logger.error(f"    KeyError during merge: {e}")
+            return pd.DataFrame()
         
         if merged_df.empty:
             logger.warning("    No matching Beta-Rf pairs found")
