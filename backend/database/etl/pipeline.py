@@ -142,6 +142,10 @@ class PipelineOrchestrator:
             if not self._stage_2_process_data():
                 return False
             
+            # Stage 3: Pre-compute metrics (Beta, etc.)
+            if not self._stage_3_precompute_metrics():
+                return False
+            
             # Final summary
             self._log_final_summary()
             return True
@@ -476,6 +480,78 @@ class PipelineOrchestrator:
             self.logger.info(traceback.format_exc())
             return False
     
+    def _stage_3_precompute_metrics(self) -> bool:
+        """Stage 3: Pre-compute metrics (Beta, etc.) during ingestion."""
+        self.logger.section("STAGE 3: PRE-COMPUTE METRICS")
+        
+        try:
+            if not self.dataset_id:
+                self.logger.error("Dataset ID not set")
+                return False
+            
+            self.logger.info(f"Dataset ID: {self.dataset_id}\n")
+            
+            # Import here to avoid circular dependencies
+            import asyncio
+            from sqlalchemy.ext.asyncio import create_async_engine
+            from sqlalchemy.orm import sessionmaker
+            
+            async def run_precomputation():
+                # Get async engine from config
+                from etl.config import get_async_engine
+                async_engine = await get_async_engine()
+                async_session_factory = sessionmaker(
+                    async_engine, class_=None, expire_on_commit=False
+                )
+                
+                # Create pre-computation service
+                from app.services.beta_precomputation_service import PreComputedBetaService
+                
+                async with async_session_factory() as session:
+                    service = PreComputedBetaService(session)
+                    result = await service.precompute_beta_async(dataset_id=self.dataset_id)
+                    return result
+            
+            # Run async pre-computation
+            result = asyncio.run(run_precomputation())
+            
+            if result["status"] == "error":
+                self.logger.error(f"Beta pre-computation failed: {result['message']}")
+                return False
+            
+            self.logger.success(f"Beta Pre-computation Complete")
+            self.logger.info(f"\nResults:")
+            self.logger.info(f"  Records pre-computed: {result['records_created']:,}")
+            self.logger.info(f"  Time elapsed: {result['time_seconds']:.1f}s")
+            
+            if result.get("alert"):
+                self.logger.info(f"\n⚠️  ALERT: Pre-computation took {result['time_seconds']:.1f}s (threshold: 120s)")
+                self.logger.info(f"  Consider optimizing data or increasing server resources")
+            
+            self.results['stage_3_precompute'] = {
+                'status': 'SUCCESS',
+                'records_created': result['records_created'],
+                'time_seconds': result['time_seconds'],
+                'alert': result.get('alert', False),
+            }
+            
+            self.logger.section("PRE-COMPUTATION COMPLETE")
+            self.logger.info("✓ Stage 3: Metrics pre-computation complete")
+            
+            return True
+        
+        except Exception as e:
+            self.logger.error(f"Metrics pre-computation failed: {e}")
+            import traceback
+            self.logger.info(traceback.format_exc())
+            # Don't fail the entire pipeline if pre-computation fails
+            # Log the error but continue
+            self.results['stage_3_precompute'] = {
+                'status': 'WARNING',
+                'message': f"Pre-computation encountered error: {str(e)}",
+            }
+            return True  # Return True to continue pipeline despite pre-computation error
+    
     def _log_final_summary(self):
         """Log final execution summary."""
         self.logger.section("FINAL SUMMARY")
@@ -492,6 +568,7 @@ class PipelineOrchestrator:
                 'stage_1a_references',
                 'stage_1b_ingest',
                 'stage_2_process',
+                'stage_3_precompute',
             ]
         )
         

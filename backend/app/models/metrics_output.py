@@ -47,9 +47,9 @@ class MetricsOutput(Base):
         ForeignKey("cissa.dataset_versions.dataset_id", ondelete="CASCADE"),
         nullable=False,
     )
-    param_set_id: Mapped[UUID] = mapped_column(
-        ForeignKey("cissa.parameter_sets.param_set_id"),
-        nullable=False,
+    param_set_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("cissa.parameter_sets.param_set_id", ondelete="CASCADE"),
+        nullable=True,
     )
 
     # Data fields

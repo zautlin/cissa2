@@ -49,17 +49,17 @@ class EEGrowthCalculator:
         """
         # Build the base SQL query with CTEs
         sql_query = """
-        WITH ee_data AS (
-          SELECT
-            ticker,
-            fiscal_year,
-            output_metric_value AS ee
-          FROM cissa.metrics_outputs
-          WHERE dataset_id = :dataset_id
-            AND param_set_id = :param_set_id
-            AND metric_name = :metric_name
-            AND ticker = ANY(:tickers)
-        ),
+         WITH ee_data AS (
+           SELECT
+             ticker,
+             fiscal_year,
+             output_metric_value AS ee
+           FROM cissa.metrics_outputs
+           WHERE dataset_id = :dataset_id
+             AND param_set_id = :param_set_id
+             AND output_metric_name = :metric_name
+             AND ticker = ANY(:tickers)
+         ),
         ee_rolling AS (
           SELECT
             ticker,

@@ -311,24 +311,30 @@ COMMENT ON TABLE parameter_sets IS 'Named bundles of parameter configurations fo
 -- ============================================================================
 
 -- Metrics Outputs: Computed metrics from fundamentals + parameters
-CREATE TABLE metrics_outputs (
-  metrics_output_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  dataset_id UUID NOT NULL REFERENCES dataset_versions(dataset_id) ON DELETE CASCADE,
-  param_set_id UUID NOT NULL REFERENCES parameter_sets(param_set_id),
-  ticker TEXT NOT NULL,
-  fiscal_year INTEGER NOT NULL,
-  
-  output_metric_name TEXT NOT NULL,
-  output_metric_value NUMERIC NOT NULL,
-  
-  metadata JSONB NOT NULL DEFAULT '{}',
-  
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+ CREATE TABLE metrics_outputs (
+   metrics_output_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+   dataset_id UUID NOT NULL REFERENCES dataset_versions(dataset_id) ON DELETE CASCADE,
+   param_set_id UUID REFERENCES parameter_sets(param_set_id) ON DELETE CASCADE,
+   ticker TEXT NOT NULL,
+   fiscal_year INTEGER NOT NULL,
+   
+   output_metric_name TEXT NOT NULL,
+   output_metric_value NUMERIC NOT NULL,
+   
+   metadata JSONB NOT NULL DEFAULT '{}',
+   
+   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+ );
 
--- Uniqueness: one row per (dataset, params, ticker, fiscal_year, metric)
-CREATE UNIQUE INDEX idx_metrics_outputs_unique 
-ON metrics_outputs (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name);
+ -- Uniqueness: one row per (dataset, params, ticker, fiscal_year, metric)
+ -- When param_set_id is NULL (pre-computed metrics), allow only one row
+ CREATE UNIQUE INDEX idx_metrics_outputs_unique 
+ ON metrics_outputs (dataset_id, COALESCE(param_set_id, '00000000-0000-0000-0000-000000000000'::UUID), ticker, fiscal_year, output_metric_name);
+
+ -- Index for pre-computed metrics (param_set_id IS NULL)
+ CREATE INDEX idx_metrics_outputs_precomputed 
+ ON metrics_outputs (dataset_id, ticker, fiscal_year, output_metric_name) 
+ WHERE param_set_id IS NULL;
 
 -- Access patterns
 CREATE INDEX idx_metrics_outputs_dataset ON metrics_outputs (dataset_id);
