@@ -86,7 +86,7 @@ class PreComputedBetaService(BetaCalculationService):
 
             if monthly_df.empty:
                 self.logger.warning(
-                    "[PRE-COMPUTATION] No monthly returns data found"
+                    "[PRE-COMPUTATION] ✗ CHECKPOINT FAILED: No monthly returns data found"
                 )
                 return {
                     "status": "error",
@@ -97,79 +97,147 @@ class PreComputedBetaService(BetaCalculationService):
                 }
 
             self.logger.info(
-                f"[PRE-COMPUTATION] Fetched {len(monthly_df)} monthly return records for {monthly_df['ticker'].nunique()} tickers"
+                f"[PRE-COMPUTATION] ✓ CHECKPOINT 1: Fetched {len(monthly_df)} monthly return records for {monthly_df['ticker'].nunique()} tickers"
             )
 
             # Fetch sector and fiscal month data
             self.logger.info(
-                "[PRE-COMPUTATION] Fetching sector and fiscal month information..."
+                "[PRE-COMPUTATION] CHECKPOINT 2: Fetching sector and fiscal month information..."
             )
-            sector_map, fy_month_map = await self._fetch_sector_and_fiscal_month_map()
-            self.logger.info(
-                f"[PRE-COMPUTATION] Loaded {len(sector_map)} ticker-sector mappings"
-            )
+            try:
+                sector_map, fy_month_map = await self._fetch_sector_and_fiscal_month_map()
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 2 SUCCESS: Loaded {len(sector_map)} ticker-sector mappings and {len(fy_month_map)} fiscal month mappings"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 2 FAILED: {e}", exc_info=True)
+                raise
 
             # Fetch begin_year mappings
             self.logger.info(
-                "[PRE-COMPUTATION] Fetching begin_year for all tickers..."
+                "[PRE-COMPUTATION] CHECKPOINT 3: Fetching begin_year for all tickers..."
             )
-            begin_year_map = await self._fetch_begin_years()
-            global_min_begin_year = await self._fetch_global_min_begin_year()
-            all_tickers = await self._fetch_all_tickers()
+            try:
+                begin_year_map = await self._fetch_begin_years()
+                global_min_begin_year = await self._fetch_global_min_begin_year()
+                all_tickers = await self._fetch_all_tickers()
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 3 SUCCESS: {len(begin_year_map)} begin_year mappings, {len(all_tickers)} total tickers, global_min_begin_year={global_min_begin_year}"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 3 FAILED: {e}", exc_info=True)
+                raise
 
             # Calculate rolling OLS slopes
             self.logger.info(
-                "[PRE-COMPUTATION] Calculating rolling OLS slopes (60-month window)..."
+                "[PRE-COMPUTATION] CHECKPOINT 4: Calculating rolling OLS slopes (60-month window)..."
             )
-            ols_df = self._calculate_rolling_ols(monthly_df)
-            self.logger.info(
-                f"[PRE-COMPUTATION] Calculated OLS slopes for {len(ols_df)} records"
-            )
+            try:
+                ols_df = self._calculate_rolling_ols(monthly_df)
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 4 SUCCESS: Calculated OLS slopes for {len(ols_df)} records"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 4 FAILED: {e}", exc_info=True)
+                raise
 
             # Transform slopes WITHOUT rounding (store raw values)
-            self.logger.info("[PRE-COMPUTATION] Transforming slopes...")
-            transformed_df = self._transform_slopes_no_rounding(
-                ols_df, params["beta_relative_error_tolerance"]
-            )
+            self.logger.info("[PRE-COMPUTATION] CHECKPOINT 5: Transforming slopes...")
+            try:
+                transformed_df = self._transform_slopes_no_rounding(
+                    ols_df, params["beta_relative_error_tolerance"]
+                )
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 5 SUCCESS: Transformed {len(transformed_df)} slope records"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 5 FAILED: {e}", exc_info=True)
+                raise
 
             # Annualize slopes
-            self.logger.info("[PRE-COMPUTATION] Annualizing slopes...")
-            annual_df = self._annualize_slopes(transformed_df, sector_map, fy_month_map)
-            self.logger.info(
-                f"[PRE-COMPUTATION] Annualized to {len(annual_df)} records"
-            )
+            self.logger.info("[PRE-COMPUTATION] CHECKPOINT 6: Annualizing slopes...")
+            try:
+                annual_df = self._annualize_slopes(transformed_df, sector_map, fy_month_map)
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 6 SUCCESS: Annualized to {len(annual_df)} records"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 6 FAILED: {e}", exc_info=True)
+                raise
 
             # Generate sector slopes (unrounded)
-            self.logger.info("[PRE-COMPUTATION] Calculating sector average slopes...")
-            sector_slopes = self._generate_sector_slopes_raw(annual_df)
+            self.logger.info("[PRE-COMPUTATION] CHECKPOINT 7: Calculating sector average slopes...")
+            try:
+                sector_slopes = self._generate_sector_slopes_raw(annual_df)
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 7 SUCCESS: Generated sector slopes for {len(sector_slopes)} sectors"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 7 FAILED: {e}", exc_info=True)
+                raise
 
             # Scaffold and backfill
-            self.logger.info("[PRE-COMPUTATION] Scaffolding and backfilling...")
-            scaffolded_df = self._scaffold_and_backfill_betas(
-                annual_df, sector_slopes, begin_year_map, global_min_begin_year, all_tickers
-            )
+            self.logger.info("[PRE-COMPUTATION] CHECKPOINT 8: Scaffolding and backfilling...")
+            try:
+                scaffolded_df = self._scaffold_and_backfill_betas(
+                    annual_df, sector_slopes, begin_year_map, global_min_begin_year, all_tickers
+                )
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 8 SUCCESS: Scaffolded to {len(scaffolded_df)} records"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 8 FAILED: {e}", exc_info=True)
+                raise
 
             # Apply 4-tier fallback
-            self.logger.info("[PRE-COMPUTATION] Applying 4-tier fallback logic...")
-            spot_betas = self._apply_4tier_fallback(scaffolded_df, sector_slopes)
+            self.logger.info("[PRE-COMPUTATION] CHECKPOINT 9: Applying 4-tier fallback logic...")
+            try:
+                spot_betas = self._apply_4tier_fallback(scaffolded_df, sector_slopes)
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 9 SUCCESS: Applied fallback logic to {len(spot_betas)} records"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 9 FAILED: {e}", exc_info=True)
+                raise
 
             # Calculate BOTH approaches WITHOUT rounding
             self.logger.info(
-                "[PRE-COMPUTATION] Calculating both approaches (FIXED and Floating)..."
+                "[PRE-COMPUTATION] CHECKPOINT 10: Calculating both approaches (FIXED and Floating)..."
             )
-            final_betas = self._calculate_both_approaches(spot_betas)
+            try:
+                final_betas = self._calculate_both_approaches(spot_betas)
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 10 SUCCESS: Calculated final betas for {len(final_betas)} records"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 10 FAILED: {e}", exc_info=True)
+                raise
 
             # Format for storage with param_set_id=NULL
-            self.logger.info("[PRE-COMPUTATION] Formatting results for storage...")
-            records = self._format_precomputed_results_for_storage(
-                final_betas, dataset_id
-            )
+            self.logger.info("[PRE-COMPUTATION] CHECKPOINT 11: Formatting results for storage...")
+            try:
+                records = self._format_precomputed_results_for_storage(
+                    final_betas, dataset_id
+                )
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 11 SUCCESS: Formatted {len(records)} records for storage"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 11 FAILED: {e}", exc_info=True)
+                raise
 
             # Store in metrics_outputs
             self.logger.info(
-                f"[PRE-COMPUTATION] Storing {len(records)} pre-computed Beta records..."
+                f"[PRE-COMPUTATION] CHECKPOINT 12: Storing {len(records)} pre-computed Beta records..."
             )
-            stored_count = await self._store_results_raw_sql(records)
+            try:
+                stored_count = await self._store_results_raw_sql(records)
+                self.logger.info(
+                    f"[PRE-COMPUTATION] ✓ CHECKPOINT 12 SUCCESS: Stored {stored_count} records"
+                )
+            except Exception as e:
+                self.logger.error(f"[PRE-COMPUTATION] ✗ CHECKPOINT 12 FAILED: {e}", exc_info=True)
+                raise
 
             elapsed_time = time.time() - start_time
             alert = elapsed_time > 120  # Alert if > 2 minutes
@@ -209,7 +277,7 @@ class PreComputedBetaService(BetaCalculationService):
         try:
             query = text(
                 """
-                SELECT parameter_name, parameter_value
+                SELECT parameter_name, default_value
                 FROM cissa.parameters
                 WHERE parameter_name IN (
                     'beta_relative_error_tolerance',

@@ -416,7 +416,7 @@ async def calculate_beta_from_precomputed(
                 message=f"⚠️  Using legacy path (no pre-computed Beta found): {result['results_count']} records"
             )
     
-     except HTTPException:
+    except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[PRE-COMPUTED] Unexpected error: {str(e)}", exc_info=True)
