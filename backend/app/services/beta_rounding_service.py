@@ -440,29 +440,25 @@ class BetaRoundingService:
         self, dataset_id: UUID, param_set_id: UUID, results: list[dict], batch_size: int = 1000
     ) -> int:
         """
-        Batch insert rounded results using multi-row INSERT for better performance.
+        Batch update rounded results using a SINGLE multi-row INSERT...ON CONFLICT UPDATE statement.
+        This avoids AsyncPG's "another operation is in progress" error by executing all updates in one SQL statement.
         
         Args:
             dataset_id: Dataset ID
             param_set_id: Parameter set ID
             results: List of rounded result dicts
-            batch_size: Number of records per batch insert (default 1000)
+            batch_size: Ignored - all data inserted in single statement (kept for interface compatibility)
         
         Returns:
-            Total number of records inserted
+            Total number of records updated
         """
         if not results:
             return 0
         
-        total_inserted = 0
-        
-        # Process results in batches using multi-row INSERT
-        for i in range(0, len(results), batch_size):
-            batch = results[i : i + batch_size]
-            
-            # Build multi-row VALUES clause for all records in batch
+        try:
+            # Build multi-row VALUES clause for ALL records at once
             rows_sql_parts = []
-            for result in batch:
+            for result in results:
                 metadata = {
                     "metric_level": "L1",
                     "derived_from_precomputed": True,
@@ -476,19 +472,28 @@ class BetaRoundingService:
             
             rows_sql = ", ".join(rows_sql_parts)
             
-            # Execute single multi-row INSERT per batch
+            # Execute SINGLE multi-row INSERT...ON CONFLICT UPDATE for all results
+            # This is the key: ONE statement instead of multiple
             query = text(f"""
                 INSERT INTO cissa.metrics_outputs 
                 (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
                 VALUES {rows_sql}
-                ON CONFLICT DO NOTHING
+                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
+                DO UPDATE SET
+                    output_metric_value = EXCLUDED.output_metric_value,
+                    metadata = EXCLUDED.metadata
             """)
             
             await self.session.execute(query)
-            total_inserted += len(batch)
-            self.logger.info(f"[BETA-BATCH] Executed batch of {len(batch)} records ({total_inserted}/{len(results)} total)")
+            self.logger.info(f"[BETA-BATCH] Executed single multi-row INSERT for {len(results)} records")
+            
+            # Single commit at the end
+            await self.session.commit()
+            self.logger.info(f"[BETA-BATCH] Batch update complete: {len(results)} records committed")
+            
+            return len(results)
         
-        # Single commit at the end
-        await self.session.commit()
-        self.logger.info(f"[BETA-BATCH] Batch insert complete: {total_inserted} records committed")
+        except Exception as e:
+            self.logger.error(f"[BETA-BATCH] Failed to store rounded results: {e}")
+            raise
         return total_inserted

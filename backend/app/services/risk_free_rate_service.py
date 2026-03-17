@@ -933,6 +933,9 @@ class RiskFreeRateCalculationService:
                 rf_expanded_df, dataset_id, param_set_id
             )
             
+            # Commit any pending read transactions before starting writes
+            await self.session.commit()
+            
             stored_count = await self._store_results_batch(results_to_store, batch_size=1000)
             
             elapsed_time = time.time() - start_time
@@ -1036,11 +1039,12 @@ class RiskFreeRateCalculationService:
 
     async def _store_results_batch(self, results: list[dict], batch_size: int = 1000) -> int:
         """
-        Batch insert results in groups (batch_size per insert).
+        Batch insert results using a SINGLE multi-row INSERT statement.
+        Avoids AsyncPG's "another operation is in progress" error by executing all inserts in one SQL statement.
         
         Args:
             results: List of result dicts
-            batch_size: Number of records per batch insert (default 1000)
+            batch_size: Ignored - all data inserted in single statement (kept for interface compatibility)
         
         Returns:
             Total number of records inserted
@@ -1048,22 +1052,18 @@ class RiskFreeRateCalculationService:
         if not results:
             return 0
         
-        total_inserted = 0
-        
-        # Process results in batches
-        for i in range(0, len(results), batch_size):
-            batch = results[i : i + batch_size]
-            
-            # Build multi-row VALUES clause
+        try:
+            # Build multi-row VALUES clause for ALL records at once
             rows_sql_parts = []
-            for record in batch:
+            for record in results:
                 metadata_json = json.dumps(record['metadata'])
                 row_sql = f"('{record['dataset_id']}', '{record['param_set_id']}', '{record['ticker']}', {record['fiscal_year']}, '{record['output_metric_name']}', {record['output_metric_value']}, '{metadata_json}')"
                 rows_sql_parts.append(row_sql)
             
             rows_sql = ", ".join(rows_sql_parts)
             
-            # Execute multi-row INSERT with ON CONFLICT UPSERT
+            # Execute SINGLE multi-row INSERT with ON CONFLICT UPSERT for all results
+            # This is the key: ONE statement instead of multiple batched statements
             multi_row_insert = text(f"""
                 INSERT INTO cissa.metrics_outputs 
                 (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
@@ -1075,10 +1075,13 @@ class RiskFreeRateCalculationService:
             """)
             
             await self.session.execute(multi_row_insert)
-            total_inserted += len(batch)
-            self.logger.info(f"[RF-BATCH] Executed batch of {len(batch)} records ({total_inserted}/{len(results)} total)")
+            self.logger.info(f"[RF-BATCH] Executed single multi-row INSERT for {len(results)} records")
+            
+            # Single commit at the end
+            await self.session.commit()
+            self.logger.info(f"[RF-BATCH] Batch insert complete: {len(results)} records committed")
+            return len(results)
         
-        # Single commit at the end
-        await self.session.commit()
-        self.logger.info(f"[RF-BATCH] Batch insert complete: {total_inserted} records committed")
-        return total_inserted
+        except Exception as e:
+            self.logger.error(f"[RF-BATCH] Failed to store results: {e}")
+            raise
