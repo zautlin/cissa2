@@ -181,24 +181,26 @@ async def orchestrate_l1_metrics_async(
     logger.info(f"Phase 1 complete: {len(phase_1_successful)}/12 successful in {phase_1_time:.1f}s")
     
     # ========================================================================
-    # Phase 2: Beta Calculation (Sequential)
+    # Phase 2: Beta Pre-Computation (Sequential)
     # ========================================================================
     
-    logger.info("Phase 2: Starting beta calculation...")
+    logger.info("Phase 2: Starting beta pre-computation...")
     phase_2_start = time.time()
     phase_2_successful = []
     phase_2_failed = {}
     phase_2_records = 0
     
     try:
-        result = await call_metric_api("/api/v1/metrics/beta/calculate")
+        # Call NEW pre-computation endpoint instead of deprecated /beta/calculate
+        # This endpoint uses PreComputedBetaService to store raw components in metadata
+        result = await call_metric_api("/api/v1/metrics/beta/precompute-for-ingestion")
         if isinstance(result, dict) and result.get("status") == "error":
             phase_2_failed["Calc Beta"] = result.get("message", "Unknown error")
             logger.warning(f"  ✗ Calc Beta: {result.get('message', 'Unknown')[:60]}")
         elif isinstance(result, dict):
             phase_2_successful.append("Calc Beta")
             phase_2_records = result.get("results_count", 0)
-            logger.info(f"  ✓ Calc Beta: {phase_2_records} records")
+            logger.info(f"  ✓ Calc Beta (Pre-computed): {phase_2_records} records")
     except Exception as e:
         phase_2_failed["Calc Beta"] = str(e)
         logger.warning(f"  ✗ Calc Beta: {str(e)[:60]}")

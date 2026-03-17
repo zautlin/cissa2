@@ -25,6 +25,7 @@ from ....models import (
 from ....services.metrics_service import MetricsService
 from ....services.l2_metrics_service import L2MetricsService
 from ....services.beta_calculation_service import BetaCalculationService
+from ....services.beta_precomputation_service import PreComputedBetaService
 from ....services.beta_rounding_service import BetaRoundingService
 from ....services.risk_free_rate_service import RiskFreeRateCalculationService
 from ....services.ratio_metrics_service import RatioMetricsService
@@ -415,7 +416,7 @@ async def calculate_beta_from_precomputed(
                 message=f"⚠️  Using legacy path (no pre-computed Beta found): {result['results_count']} records"
             )
     
-    except HTTPException:
+     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[PRE-COMPUTED] Unexpected error: {str(e)}", exc_info=True)
@@ -423,6 +424,94 @@ async def calculate_beta_from_precomputed(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during beta calculation"
         )
+
+
+@router.post("/beta/precompute-for-ingestion", response_model=CalculateBetaResponse, status_code=status.HTTP_200_OK)
+async def precompute_beta_for_ingestion(
+    request: CalculateBetaRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Pre-compute Beta for entire dataset during ETL ingestion.
+    
+    **Purpose:** Called from ETL pipeline (Stage 3) to pre-compute Beta with both FIXED and Floating approaches.
+    
+    **Algorithm:**
+    1. Fetch monthly COMPANY_TSR and INDEX_TSR from fundamentals
+    2. Calculate 60-month rolling OLS slopes
+    3. Transform slopes: adjusted = (slope * 2/3) + 1/3
+    4. Filter by relative error tolerance
+    5. DON'T ROUND - store raw transformed values
+    6. Annualize: group by fiscal_year and calculate sector medians
+    7. Apply 4-tier fallback logic to select best estimate
+    8. Calculate BOTH approaches (FIXED and Floating)
+    9. Store with param_set_id=NULL and comprehensive metadata
+    
+    **Metadata Stored:**
+    - fixed_beta_raw: Unrounded FIXED approach beta
+    - floating_beta_raw: Unrounded Floating approach beta
+    - spot_slope_raw: Raw unrounded slope value
+    - fallback_tier_used: Which fallback tier was used (1-4)
+    - monthly_raw_slopes: Array of monthly slopes used in calculation
+    
+    **Called by:** ETL pipeline Stage 3 orchestrator
+    
+    **Expected Response Time:** 60-80 seconds
+    
+    **Prerequisites:**
+    - Monthly TSR data must exist in fundamentals table
+    - dataset_id must exist in dataset_versions
+    - param_set_id must exist (used to fetch beta_relative_error_tolerance)
+    
+    **Example Request:**
+    ```json
+    {
+        "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+        "param_set_id": "660e8400-e29b-41d4-a716-446655440001"
+    }
+    ```
+    
+    **Response:**
+    - status: 'success' or 'error'
+    - results_count: number of beta records pre-computed
+    - message: operation summary
+    """
+    
+    logger.info(f"[INGESTION] Pre-computing Beta for dataset: {request.dataset_id}")
+    
+    try:
+        # Use PreComputedBetaService to pre-compute both approaches
+        service = PreComputedBetaService(db)
+        result = await service.precompute_beta_async(
+            dataset_id=request.dataset_id
+        )
+        
+        if result["status"] == "error":
+            logger.warning(f"[INGESTION] Beta pre-computation failed: {result['message']}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+        
+        logger.info(f"[INGESTION] ✓ Beta pre-computation successful: {result['records_created']} records in {result['time_seconds']:.1f}s")
+        
+        return CalculateBetaResponse(
+            dataset_id=request.dataset_id,
+            param_set_id=request.param_set_id,
+            results_count=result["records_created"],
+            status="success",
+            message=f"✓ Beta pre-computed: {result['records_created']} records with raw components stored in metadata. Time: {result['time_seconds']:.1f}s"
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[INGESTION] Unexpected error during beta pre-computation: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during beta pre-computation"
+        )
+
 
 @router.post("/rates/calculate", response_model=CalculateRiskFreeRateResponse, status_code=status.HTTP_200_OK)
 async def calculate_risk_free_rate(
