@@ -173,3 +173,21 @@ class MetricsRepository:
         
         result = await self._session.execute(query)
         return list(result.scalars().all())
+    
+    async def exists_by_dataset_and_param_set(
+        self,
+        dataset_id: UUID,
+        param_set_id: UUID,
+    ) -> bool:
+        """
+        Check if any metrics exist for a dataset and parameter set combination.
+        
+        Returns True if at least one metric record exists, False otherwise.
+        """
+        query = select(MetricsOutput).where(
+            MetricsOutput.dataset_id == dataset_id,
+            MetricsOutput.param_set_id == param_set_id,
+        ).limit(1)
+        
+        result = await self._session.execute(query)
+        return result.scalar_one_or_none() is not None
