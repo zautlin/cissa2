@@ -1055,10 +1055,13 @@ class RiskFreeRateCalculationService:
             batch = results[i : i + batch_size]
             
             # Build multi-row VALUES clause
-            rows_sql = ", ".join([
-                f"('{record['dataset_id']}', '{record['param_set_id']}', '{record['ticker']}', {record['fiscal_year']}, '{record['output_metric_name']}', {record['output_metric_value']}, '{json.dumps(record['metadata'])}')"
-                for record in batch
-            ])
+            rows_sql_parts = []
+            for record in batch:
+                metadata_json = json.dumps(record['metadata'])
+                row_sql = f"('{record['dataset_id']}', '{record['param_set_id']}', '{record['ticker']}', {record['fiscal_year']}, '{record['output_metric_name']}', {record['output_metric_value']}, '{metadata_json}')"
+                rows_sql_parts.append(row_sql)
+            
+            rows_sql = ", ".join(rows_sql_parts)
             
             # Execute multi-row INSERT with ON CONFLICT UPSERT
             multi_row_insert = text(f"""

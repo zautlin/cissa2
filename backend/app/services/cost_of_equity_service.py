@@ -429,10 +429,12 @@ class CostOfEquityService:
             batch_num = i // batch_size + 1
             
             # Build multi-row VALUES clause for all rows in batch
-            rows_sql = ", ".join([
-                f"('{str(dataset_id)}', '{str(param_set_id)}', '{str(row['ticker'])}', {int(row['fiscal_year'])}, 'Calc KE', {float(row['ke'])}, '{metadata}', now())"
-                for _, row in batch.iterrows()
-            ])
+            rows_sql_parts = []
+            for _, row in batch.iterrows():
+                row_sql = f"('{str(dataset_id)}', '{str(param_set_id)}', '{str(row['ticker'])}', {int(row['fiscal_year'])}, 'Calc KE', {float(row['ke'])}, '{metadata}', now())"
+                rows_sql_parts.append(row_sql)
+            
+            rows_sql = ", ".join(rows_sql_parts)
             
             # Execute multi-row INSERT with ON CONFLICT UPSERT (single statement for entire batch)
             multi_row_insert = text(f"""
