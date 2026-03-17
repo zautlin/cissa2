@@ -112,23 +112,23 @@ class CostOfEquityService:
             inserted = await self._insert_ke_batch(dataset_id, param_set_id, ke_df)
             logger.info(f"    - Inserted {inserted} records")
             
-             logger.info(f"✓ Phase 09 complete: {len(ke_df)} KE values calculated and stored")
-             
-             return {
-                 "status": "success",
-                 "records_calculated": len(ke_df),
-                 "records_inserted": inserted,
-                 "message": f"Calculated and stored {inserted} Cost of Equity values"
-             }
-         
-         except Exception as e:
-             logger.error(f"✗ Phase 09 error: {str(e)}", exc_info=True)
-             return {
-                 "status": "error",
-                 "records_calculated": 0,
-                 "records_inserted": 0,
-                 "message": str(e)
-             }
+            logger.info(f"✓ Phase 09 complete: {len(ke_df)} KE values calculated and stored")
+            
+            return {
+                "status": "success",
+                "records_calculated": len(ke_df),
+                "records_inserted": inserted,
+                "message": f"Calculated and stored {inserted} Cost of Equity values"
+            }
+        
+        except Exception as e:
+            logger.error(f"✗ Phase 09 error: {str(e)}", exc_info=True)
+            return {
+                "status": "error",
+                "records_calculated": 0,
+                "records_inserted": 0,
+                "message": str(e)
+            }
     
     async def calculate_cost_of_equity_runtime(
         self,

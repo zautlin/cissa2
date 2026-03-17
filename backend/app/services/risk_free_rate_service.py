@@ -192,14 +192,14 @@ class RiskFreeRateCalculationService:
                 "results_count": stored_count,
                 "message": f"Calculated Calc Rf for {len(all_tickers)} tickers using ticker-specific FY end dates ({stored_count} total records)"
             }
-         
-         except Exception as e:
-             self.logger.error(f"Risk-free rate calculation failed: {e}", exc_info=True)
-             return {
-                 "status": "error",
-                 "results_count": 0,
-                 "message": f"Calculation failed: {str(e)}"
-             }
+        
+        except Exception as e:
+            self.logger.error(f"Risk-free rate calculation failed: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "results_count": 0,
+                "message": f"Calculation failed: {str(e)}"
+            }
     
     async def calculate_risk_free_rate_runtime(
         self,
