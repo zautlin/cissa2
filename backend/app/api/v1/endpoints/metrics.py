@@ -103,11 +103,20 @@ async def get_metric(
     """
     Get or calculate a metric for a dataset (GET endpoint for convenience).
     
+    **DEPRECATED:** This endpoint is deprecated. Please use `/api/v1/metrics/get_metrics/` instead,
+    which provides more flexible filtering and supports fundamentals table queries.
+    
     This endpoint:
     1. Checks if metric exists in metrics_outputs
     2. If not, calculates it
     3. Returns the results
     """
+    
+    # Log deprecation warning
+    logger.warning(
+        f"DEPRECATED ENDPOINT CALLED: GET /api/v1/metrics/dataset/{dataset_id}/metrics/{metric_name} - "
+        f"Please migrate to GET /api/v1/metrics/get_metrics/ which is more flexible"
+    )
     
     service = MetricsService(db)
     response = await service.calculate_metric(dataset_id, metric_name)
