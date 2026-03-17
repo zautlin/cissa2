@@ -213,22 +213,24 @@ class TestMetadataStructure:
         mock_session = MagicMock()
         service = PreComputedBetaService(mock_session)
         
-        result = {
-            'ticker': 'TEST',
-            'fiscal_year': 2021,
-            'fixed_beta_raw': 1.0555,
-            'floating_beta_raw': 0.8765,
-            'spot_slope_raw': 0.8765,
-            'sector_slope_raw': 0.88,
-            'fallback_tier_used': 1,
-            'monthly_raw_slopes': [0.75, 0.82],
-            'annualization_month': 12,
-        }
+        results_df = pd.DataFrame({
+            'ticker': ['TEST'],
+            'fiscal_year': [2021],
+            'fixed_beta_raw': [1.0555],
+            'floating_beta_raw': [0.8765],
+            'spot_slope_raw': [0.8765],
+            'sector_slope_raw': [0.88],
+            'fallback_tier_used': [1],
+            'monthly_raw_slopes': [[[0.75, 0.82]]],
+            'annualization_month': [12],
+        })
         
-        metadata = service._format_precomputed_results_for_storage(result)
+        dataset_id = uuid4()
+        results = service._format_precomputed_results_for_storage(results_df, dataset_id)
         
         # Should be serializable to JSON
         try:
+            metadata = results[0]['metadata']
             json_str = json.dumps(metadata)
             parsed = json.loads(json_str)
             assert parsed['fixed_beta_raw'] == 1.0555
@@ -249,23 +251,26 @@ class TestPrecomputationResultFormatting:
         mock_session = MagicMock()
         service = PreComputedBetaService(mock_session)
         
-        # Create mock result
-        result = {
-            'ticker': 'TEST',
-            'fiscal_year': 2021,
-            'fixed_beta_raw': 1.0555,
-            'floating_beta_raw': 0.8765,
-            'spot_slope_raw': 0.8765,
-            'sector_slope_raw': 0.88,
-            'fallback_tier_used': 1,
-            'monthly_raw_slopes': [0.75],
-        }
+        # Create mock result dataframe
+        results_df = pd.DataFrame({
+            'ticker': ['TEST'],
+            'fiscal_year': [2021],
+            'fixed_beta_raw': [1.0555],
+            'floating_beta_raw': [0.8765],
+            'spot_slope_raw': [0.8765],
+            'sector_slope_raw': [0.88],
+            'fallback_tier_used': [1],
+            'monthly_raw_slopes': [[[0.75]]],
+        })
         
-        formatted = service._format_precomputed_results_for_storage(result)
+        dataset_id = uuid4()
+        results = service._format_precomputed_results_for_storage(results_df, dataset_id)
         
-        # Verify can be stored with param_set_id=NULL
-        assert 'fixed_beta_raw' in formatted
-        assert 'floating_beta_raw' in formatted
+        # Verify structure
+        assert len(results) > 0
+        record = results[0]
+        assert 'fixed_beta_raw' in record['metadata']
+        assert 'floating_beta_raw' in record['metadata']
         # Note: param_set_id should be NULL at storage time
     
     def test_precomputed_output_metric_value_is_raw_value(self):
@@ -278,21 +283,22 @@ class TestPrecomputationResultFormatting:
         service = PreComputedBetaService(mock_session)
         
         # For pre-computation, output_metric_value should be the raw unrounded value
-        # Typically the spot_slope_raw (or floating_beta_raw depending on approach)
-        result = {
-            'ticker': 'TEST',
-            'fiscal_year': 2021,
-            'fixed_beta_raw': 1.0555555,
-            'floating_beta_raw': 0.8765432,
-            'spot_slope_raw': 0.8765432,
-            'sector_slope_raw': 0.88,
-            'fallback_tier_used': 1,
-            'monthly_raw_slopes': [],
-        }
+        results_df = pd.DataFrame({
+            'ticker': ['TEST'],
+            'fiscal_year': [2021],
+            'fixed_beta_raw': [1.0555555],
+            'floating_beta_raw': [0.8765432],
+            'spot_slope_raw': [0.8765432],
+            'sector_slope_raw': [0.88],
+            'fallback_tier_used': [1],
+            'monthly_raw_slopes': [[[]]],
+        })
         
-        metadata = service._format_precomputed_results_for_storage(result)
+        dataset_id = uuid4()
+        results = service._format_precomputed_results_for_storage(results_df, dataset_id)
         
         # Both approaches should be available in metadata
+        metadata = results[0]['metadata']
         assert 'fixed_beta_raw' in metadata
         assert 'floating_beta_raw' in metadata
 

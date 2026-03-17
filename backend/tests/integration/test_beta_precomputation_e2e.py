@@ -324,7 +324,10 @@ class TestDataIntegrityE2E:
         raw_value = 0.8765
         
         roundings = [0.1, 0.05, 0.01]
-        expected = [0.9, 0.85, 0.88]
+        # 0.8765 / 0.1 = 8.765 -> rounds to 9 -> 9 * 0.1 = 0.9
+        # 0.8765 / 0.05 = 17.53 -> rounds to 18 -> 18 * 0.05 = 0.9
+        # 0.8765 / 0.01 = 87.65 -> rounds to 88 -> 88 * 0.01 = 0.88
+        expected = [0.9, 0.9, 0.88]
         
         for rounding, expected_rounded in zip(roundings, expected):
             rounded = np.round(raw_value / rounding, 0) * rounding

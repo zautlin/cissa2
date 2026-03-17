@@ -62,17 +62,40 @@ DROP TRIGGER IF EXISTS trigger_metric_units_updated ON metric_units;
 -- DROP FUNCTIONS
 -- ============================================================================
 
+-- Drop trigger functions
 DROP FUNCTION IF EXISTS update_dataset_versions_timestamp() CASCADE;
 DROP FUNCTION IF EXISTS update_parameters_timestamp() CASCADE;
 DROP FUNCTION IF EXISTS update_parameter_sets_timestamp() CASCADE;
 DROP FUNCTION IF EXISTS update_optimization_outputs_timestamp() CASCADE;
 DROP FUNCTION IF EXISTS update_metric_units_timestamp() CASCADE;
 
+-- Drop metric calculation functions (Phase 1)
+DROP FUNCTION IF EXISTS fn_calc_market_cap(UUID) CASCADE;
+DROP FUNCTION IF EXISTS fn_calc_operating_assets(UUID) CASCADE;
+DROP FUNCTION IF EXISTS fn_calc_operating_assets_detail(UUID) CASCADE;
+DROP FUNCTION IF EXISTS fn_calc_operating_cost(UUID) CASCADE;
+DROP FUNCTION IF EXISTS fn_calc_non_operating_cost(UUID) CASCADE;
+DROP FUNCTION IF EXISTS fn_calc_tax_cost(UUID) CASCADE;
+DROP FUNCTION IF EXISTS fn_calc_extraordinary_cost(UUID) CASCADE;
+DROP FUNCTION IF EXISTS fn_calc_book_equity(UUID) CASCADE;
+DROP FUNCTION IF EXISTS fn_calc_roa(UUID) CASCADE;
+
+-- Drop metric calculation functions (Phase 1 - with schema prefix)
+DROP FUNCTION IF EXISTS cissa.fn_calc_lag_mc(UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_ecf(UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_non_div_ecf(UUID) CASCADE;
+
+-- Drop functions that take both dataset_id and param_set_id
+DROP FUNCTION IF EXISTS cissa.fn_calc_economic_equity(UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_economic_equity(UUID, UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_fy_tsr(UUID, UUID) CASCADE;
+DROP FUNCTION IF EXISTS cissa.fn_calc_fy_tsr_prel(UUID, UUID) CASCADE;
+
 -- ============================================================================
 -- VERIFICATION
 -- ============================================================================
 
-SELECT 'Schema destruction complete. All 11 tables, triggers, and functions have been dropped.' AS status;
+SELECT 'Schema destruction complete. All 11 tables, 20+ functions, triggers, and procedures have been dropped.' AS status;
 
 -- ============================================================================
 -- END OF DESTRUCTION SCRIPT

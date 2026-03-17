@@ -118,6 +118,8 @@ class SchemaManager:
         print("  • All 11 tables in cissa schema")
         print("  • All data in those tables")
         print("  • All triggers and functions")
+        print("  • All stored procedures (20+)")
+        print("  • All metric calculation functions (15)")
         print("\nThere is NO UNDO for this operation.")
         print("\nType 'destroy everything' to confirm: ", end="", flush=True)
         
@@ -159,7 +161,7 @@ class SchemaManager:
         if not self._execute_sql(destroy_sql, "Schema destroyed successfully"):
             return False
         
-        print("\n✓ All tables, triggers, and functions have been removed")
+        print("\n✓ All 11 tables, 20+ functions, triggers, and stored procedures have been removed")
         return True
     
     def create(self) -> bool:
