@@ -827,7 +827,260 @@ class RiskFreeRateCalculationService:
             
             self.logger.info(f"Stored {len(results)} records (multi-row INSERT)")
             return len(results)
-            
+             
         except Exception as e:
             self.logger.error(f"Failed to store results: {e}")
+            raise
+
+    async def calculate_risk_free_rate_runtime_batch(
+        self,
+        dataset_id: UUID,
+        param_set_id: UUID,
+        parameter_id: UUID,
+        country_code: str = 'AU',
+    ) -> dict:
+        """
+        Batch runtime version: Calculate Rf and batch insert results (~11k records).
+        
+        Extracts parameters from parameter_overrides (JSONB) using parameter_id.
+        Batch inserts results (1000-2000 records per insert).
+        
+        Args:
+            dataset_id: Dataset ID
+            param_set_id: Parameter set ID (for storage)
+            parameter_id: Parameter ID (used to fetch parameters from parameter_sets)
+            country_code: Country code for fiscal year definitions (default: 'AU')
+        
+        Returns:
+            {
+                "status": "success|error",
+                "results_count": N,
+                "message": "...",
+            }
+        """
+        try:
+            import time
+            start_time = time.time()
+            
+            self.logger.info(
+                f"[RF-BATCH] Starting batch risk-free rate calculation: dataset={dataset_id}, param_set={param_set_id}, parameter={parameter_id}"
+            )
+            
+            # Step 1: Determine currency from country code
+            currency_map = {'AU': 'AUD', 'US': 'USD', 'UK': 'GBP'}
+            currency = currency_map.get(country_code, 'AUD')
+            self.logger.info(f"[RF-BATCH] Using currency: {currency}")
+            
+            # Step 2: Load parameters from parameter_sets
+            params = await self._load_parameters_from_parameter_set(parameter_id)
+            self.logger.info(
+                f"[RF-BATCH] Parameters loaded: approach={params.get('cost_of_equity_approach', 'Floating')}, "
+                f"rounding={params.get('beta_rounding', 0.005)}"
+            )
+            
+            # Step 3: Fetch bond ticker for currency
+            bond_ticker = await self._fetch_bond_ticker_by_currency(currency)
+            if not bond_ticker:
+                return {
+                    "status": "error",
+                    "results_count": 0,
+                    "message": f"No bond ticker found for currency {currency}",
+                }
+            self.logger.info(f"[RF-BATCH] Using bond ticker: {bond_ticker}")
+            
+            # Step 4: Fetch all company tickers for currency
+            all_tickers = await self._fetch_all_company_tickers_by_currency(currency)
+            if not all_tickers:
+                return {
+                    "status": "error",
+                    "results_count": 0,
+                    "message": f"No company tickers found for currency {currency}",
+                }
+            self.logger.info(f"[RF-BATCH] Found {len(all_tickers)} company tickers")
+            
+            # Step 5: Fetch monthly bond yields
+            monthly_rf_df = await self._fetch_monthly_bond_yields(bond_ticker)
+            if monthly_rf_df.empty:
+                return {
+                    "status": "error",
+                    "results_count": 0,
+                    "message": f"No monthly bond yield data found for {bond_ticker}",
+                }
+            self.logger.info(f"[RF-BATCH] Fetched {len(monthly_rf_df)} monthly bond yield records")
+            
+            # Step 6: Calculate rolling 12-month geometric mean
+            rf_monthly_df = self._calculate_rolling_geometric_mean(monthly_rf_df)
+            
+            # Step 7: Calculate Calc Rf with approach logic
+            rf_monthly_calc_df = self._calculate_calc_rf_batch(rf_monthly_df, params)
+            
+            # Step 8: Fetch FY end dates for all company tickers
+            fy_dates_dict = await self._fetch_fy_end_dates_for_tickers(all_tickers)
+            self.logger.info(f"[RF-BATCH] Fetched FY end dates for {len(fy_dates_dict)} tickers")
+            
+            # Step 9: Extract Calc Rf by ticker-specific FY end date
+            rf_expanded_df = self._extract_rf_by_fy_end_date(rf_monthly_calc_df, fy_dates_dict)
+            if rf_expanded_df.empty:
+                return {
+                    "status": "error",
+                    "results_count": 0,
+                    "message": "Failed to extract Calc Rf by FY end dates",
+                }
+            self.logger.info(f"[RF-BATCH] Extracted {len(rf_expanded_df)} Calc Rf values")
+            
+            # Step 10: Format and batch insert results
+            results_to_store = self._format_results_for_storage(
+                rf_expanded_df, dataset_id, param_set_id
+            )
+            
+            stored_count = await self._store_results_batch(results_to_store, batch_size=1000)
+            
+            elapsed_time = time.time() - start_time
+            self.logger.info(
+                f"[RF-BATCH] ✓ Batch risk-free rate calculation complete: {stored_count} records stored in {elapsed_time:.2f}s"
+            )
+            
+            return {
+                "status": "success",
+                "results_count": stored_count,
+                "message": f"Calculated Calc Rf for {len(all_tickers)} tickers: {stored_count} total records",
+            }
+        
+        except Exception as e:
+            self.logger.error(f"[RF-BATCH] Batch risk-free rate calculation failed: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "results_count": 0,
+                "message": f"Batch calculation failed: {str(e)}",
+            }
+
+    async def _load_parameters_from_parameter_set(self, parameter_id: UUID) -> dict:
+        """
+        Load parameters from parameter_sets table (JSONB param_overrides).
+        
+        Args:
+            parameter_id: parameter_id (which is param_set_id in parameter_sets table)
+        
+        Returns:
+            {
+                "cost_of_equity_approach": "Floating",
+                "beta_rounding": 0.005,
+                "benchmark": 0.0,
+                "risk_premium": 0.0,
+                ...
+            }
+        """
+        try:
+            query = text(
+                """
+                SELECT param_overrides
+                FROM cissa.parameter_sets
+                WHERE param_set_id = :parameter_id
+                LIMIT 1
+            """
+            )
+            result = await self.session.execute(query, {"parameter_id": str(parameter_id)})
+            row = result.fetchone()
+            
+            # Default parameters
+            defaults = {
+                "cost_of_equity_approach": "Floating",
+                "beta_rounding": 0.005,
+                "benchmark": 0.0,
+                "risk_premium": 0.0,
+            }
+            
+            if not row:
+                self.logger.warning(f"[RF-BATCH] Parameter set not found: {parameter_id}")
+                return defaults
+            
+            param_overrides = row[0]
+            if isinstance(param_overrides, str):
+                param_overrides = json.loads(param_overrides)
+            elif param_overrides is None:
+                param_overrides = {}
+            
+            # Merge with defaults
+            result = {**defaults}
+            result.update(param_overrides)
+            
+            return result
+        
+        except Exception as e:
+            self.logger.error(f"[RF-BATCH] Failed to load parameters: {e}")
+            raise
+
+    def _calculate_calc_rf_batch(self, rf_monthly_df: pd.DataFrame, params: dict) -> pd.DataFrame:
+        """
+        Calculate Calc Rf based on approach (Fixed or Floating).
+        
+        Same as _calculate_calc_rf but accepts params dict instead of individual args.
+        """
+        try:
+            approach = params.get('cost_of_equity_approach', 'Floating').upper()
+            rounding = params.get('beta_rounding', 0.005)
+            benchmark = params.get('benchmark', 0.0)
+            risk_premium = params.get('risk_premium', 0.0)
+            
+            return self._calculate_calc_rf(
+                rf_monthly_df,
+                approach,
+                benchmark,
+                risk_premium,
+                rounding
+            )
+        
+        except Exception as e:
+            self.logger.error(f"[RF-BATCH] Failed to calculate Calc Rf: {e}")
+            raise
+
+    async def _store_results_batch(self, results: list[dict], batch_size: int = 1000) -> int:
+        """
+        Batch insert results in groups (batch_size per insert).
+        
+        Args:
+            results: List of result dicts
+            batch_size: Number of records per batch insert (default 1000)
+        
+        Returns:
+            Total number of records inserted
+        """
+        try:
+            if not results:
+                return 0
+            
+            total_inserted = 0
+            
+            # Process results in batches
+            for i in range(0, len(results), batch_size):
+                batch = results[i : i + batch_size]
+                
+                # Build multi-row VALUES clause
+                rows_sql = ", ".join([
+                    f"('{record['dataset_id']}', '{record['param_set_id']}', '{record['ticker']}', {record['fiscal_year']}, '{record['output_metric_name']}', {record['output_metric_value']}, '{json.dumps(record['metadata'])}')"
+                    for record in batch
+                ])
+                
+                # Execute multi-row INSERT with ON CONFLICT UPSERT
+                multi_row_insert = text(f"""
+                    INSERT INTO cissa.metrics_outputs 
+                    (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
+                    VALUES {rows_sql}
+                    ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
+                    DO UPDATE SET
+                        output_metric_value = EXCLUDED.output_metric_value,
+                        metadata = EXCLUDED.metadata
+                """)
+                
+                await self.session.execute(multi_row_insert)
+                await self.session.commit()
+                total_inserted += len(batch)
+                self.logger.info(f"[RF-BATCH] Inserted batch of {len(batch)} records ({total_inserted}/{len(results)} total)")
+            
+            self.logger.info(f"[RF-BATCH] Batch insert complete: {total_inserted} records")
+            return total_inserted
+        
+        except Exception as e:
+            self.logger.error(f"[RF-BATCH] Failed to batch insert results: {e}", exc_info=True)
+            await self.session.rollback()
             raise

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import pandas as pd
 import json
+import time
 
 from ..core.config import get_logger
 
@@ -288,4 +289,221 @@ class BetaRoundingService:
             self.logger.error(
                 f"Failed to get pre-computed Beta for retrieval: {e}", exc_info=True
             )
+            raise
+
+    async def apply_rounding_to_precomputed_beta_batch(
+        self,
+        dataset_id: UUID,
+        param_set_id: UUID,
+        parameter_id: UUID,
+    ) -> dict:
+        """
+        Batch version: Apply rounding to pre-computed Beta and store with param_set_id.
+        
+        Extracts beta_rounding and approach_to_ke from parameter_overrides (JSONB).
+        Batch inserts results (1000-2000 records per insert) for better performance.
+        
+        Args:
+            dataset_id: Dataset ID
+            param_set_id: Parameter set ID (for storage)
+            parameter_id: Parameter ID (used to fetch parameters from parameter_sets)
+        
+        Returns:
+            {
+                "status": "success|error",
+                "results_count": N,
+                "message": "...",
+            }
+        """
+        try:
+            start_time = time.time()
+            self.logger.info(
+                f"[BETA-BATCH] Starting batch Beta rounding: dataset={dataset_id}, param_set={param_set_id}, parameter={parameter_id}"
+            )
+            
+            # Step 1: Load parameters from parameter_sets
+            params = await self._load_parameters_from_parameter_set(parameter_id)
+            beta_rounding = params.get("beta_rounding", 0.1)
+            approach_to_ke = params.get("cost_of_equity_approach", "Floating").upper()
+            
+            self.logger.info(
+                f"[BETA-BATCH] Parameters loaded: rounding={beta_rounding}, approach={approach_to_ke}"
+            )
+            
+            # Step 2: Fetch pre-computed Beta records
+            precomputed_records = await self._fetch_precomputed_beta(dataset_id)
+            
+            if not precomputed_records:
+                return {
+                    "status": "error",
+                    "results_count": 0,
+                    "message": "No pre-computed Beta found",
+                }
+            
+            self.logger.info(f"[BETA-BATCH] Fetched {len(precomputed_records)} pre-computed Beta records")
+            
+            # Step 3: Apply rounding and approach selection (vectorized)
+            rounded_results = []
+            for record in precomputed_records:
+                metadata = record.get("metadata", {})
+                
+                # Select appropriate raw value based on approach
+                if approach_to_ke == "FIXED":
+                    raw_value = metadata.get("fixed_beta_raw")
+                else:  # Floating
+                    raw_value = metadata.get("floating_beta_raw")
+                
+                if raw_value is None:
+                    continue
+                
+                # Apply rounding
+                rounded_value = np.round(raw_value / beta_rounding, 0) * beta_rounding
+                
+                rounded_results.append({
+                    "ticker": record["ticker"],
+                    "fiscal_year": record["fiscal_year"],
+                    "beta": float(rounded_value),
+                    "raw_beta": raw_value,
+                    "approach": approach_to_ke,
+                    "rounding": beta_rounding,
+                })
+            
+            self.logger.info(f"[BETA-BATCH] Rounded {len(rounded_results)} records")
+            
+            # Step 4: Batch insert results (1000 records per batch)
+            stored_count = await self._store_rounded_results_batch(
+                dataset_id, param_set_id, rounded_results, batch_size=1000
+            )
+            
+            elapsed_time = time.time() - start_time
+            self.logger.info(
+                f"[BETA-BATCH] ✓ Batch Beta rounding complete: {stored_count} records stored in {elapsed_time:.2f}s"
+            )
+            
+            return {
+                "status": "success",
+                "results_count": stored_count,
+                "message": f"Applied rounding ({beta_rounding}) and approach ({approach_to_ke}): {stored_count} records stored",
+            }
+        
+        except Exception as e:
+            self.logger.error(f"[BETA-BATCH] Failed to apply batch rounding: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "results_count": 0,
+                "message": f"Batch rounding failed: {str(e)}",
+            }
+
+    async def _load_parameters_from_parameter_set(self, parameter_id: UUID) -> dict:
+        """
+        Load parameters from parameter_sets table (JSONB param_overrides).
+        
+        Args:
+            parameter_id: parameter_id (which is param_set_id in parameter_sets table)
+        
+        Returns:
+            {
+                "beta_rounding": 0.1,
+                "cost_of_equity_approach": "Floating",
+                ...
+            }
+        """
+        try:
+            query = text(
+                """
+                SELECT param_overrides
+                FROM cissa.parameter_sets
+                WHERE param_set_id = :parameter_id
+                LIMIT 1
+            """
+            )
+            result = await self.session.execute(query, {"parameter_id": str(parameter_id)})
+            row = result.fetchone()
+            
+            if not row:
+                self.logger.warning(f"[BETA-BATCH] Parameter set not found: {parameter_id}")
+                return {}
+            
+            param_overrides = row[0]
+            if isinstance(param_overrides, str):
+                param_overrides = json.loads(param_overrides)
+            elif param_overrides is None:
+                param_overrides = {}
+            
+            return param_overrides
+        
+        except Exception as e:
+            self.logger.error(f"[BETA-BATCH] Failed to load parameters: {e}")
+            raise
+
+    async def _store_rounded_results_batch(
+        self, dataset_id: UUID, param_set_id: UUID, results: list[dict], batch_size: int = 1000
+    ) -> int:
+        """
+        Batch insert rounded results in groups (batch_size per insert).
+        
+        Args:
+            dataset_id: Dataset ID
+            param_set_id: Parameter set ID
+            results: List of rounded result dicts
+            batch_size: Number of records per batch insert (default 1000)
+        
+        Returns:
+            Total number of records inserted
+        """
+        try:
+            if not results:
+                return 0
+            
+            total_inserted = 0
+            
+            # Process results in batches
+            for i in range(0, len(results), batch_size):
+                batch = results[i : i + batch_size]
+                
+                # Build batch insert query
+                values_list = []
+                for result in batch:
+                    metadata = {
+                        "metric_level": "L1",
+                        "derived_from_precomputed": True,
+                        "raw_beta": result.get("raw_beta"),
+                        "approach": result.get("approach"),
+                        "rounding": result.get("rounding"),
+                    }
+                    
+                    values_list.append({
+                        "dataset_id": str(dataset_id),
+                        "param_set_id": str(param_set_id),
+                        "ticker": result["ticker"],
+                        "fiscal_year": result["fiscal_year"],
+                        "output_metric_name": "Calc Beta",
+                        "output_metric_value": float(result["beta"]),
+                        "metadata": json.dumps(metadata),
+                    })
+                
+                # Execute batch insert
+                if values_list:
+                    query = text(
+                        """
+                        INSERT INTO cissa.metrics_outputs 
+                        (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
+                        VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata)
+                        ON CONFLICT DO NOTHING
+                    """
+                    )
+                    
+                    for values in values_list:
+                        await self.session.execute(query, values)
+                    
+                    await self.session.commit()
+                    total_inserted += len(values_list)
+                    self.logger.info(f"[BETA-BATCH] Inserted batch of {len(values_list)} records ({total_inserted}/{len(results)} total)")
+            
+            self.logger.info(f"[BETA-BATCH] Batch insert complete: {total_inserted} records")
+            return total_inserted
+        
+        except Exception as e:
+            self.logger.error(f"[BETA-BATCH] Failed to batch insert results: {e}", exc_info=True)
+            await self.session.rollback()
             raise

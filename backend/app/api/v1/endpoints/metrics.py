@@ -29,6 +29,7 @@ from ....services.beta_precomputation_service import PreComputedBetaService
 from ....services.beta_rounding_service import BetaRoundingService
 from ....services.risk_free_rate_service import RiskFreeRateCalculationService
 from ....services.ratio_metrics_service import RatioMetricsService
+from ....services.runtime_metrics_orchestration_service import RuntimeMetricsOrchestrationService
 from ....repositories.metrics_query_repository import MetricsQueryRepository
 from ....models.ratio_metrics import (
     RatioMetricsResponse,
@@ -1081,5 +1082,95 @@ async def get_ratio_metrics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to calculate ratio metric: {str(e)}"
+        )
+
+
+@router.post("/runtime-metrics")
+async def calculate_runtime_metrics(
+    dataset_id: UUID = Query(..., description="Dataset ID"),
+    param_set_id: UUID = Query(..., description="Parameter set ID for storing results"),
+    parameter_id: Optional[UUID] = Query(None, description="Parameter ID (optional, fallback to is_active)"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Orchestrate Phase 3+ runtime metrics calculation.
+    
+    Executes in this order:
+    1. Beta Rounding (parallel with Rf)
+    2. Risk-Free Rate (parallel with Beta)
+    3. Cost of Equity (sequential, depends on Beta & Rf)
+    
+    Calculates ~33k total records (11k per metric).
+    
+    Query Parameters:
+    - dataset_id: Dataset ID (required)
+    - param_set_id: Parameter set ID for storing results (required)
+    - parameter_id: Specific parameter ID to use (optional, falls back to is_active=true)
+    
+    Returns:
+    ```json
+    {
+        "success": true,
+        "execution_time_seconds": 45.23,
+        "dataset_id": "...",
+        "param_set_id": "...",
+        "parameter_id": "...",
+        "timestamp": "2026-03-17T12:34:56.789...",
+        "metrics_completed": {
+            "beta_rounding": {
+                "status": "success",
+                "records_inserted": 11000,
+                "time_seconds": 15.2,
+                "message": "..."
+            },
+            "risk_free_rate": {
+                "status": "success",
+                "records_inserted": 11000,
+                "time_seconds": 14.8,
+                "message": "..."
+            },
+            "cost_of_equity": {
+                "status": "success",
+                "records_inserted": 11000,
+                "time_seconds": 15.3,
+                "message": "..."
+            }
+        }
+    }
+    ```
+    """
+    try:
+        logger.info(
+            f"[API] POST /runtime-metrics: dataset={dataset_id}, param_set={param_set_id}, parameter={parameter_id}"
+        )
+        
+        # Create orchestration service
+        service = RuntimeMetricsOrchestrationService(db)
+        
+        # Execute orchestration
+        result = await service.orchestrate_runtime_metrics(
+            dataset_id=dataset_id,
+            param_set_id=param_set_id,
+            parameter_id=parameter_id,
+        )
+        
+        # Check for success
+        if not result.get("success", False):
+            logger.error(f"[API] Orchestration failed: {result.get('error', 'Unknown error')}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.get("error", "Runtime metrics calculation failed")
+            )
+        
+        logger.info(f"[API] Orchestration succeeded: {result['execution_time_seconds']:.2f}s")
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[API] Error in runtime metrics orchestration: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Runtime metrics calculation failed: {str(e)}"
         )
 

@@ -454,3 +454,152 @@ class CostOfEquityService:
                 raise
         
         return total_inserted
+
+    async def calculate_cost_of_equity_runtime_batch(
+        self,
+        dataset_id: UUID,
+        param_set_id: UUID,
+        parameter_id: UUID,
+    ) -> dict:
+        """
+        Batch runtime version: Calculate KE and batch insert results (~11k records).
+        
+        Extracts equity_risk_premium and cost_of_equity_approach from parameter_overrides.
+        Fetches pre-computed Calc Beta and Calc Rf, calculates KE, and batch inserts.
+        
+        Args:
+            dataset_id: Dataset ID
+            param_set_id: Parameter set ID (for storage and fetching Beta/Rf)
+            parameter_id: Parameter ID (used to fetch parameters from parameter_sets)
+        
+        Returns:
+            {
+                "status": "success|error",
+                "records_inserted": N,
+                "message": "...",
+            }
+        """
+        try:
+            import time
+            start_time = time.time()
+            
+            logger.info(
+                f"[KE-BATCH] Starting batch cost of equity calculation: dataset={dataset_id}, param_set={param_set_id}, parameter={parameter_id}"
+            )
+            
+            # Step 1: Load parameters from parameter_sets
+            params = await self._load_parameters_from_parameter_set(parameter_id)
+            logger.info(
+                f"[KE-BATCH] Parameters loaded: approach={params.get('cost_of_equity_approach', 'Floating')}, "
+                f"risk_premium={params.get('equity_risk_premium', 0.05):.4f}"
+            )
+            
+            # Step 2: Fetch Calc Beta and Calc Rf from metrics_outputs
+            logger.info("[KE-BATCH] Fetching Calc Beta and Calc Rf from metrics_outputs...")
+            beta_df, rf_df = await self._fetch_ke_inputs(dataset_id, param_set_id)
+            
+            if beta_df.empty:
+                return {
+                    "status": "error",
+                    "records_inserted": 0,
+                    "message": "No Calc Beta data found in metrics_outputs",
+                }
+            
+            if rf_df.empty:
+                return {
+                    "status": "error",
+                    "records_inserted": 0,
+                    "message": "No Calc Rf data found in metrics_outputs",
+                }
+            
+            logger.info(f"[KE-BATCH] Fetched: Beta={len(beta_df)} records, Rf={len(rf_df)} records")
+            
+            # Step 3: Calculate KE using vectorized operations
+            logger.info("[KE-BATCH] Calculating KE = Rf + Beta × RiskPremium (vectorized)...")
+            ke_df = self._calculate_ke_vectorized(beta_df, rf_df, params)
+            
+            if ke_df.empty:
+                return {
+                    "status": "error",
+                    "records_inserted": 0,
+                    "message": "No KE values could be calculated",
+                }
+            
+            logger.info(f"[KE-BATCH] Calculated {len(ke_df)} KE values")
+            
+            # Step 4: Batch insert results
+            logger.info("[KE-BATCH] Batch inserting results...")
+            records_inserted = await self._insert_ke_batch(dataset_id, param_set_id, ke_df)
+            
+            elapsed_time = time.time() - start_time
+            logger.info(
+                f"[KE-BATCH] ✓ Batch cost of equity calculation complete: {records_inserted} records inserted in {elapsed_time:.2f}s"
+            )
+            
+            return {
+                "status": "success",
+                "records_inserted": records_inserted,
+                "message": f"Calculated KE for {len(ke_df)} ticker-year pairs: {records_inserted} records inserted",
+            }
+        
+        except Exception as e:
+            logger.error(f"[KE-BATCH] Batch cost of equity calculation failed: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "records_inserted": 0,
+                "message": f"Batch calculation failed: {str(e)}",
+            }
+
+    async def _load_parameters_from_parameter_set(self, parameter_id: UUID) -> dict:
+        """
+        Load parameters from parameter_sets table (JSONB param_overrides).
+        
+        Args:
+            parameter_id: parameter_id (which is param_set_id in parameter_sets table)
+        
+        Returns:
+            {
+                "cost_of_equity_approach": "Floating",
+                "equity_risk_premium": 0.05,
+                "fixed_benchmark_return_wealth_preservation": 0.075,
+                ...
+            }
+        """
+        try:
+            query = text(
+                """
+                SELECT param_overrides
+                FROM cissa.parameter_sets
+                WHERE param_set_id = :parameter_id
+                LIMIT 1
+            """
+            )
+            result = await self.session.execute(query, {"parameter_id": str(parameter_id)})
+            row = result.fetchone()
+            
+            # Default parameters
+            defaults = {
+                "cost_of_equity_approach": "Floating",
+                "equity_risk_premium": 0.05,
+                "fixed_benchmark_return_wealth_preservation": 0.075,
+            }
+            
+            if not row:
+                logger.warning(f"[KE-BATCH] Parameter set not found: {parameter_id}")
+                return defaults
+            
+            param_overrides = row[0]
+            if isinstance(param_overrides, str):
+                param_overrides = json.loads(param_overrides)
+            elif param_overrides is None:
+                param_overrides = {}
+            
+            # Merge with defaults
+            result = {**defaults}
+            result.update(param_overrides)
+            
+            return result
+        
+        except Exception as e:
+            logger.error(f"[KE-BATCH] Failed to load parameters: {e}")
+            raise
