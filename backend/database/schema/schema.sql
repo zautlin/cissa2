@@ -323,13 +323,17 @@ COMMENT ON TABLE parameter_sets IS 'Named bundles of parameter configurations fo
    
    metadata JSONB NOT NULL DEFAULT '{}',
    
-   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
- );
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    
+    -- Unique constraint for ON CONFLICT upserts
+    -- Required by metrics calculation service for idempotent inserts
+    UNIQUE (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
+  );
 
- -- Uniqueness: one row per (dataset, params, ticker, fiscal_year, metric)
- -- When param_set_id is NULL (pre-computed metrics), allow only one row
- CREATE UNIQUE INDEX idx_metrics_outputs_unique 
- ON metrics_outputs (dataset_id, COALESCE(param_set_id, '00000000-0000-0000-0000-000000000000'::UUID), ticker, fiscal_year, output_metric_name);
+  -- Uniqueness: one row per (dataset, params, ticker, fiscal_year, metric)
+  -- When param_set_id is NULL (pre-computed metrics), allow only one row
+  CREATE UNIQUE INDEX idx_metrics_outputs_unique 
+  ON metrics_outputs (dataset_id, COALESCE(param_set_id, '00000000-0000-0000-0000-000000000000'::UUID), ticker, fiscal_year, output_metric_name);
 
  -- Index for pre-computed metrics (param_set_id IS NULL)
  CREATE INDEX idx_metrics_outputs_precomputed 
