@@ -424,11 +424,11 @@ class CostOfEquityService:
         
         metadata = json.dumps({"metric_level": "L1", "calculation_source": "cost_of_equity_service"})
         
-        for i in range(0, len(ke_df), batch_size):
-            batch = ke_df.iloc[i:i+batch_size]
-            batch_num = i // batch_size + 1
-            
-            try:
+        try:
+            for i in range(0, len(ke_df), batch_size):
+                batch = ke_df.iloc[i:i+batch_size]
+                batch_num = i // batch_size + 1
+                
                 # Build multi-row VALUES clause for all rows in batch
                 rows_sql = ", ".join([
                     f"('{str(dataset_id)}', '{str(param_set_id)}', '{str(row['ticker'])}', {int(row['fiscal_year'])}, 'Calc KE', {float(row['ke'])}, '{metadata}', now())"
@@ -445,15 +445,18 @@ class CostOfEquityService:
                 """)
                 
                 await self.session.execute(multi_row_insert)
-                await self.session.commit()
                 total_inserted += len(batch)
-                logger.debug(f"    - Batch {batch_num}: inserted {len(batch)} records (multi-row INSERT)")
-            except Exception as e:
-                logger.error(f"    - Batch {batch_num} error: {str(e)}", exc_info=True)
-                await self.session.rollback()
-                raise
+                logger.debug(f"    - Batch {batch_num}: executed {len(batch)} records (multi-row INSERT)")
+            
+            # Single commit at the end
+            await self.session.commit()
+            logger.info(f"    - All batches committed: {total_inserted} total records")
+            return total_inserted
         
-        return total_inserted
+        except Exception as e:
+            logger.error(f"    - Batch insert error: {str(e)}", exc_info=True)
+            await self.session.rollback()
+            raise
 
     async def calculate_cost_of_equity_runtime_batch(
         self,

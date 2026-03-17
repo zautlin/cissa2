@@ -451,12 +451,12 @@ class BetaRoundingService:
         Returns:
             Total number of records inserted
         """
+        if not results:
+            return 0
+        
+        total_inserted = 0
+        
         try:
-            if not results:
-                return 0
-            
-            total_inserted = 0
-            
             # Process results in batches
             for i in range(0, len(results), batch_size):
                 batch = results[i : i + batch_size]
@@ -496,11 +496,12 @@ class BetaRoundingService:
                     for values in values_list:
                         await self.session.execute(query, values)
                     
-                    await self.session.commit()
                     total_inserted += len(values_list)
-                    self.logger.info(f"[BETA-BATCH] Inserted batch of {len(values_list)} records ({total_inserted}/{len(results)} total)")
+                    self.logger.info(f"[BETA-BATCH] Executed batch of {len(values_list)} queries ({total_inserted}/{len(results)} total)")
             
-            self.logger.info(f"[BETA-BATCH] Batch insert complete: {total_inserted} records")
+            # Single commit at the end
+            await self.session.commit()
+            self.logger.info(f"[BETA-BATCH] Batch insert complete: {total_inserted} records committed")
             return total_inserted
         
         except Exception as e:

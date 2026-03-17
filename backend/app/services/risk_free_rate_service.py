@@ -1045,12 +1045,12 @@ class RiskFreeRateCalculationService:
         Returns:
             Total number of records inserted
         """
+        if not results:
+            return 0
+        
+        total_inserted = 0
+        
         try:
-            if not results:
-                return 0
-            
-            total_inserted = 0
-            
             # Process results in batches
             for i in range(0, len(results), batch_size):
                 batch = results[i : i + batch_size]
@@ -1073,11 +1073,12 @@ class RiskFreeRateCalculationService:
                 """)
                 
                 await self.session.execute(multi_row_insert)
-                await self.session.commit()
                 total_inserted += len(batch)
-                self.logger.info(f"[RF-BATCH] Inserted batch of {len(batch)} records ({total_inserted}/{len(results)} total)")
+                self.logger.info(f"[RF-BATCH] Executed batch of {len(batch)} records ({total_inserted}/{len(results)} total)")
             
-            self.logger.info(f"[RF-BATCH] Batch insert complete: {total_inserted} records")
+            # Single commit at the end
+            await self.session.commit()
+            self.logger.info(f"[RF-BATCH] Batch insert complete: {total_inserted} records committed")
             return total_inserted
         
         except Exception as e:
