@@ -422,6 +422,8 @@ async def calculate_beta_from_precomputed(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during beta calculation"
         )
+
+@router.post("/rates/calculate", response_model=CalculateRiskFreeRateResponse, status_code=status.HTTP_200_OK)
 async def calculate_risk_free_rate(
     request: CalculateRiskFreeRateRequest,
     db: AsyncSession = Depends(get_db)
