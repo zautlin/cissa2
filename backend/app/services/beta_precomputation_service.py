@@ -466,7 +466,7 @@ class PreComputedBetaService(BetaCalculationService):
                     "param_set_id": None,  # NULL for pre-computed
                     "ticker": row["ticker"],
                     "fiscal_year": int(row["fiscal_year"]),
-                    "output_metric_name": "Calc Beta",
+                    "output_metric_name": "Raw Calc Beta",
                     "output_metric_value": output_value,
                     "metadata": metadata,
                 }

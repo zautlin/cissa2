@@ -45,7 +45,7 @@ class BetaRoundingService:
                 SELECT COUNT(*) 
                 FROM cissa.metrics_outputs
                 WHERE dataset_id = :dataset_id
-                AND output_metric_name = 'Calc Beta'
+                AND output_metric_name = 'Raw Calc Beta'
                 AND param_set_id IS NULL
             """
             )
@@ -163,7 +163,7 @@ class BetaRoundingService:
                     metadata
                 FROM cissa.metrics_outputs
                 WHERE dataset_id = :dataset_id
-                AND output_metric_name = 'Calc Beta'
+                AND output_metric_name = 'Raw Calc Beta'
                 AND param_set_id IS NULL
                 ORDER BY ticker, fiscal_year
             """
