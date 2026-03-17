@@ -2,13 +2,16 @@
 # L1 Metrics Orchestration API Endpoints
 # ============================================================================
 """
-Endpoints for orchestrating L1 metric calculations.
+Endpoints for orchestrating L1 metric calculations (Pre-computation phases only).
 
-Provides a unified entry point for calculating all L1 metrics with:
+Provides a unified entry point for calculating pre-computed L1 metrics with:
 - Parallelization within Phase 1 (4 concurrent groups)
-- Sequential execution of Phases 2-4 (due to dependencies)
+- Sequential execution of Phase 2 (due to dependencies on Phase 1)
 - Automatic retry logic and error aggregation
 - Timing statistics for performance monitoring
+
+Note: Cost of Equity (Phase 3) and Risk-Free Rate (Phase 4) are now calculated
+at runtime via separate endpoints based on user-selected parameter sets.
 """
 
 import asyncio
@@ -59,7 +62,7 @@ class CalculateL1OrchestratorResponse(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     
     # Overall stats
-    total_successful: int = Field(..., description="Total successful metrics (17 target)")
+    total_successful: int = Field(..., description="Total successful metrics (13 target: 12 Phase 1 + 1 Phase 2)")
     total_failed: int = Field(..., description="Total failed metrics")
     total_records_inserted: int = Field(..., description="Total records inserted across all metrics")
     
@@ -135,12 +138,13 @@ async def orchestrate_l1_metrics_async(
     logger.info("Phase 1: Starting basic metrics (12 metrics, parallelized)...")
     phase_1_start = time.time()
     
-    # Group metrics into 4 groups of 3-4 each
+    # Group metrics into 4 groups of 3-4 each, respecting dependencies
+    # Dependencies: Calc OA depends on Calc Assets being stored first
     phase_1_groups = [
-        ["Calc MC", "Calc Assets", "Calc OA"],
-        ["Calc Op Cost", "Calc Non Op Cost", "Calc Tax Cost"],
-        ["Calc XO Cost", "Calc ECF", "Non Div ECF"],
-        ["Calc EE", "Calc FY TSR", "Calc FY TSR PREL"],
+        ["Calc MC", "Calc Op Cost", "Calc Non Op Cost"],           # Group 1: Independent metrics
+        ["Calc Tax Cost", "Calc XO Cost", "Calc Assets"],          # Group 2: Calc Assets alone
+        ["Calc OA", "Calc ECF", "Non Div ECF"],                    # Group 3: Calc OA after Calc Assets inserted
+        ["Calc EE", "Calc FY TSR", "Calc FY TSR PREL"],            # Group 4: Other temporal metrics
     ]
     
     phase_1_successful = []
@@ -203,72 +207,13 @@ async def orchestrate_l1_metrics_async(
     logger.info(f"Phase 2 complete: {len(phase_2_successful)}/1 successful in {phase_2_time:.1f}s")
     
     # ========================================================================
-    # Phase 4: Risk-Free Rate (Sequential) - RUN BEFORE Phase 3
-    # ========================================================================
-    
-    logger.info("Phase 4: Starting risk-free rate calculation...")
-    phase_4_start = time.time()
-    phase_4_successful = []
-    phase_4_failed = {}
-    phase_4_records = 0
-    
-    try:
-        result = await call_metric_api("/api/v1/metrics/rates/calculate")
-        if isinstance(result, dict) and result.get("status") == "error":
-            phase_4_failed["Calc Rf"] = result.get("message", "Unknown error")
-            logger.warning(f"  ✗ Calc Rf: {result.get('message', 'Unknown')[:60]}")
-        elif isinstance(result, dict):
-            phase_4_successful.append("Calc Rf")
-            phase_4_records = result.get("results_count", 0)
-            logger.info(f"  ✓ Calc Rf: {phase_4_records} records")
-    except Exception as e:
-        phase_4_failed["Calc Rf"] = str(e)
-        logger.warning(f"  ✗ Calc Rf: {str(e)[:60]}")
-    
-    phase_4_time = time.time() - phase_4_start
-    logger.info(f"Phase 4 complete: {len(phase_4_successful)}/1 successful in {phase_4_time:.1f}s")
-    
-    # ========================================================================
-    # Phase 3: Cost of Equity (Sequential, depends on Phase 2 AND Phase 4)
-    # ========================================================================
-    
-    logger.info("Phase 3: Starting cost of equity calculation...")
-    phase_3_start = time.time()
-    phase_3_successful = []
-    phase_3_failed = {}
-    phase_3_records = 0
-    
-    if "Calc Beta" not in phase_2_successful:
-        logger.warning("  ⚠ Skipping Phase 3: Beta not available from Phase 2")
-        phase_3_failed["Calc KE"] = "Phase 2 Beta dependency not met"
-    elif "Calc Rf" not in phase_4_successful:
-        logger.warning("  ⚠ Skipping Phase 3: Risk-Free Rate not available from Phase 4")
-        phase_3_failed["Calc KE"] = "Phase 4 Risk-Free Rate dependency not met"
-    else:
-        try:
-            result = await call_metric_api("/api/v1/metrics/cost-of-equity/calculate")
-            if isinstance(result, dict) and result.get("status") == "error":
-                phase_3_failed["Calc KE"] = result.get("message", "Unknown error")
-                logger.warning(f"  ✗ Calc KE: {result.get('message', 'Unknown')[:60]}")
-            elif isinstance(result, dict):
-                phase_3_successful.append("Calc KE")
-                phase_3_records = result.get("results_count", 0)
-                logger.info(f"  ✓ Calc KE: {phase_3_records} records")
-        except Exception as e:
-            phase_3_failed["Calc KE"] = str(e)
-            logger.warning(f"  ✗ Calc KE: {str(e)[:60]}")
-    
-    phase_3_time = time.time() - phase_3_start
-    logger.info(f"Phase 3 complete: {len(phase_3_successful)}/1 successful in {phase_3_time:.1f}s")
-    
-    # ========================================================================
-    # Compile Results
+    # Compile Results (2-Phase Pre-computation Only)
     # ========================================================================
     
     total_time = time.time() - orchestration_start
-    total_successful = len(phase_1_successful) + len(phase_2_successful) + len(phase_3_successful) + len(phase_4_successful)
-    total_failed = len(phase_1_failed) + len(phase_2_failed) + len(phase_3_failed) + len(phase_4_failed)
-    total_records = phase_1_records + phase_2_records + phase_3_records + phase_4_records
+    total_successful = len(phase_1_successful) + len(phase_2_successful)
+    total_failed = len(phase_1_failed) + len(phase_2_failed)
+    total_records = phase_1_records + phase_2_records
     
     # Collect errors
     errors = []
@@ -276,12 +221,8 @@ async def orchestrate_l1_metrics_async(
         errors.append(f"Phase 1 - {metric}: {error}")
     for metric, error in phase_2_failed.items():
         errors.append(f"Phase 2 - {metric}: {error}")
-    for metric, error in phase_3_failed.items():
-        errors.append(f"Phase 3 - {metric}: {error}")
-    for metric, error in phase_4_failed.items():
-        errors.append(f"Phase 4 - {metric}: {error}")
     
-    logger.info(f"Orchestration complete: {total_successful}/17 successful in {total_time:.1f}s")
+    logger.info(f"Orchestration complete: {total_successful}/13 successful in {total_time:.1f}s")
     
     return CalculateL1OrchestratorResponse(
         success=total_failed == 0,
@@ -308,22 +249,6 @@ async def orchestrate_l1_metrics_async(
                 "time_seconds": phase_2_time,
                 "records_inserted": phase_2_records,
             },
-            "phase_3": {
-                "status": "success" if len(phase_3_failed) == 0 else ("failed" if "Calc Beta" in phase_2_successful else "skipped"),
-                "metrics": 1,
-                "successful": len(phase_3_successful),
-                "failed": len(phase_3_failed),
-                "time_seconds": phase_3_time,
-                "records_inserted": phase_3_records,
-            },
-            "phase_4": {
-                "status": "success" if len(phase_4_failed) == 0 else "failed",
-                "metrics": 1,
-                "successful": len(phase_4_successful),
-                "failed": len(phase_4_failed),
-                "time_seconds": phase_4_time,
-                "records_inserted": phase_4_records,
-            },
         },
         errors=errors,
     )
@@ -336,31 +261,31 @@ async def orchestrate_l1_metrics_async(
 @router.post("/calculate-l1", response_model=CalculateL1OrchestratorResponse)
 async def calculate_l1_orchestrated(request: CalculateL1OrchestratorRequest):
     """
-    Orchestrate L1 metric calculations with parallelization and automatic retry logic.
+    Orchestrate pre-computed L1 metric calculations (Phase 1 & 2 only).
     
-    **Phases:**
+    **NOTE:** Cost of Equity (Phase 3) and Risk-Free Rate (Phase 4) are now calculated
+    at runtime via separate endpoints:
+    - POST /api/v1/metrics/rates/calculate - Runtime Risk-Free Rate calculation
+    - POST /api/v1/metrics/cost-of-equity/calculate - Runtime Cost of Equity calculation
+    
+    **Phases (Pre-computation Only):**
     1. **Phase 1 - Basic Metrics** (12 metrics, parallelized in 4 concurrent groups)
-       - Simple metrics (7): Calc MC, Calc Assets, Calc OA, Calc Op Cost, Calc Non Op Cost, Calc Tax Cost, Calc XO Cost
-       - Temporal metrics (5): Calc ECF, Non Div ECF, Calc EE, Calc FY TSR, Calc FY TSR PREL
+       - Simple metrics: Calc MC, Calc Assets, Calc Op Cost, Calc Non Op Cost, Calc Tax Cost, Calc XO Cost
+       - Temporal metrics: Calc ECF, Non Div ECF, Calc EE, Calc FY TSR, Calc FY TSR PREL
+       - Dependencies: Calc OA depends on Calc Assets (Group 2 runs before Group 3)
     
     2. **Phase 2 - Beta** (1 metric, sequential)
        - Calc Beta: 36-month rolling OLS regression
-    
-    3. **Phase 3 - Cost of Equity** (1 metric, depends on Phase 2)
-       - Calc KE: KE = Rf + Beta × RiskPremium
-    
-    4. **Phase 4 - Risk-Free Rate** (1 metric, sequential)
-       - Calc Rf: 12-month rolling geometric mean
+       - Stores with param_set_id=NULL and raw components in metadata
     
     **Concurrency Strategy:**
-    - Phase 1: 4 concurrent groups to parallelize basic metrics
-    - Phases 2-4: Sequential execution (dependencies require this)
+    - Phase 1: 4 concurrent groups to parallelize basic metrics (respecting dependencies)
+    - Phase 2: Sequential execution
     - Semaphore limits concurrency to prevent API/DB overload
     
     **Performance:**
-    - Target: <1 minute total execution time
-    - Realistic: 40-60 seconds with optimized batch inserts
-    - ~100x faster than sequential execution with individual row INSERTs
+    - Target: <30 seconds total execution time (reduced from 40-60s by removing Phase 3/4)
+    - Realistic: 20-30 seconds with optimized batch inserts
     
     **Example Request:**
     ```json
