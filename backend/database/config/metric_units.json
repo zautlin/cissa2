@@ -259,12 +259,147 @@
       "metric_level": "L2",
       "description": "Future Value Economic Cash Flow (5-Year)"
     },
-    {
-      "metric_name": "FV_ECF_10Y",
-      "database_name": "Calc 10Y FV ECF",
-      "unit": "millions",
-      "is_output_metric": true,
-      "metric_level": "L2",
-      "description": "Future Value Economic Cash Flow (10-Year)"
-    }
-  ]
+     {
+       "metric_name": "FV_ECF_10Y",
+       "database_name": "Calc 10Y FV ECF",
+       "unit": "millions",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "description": "Future Value Economic Cash Flow (10-Year)"
+     },
+     {
+       "metric_name": "TER",
+       "database_name": "TER",
+       "unit": "%",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Total Equity Return - percentage annual return on equity (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "TER-Ke",
+       "database_name": "TER-Ke",
+       "unit": "%",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "TER minus Cost of Equity - excess return above cost of equity (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "TERA",
+       "database_name": "TERA",
+       "unit": "%",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "TER Alpha - alternative measure of excess equity returns (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "TRTE",
+       "database_name": "TRTE",
+       "unit": "millions",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Total Return Total Equity - total return on total equity value (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "WP",
+       "database_name": "WP",
+       "unit": "millions",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Working Period - metric for working capital analysis (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "WC",
+       "database_name": "WC",
+       "unit": "millions",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Working Capital - current assets minus current liabilities (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "WC TERA",
+       "database_name": "WC TERA",
+       "unit": "millions",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Working Capital TER Alpha - working capital adjusted for TER alpha (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "RA MM",
+       "database_name": "RA MM",
+       "unit": "%",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Risk Adjusted Market Model - market model return adjusted for risk (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "TSR",
+       "database_name": "TSR",
+       "unit": "%",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Total Shareholder Return - total return to shareholders including dividends (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "EP PCT",
+       "database_name": "EP PCT",
+       "unit": "%",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Economic Profit Percentage - economic profit as percentage of equity (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "Calc EP",
+       "database_name": "Calc EP",
+       "unit": "millions",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Calculated Economic Profit - profit minus cost of capital charge (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "Calc PAT_Ex",
+       "database_name": "Calc PAT_Ex",
+       "unit": "millions",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Calculated Profit After Tax Exclusive - PAT adjusted for extraordinary items (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "Calc XO_Cost_Ex",
+       "database_name": "Calc XO_Cost_Ex",
+       "unit": "millions",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Calculated XO Cost Exclusive - extraordinary costs adjusted for exclusions (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "Calc FC",
+       "database_name": "Calc FC",
+       "unit": "millions",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "Calculated Franking Credit - imputation credit value for tax purposes (awaiting calculation implementation)"
+     },
+     {
+       "metric_name": "Calc 1Y FV ECF",
+       "database_name": "Calc 1Y FV ECF",
+       "unit": "millions",
+       "is_output_metric": true,
+       "metric_level": "L2",
+       "status": "temporary",
+       "description": "1-Year Future Value Economic Cash Flow - forward-looking ECF valuation metric (awaiting calculation implementation)"
+     }
+   ]
