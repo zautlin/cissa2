@@ -440,7 +440,7 @@ class BetaRoundingService:
         self, dataset_id: UUID, param_set_id: UUID, results: list[dict], batch_size: int = 1000
     ) -> int:
         """
-        Batch insert rounded results in groups (batch_size per insert).
+        Batch insert rounded results using multi-row INSERT for better performance.
         
         Args:
             dataset_id: Dataset ID
@@ -456,12 +456,12 @@ class BetaRoundingService:
         
         total_inserted = 0
         
-        # Process results in batches
+        # Process results in batches using multi-row INSERT
         for i in range(0, len(results), batch_size):
             batch = results[i : i + batch_size]
             
-            # Build batch insert query
-            values_list = []
+            # Build multi-row VALUES clause for all records in batch
+            rows_sql_parts = []
             for result in batch:
                 metadata = {
                     "metric_level": "L1",
@@ -470,33 +470,23 @@ class BetaRoundingService:
                     "approach": result.get("approach"),
                     "rounding": result.get("rounding"),
                 }
-                
-                values_list.append({
-                    "dataset_id": str(dataset_id),
-                    "param_set_id": str(param_set_id),
-                    "ticker": result["ticker"],
-                    "fiscal_year": result["fiscal_year"],
-                    "output_metric_name": "Calc Beta",
-                    "output_metric_value": float(result["beta"]),
-                    "metadata": json.dumps(metadata),
-                })
+                metadata_json = json.dumps(metadata)
+                row_sql = f"('{str(dataset_id)}', '{str(param_set_id)}', '{result['ticker']}', {result['fiscal_year']}, 'Calc Beta', {float(result['beta'])}, '{metadata_json}')"
+                rows_sql_parts.append(row_sql)
             
-            # Execute batch insert
-            if values_list:
-                query = text(
-                    """
-                    INSERT INTO cissa.metrics_outputs 
-                    (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
-                    VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata)
-                    ON CONFLICT DO NOTHING
-                """
-                )
-                
-                for values in values_list:
-                    await self.session.execute(query, values)
-                
-                total_inserted += len(values_list)
-                self.logger.info(f"[BETA-BATCH] Executed batch of {len(values_list)} queries ({total_inserted}/{len(results)} total)")
+            rows_sql = ", ".join(rows_sql_parts)
+            
+            # Execute single multi-row INSERT per batch
+            query = text(f"""
+                INSERT INTO cissa.metrics_outputs 
+                (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
+                VALUES {rows_sql}
+                ON CONFLICT DO NOTHING
+            """)
+            
+            await self.session.execute(query)
+            total_inserted += len(batch)
+            self.logger.info(f"[BETA-BATCH] Executed batch of {len(batch)} records ({total_inserted}/{len(results)} total)")
         
         # Single commit at the end
         await self.session.commit()
