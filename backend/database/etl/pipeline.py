@@ -100,6 +100,8 @@ class PipelineOrchestrator:
         self.start_time = datetime.now()
         self.results = {}
         self.dataset_id = None
+        self.param_set_id = None
+        self.api_available = False
         
         # Paths - scripts are in input-data/ASX/ (parent of raw-data/)
         self.scripts_dir = self.excel_file.parent.parent  # input-data/ASX/
@@ -140,6 +142,19 @@ class PipelineOrchestrator:
             
             # Stage 2: Process data
             if not self._stage_2_process_data():
+                return False
+            
+            # Fetch default parameter set (needed for Stage 3)
+            import asyncio
+            self.param_set_id = asyncio.run(self._fetch_default_parameter_set())
+            if not self.param_set_id:
+                self.logger.error("Cannot proceed to Stage 3 without default parameter set")
+                return False
+            
+            # Check API server availability (needed for Stage 3)
+            self.api_available = self._ensure_api_server_running()
+            if not self.api_available:
+                self.logger.error("API server unavailable - cannot proceed to Stage 3")
                 return False
             
             # Stage 3: Pre-compute metrics (Beta, etc.)
@@ -184,6 +199,111 @@ class PipelineOrchestrator:
         except Exception as e:
             self.logger.error(f"Database connection failed: {e}")
             return False
+    
+    async def _fetch_default_parameter_set(self) -> Optional[str]:
+        """
+        Fetch the default parameter set (is_default=true) from database.
+        Called after Stage 2 completes, before Stage 3 starts.
+        
+        Returns:
+            UUID string of default parameter set, or None if not found
+        """
+        try:
+            import sys
+            import os
+            from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+            from etl.config import get_async_db_url
+            
+            # Add backend to path for imports
+            backend_path = os.path.join(os.path.dirname(__file__), '../..')
+            if backend_path not in sys.path:
+                sys.path.insert(0, backend_path)
+            
+            from app.repositories.parameter_repository import ParameterRepository
+            
+            async_engine = create_async_engine(
+                get_async_db_url(),
+                echo=False
+            )
+            
+            async_session_factory = async_sessionmaker(
+                async_engine,
+                class_=AsyncSession,
+                expire_on_commit=False
+            )
+            
+            async with async_session_factory() as session:
+                repo = ParameterRepository(session)
+                param_set = await repo.get_default_parameter_set()
+                
+                if param_set:
+                    param_set_id = param_set.get('id') or param_set.get('param_set_id')
+                    return str(param_set_id)
+                else:
+                    self.logger.info("⚠ No default parameter set found (is_default=true)")
+                    return None
+        
+        except Exception as e:
+            self.logger.error(f"Failed to fetch default parameter set: {e}")
+            import traceback
+            self.logger.info(traceback.format_exc())
+            return None
+    
+    def _ensure_api_server_running(self, api_url: str = "http://localhost:8000", max_retries: int = 2) -> bool:
+        """
+        Check if API server is running. If not, attempt to start it.
+        
+        Args:
+            api_url: Base URL of API server
+            max_retries: Number of health check retries with delays
+        
+        Returns:
+            True if API is running or successfully started, False otherwise
+        """
+        import requests
+        import time
+        
+        health_endpoint = f"{api_url}/health"
+        
+        self.logger.info(f"Checking API server health: {health_endpoint}")
+        
+        # Try health check multiple times
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(health_endpoint, timeout=5)
+                if response.status_code == 200:
+                    self.logger.success(f"✓ API server is running")
+                    return True
+            except Exception as e:
+                self.logger.info(f"  Health check attempt {attempt + 1}/{max_retries} failed: {e}")
+        
+        # API not running, attempt to start it
+        self.logger.info(f"API server not responding, attempting to start...")
+        try:
+            start_script = Path(__file__).parent.parent.parent / "scripts" / "start-api.sh"
+            if start_script.exists():
+                subprocess.Popen(
+                    ["bash", str(start_script)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+                self.logger.info(f"  Started API server script, waiting 5 seconds...")
+                time.sleep(5)
+                
+                # Retry health check after starting
+                try:
+                    response = requests.get(health_endpoint, timeout=5)
+                    if response.status_code == 200:
+                        self.logger.success(f"✓ API server started successfully")
+                        return True
+                except Exception as e:
+                    self.logger.info(f"  API still not responding after start attempt: {e}")
+        except Exception as e:
+            self.logger.info(f"  Failed to start API server: {e}")
+        
+        self.logger.error(f"✗ API server at {api_url} is not responding")
+        return False
     
     def _stage_0_extract(self) -> bool:
         """Stage 0: Extract Excel to CSV."""
@@ -481,76 +601,162 @@ class PipelineOrchestrator:
             return False
     
     def _stage_3_precompute_metrics(self) -> bool:
-        """Stage 3: Pre-compute metrics (Beta, etc.) during ingestion."""
-        self.logger.section("STAGE 3: PRE-COMPUTE METRICS")
+        """
+        Stage 3: Pre-compute all L1 metrics via orchestrator endpoint.
+        
+        Calls /api/v1/metrics/calculate-l1 orchestrator with:
+        - Phase 1: 12 simple metrics (parallelized)
+        - Phase 2: Beta calculation (sequential)
+        - Phase 4: Risk-Free Rate (sequential)
+        - Phase 3: Cost of Equity (sequential, depends on Phase 2 + Phase 4)
+        
+        Returns:
+            True if orchestrator call completes (even with warnings)
+            False only if fatal error (API unavailable, no param_set_id)
+        """
+        self.logger.section("STAGE 3: PRE-COMPUTE L1 METRICS")
         
         try:
+            # Validate prerequisites
             if not self.dataset_id:
-                self.logger.error("Dataset ID not set")
+                self.logger.error("Dataset ID not set (should be from Stage 1b)")
                 return False
             
-            self.logger.info(f"Dataset ID: {self.dataset_id}\n")
+            if not self.param_set_id:
+                self.logger.error("Parameter Set ID not set (should be from after Stage 2)")
+                return False
             
-            # Import here to avoid circular dependencies
-            import asyncio
-            from sqlalchemy.ext.asyncio import create_async_engine
-            from sqlalchemy.orm import sessionmaker
+            if not self.api_available:
+                self.logger.error("API server not available (should have been checked at stage start)")
+                return False
             
-            async def run_precomputation():
-                # Get async engine from config
-                from etl.config import get_async_engine
-                async_engine = await get_async_engine()
-                async_session_factory = sessionmaker(
-                    async_engine, class_=None, expire_on_commit=False
+            self.logger.info(f"Dataset ID:       {self.dataset_id}")
+            self.logger.info(f"Parameter Set ID: {self.param_set_id}\n")
+            
+            # Call orchestrator endpoint
+            import requests
+            import time
+            
+            orchestrator_url = "http://localhost:8000/api/v1/metrics/calculate-l1"
+            payload = {
+                "dataset_id": str(self.dataset_id),
+                "param_set_id": str(self.param_set_id),
+                "concurrency": 4,
+                "max_retries": 3,
+            }
+            
+            self.logger.info(f"Calling orchestrator: {orchestrator_url}")
+            self.logger.info(f"Payload: dataset={self.dataset_id}, param_set={self.param_set_id}\n")
+            
+            start_time = time.time()
+            
+            try:
+                response = requests.post(
+                    orchestrator_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=600  # 10 minute timeout
                 )
-                
-                # Create pre-computation service
-                from app.services.beta_precomputation_service import PreComputedBetaService
-                
-                async with async_session_factory() as session:
-                    service = PreComputedBetaService(session)
-                    result = await service.precompute_beta_async(dataset_id=self.dataset_id)
-                    return result
+            except requests.exceptions.Timeout:
+                self.logger.error(f"Orchestrator timeout (10 minutes exceeded)")
+                self.results['stage_3_precompute'] = {
+                    'status': 'WARNING',
+                    'message': 'Orchestrator timeout - Stage 3 skipped',
+                }
+                return True  # Non-fatal: continue pipeline
+            except requests.exceptions.ConnectionError as e:
+                self.logger.error(f"Failed to connect to orchestrator: {e}")
+                self.results['stage_3_precompute'] = {
+                    'status': 'WARNING',
+                    'message': f'Orchestrator unreachable: {str(e)}',
+                }
+                return True  # Non-fatal: continue pipeline
             
-            # Run async pre-computation
-            result = asyncio.run(run_precomputation())
+            elapsed_time = time.time() - start_time
             
-            if result["status"] == "error":
-                self.logger.error(f"Beta pre-computation failed: {result['message']}")
-                return False
+            if response.status_code != 200:
+                self.logger.error(f"Orchestrator returned HTTP {response.status_code}")
+                self.logger.error(f"Response: {response.text[:200]}")
+                self.results['stage_3_precompute'] = {
+                    'status': 'WARNING',
+                    'message': f'Orchestrator HTTP {response.status_code}',
+                }
+                return True  # Non-fatal: continue pipeline
             
-            self.logger.success(f"Beta Pre-computation Complete")
-            self.logger.info(f"\nResults:")
-            self.logger.info(f"  Records pre-computed: {result['records_created']:,}")
-            self.logger.info(f"  Time elapsed: {result['time_seconds']:.1f}s")
+            # Parse orchestrator response
+            result = response.json()
             
-            if result.get("alert"):
-                self.logger.info(f"\n⚠️  ALERT: Pre-computation took {result['time_seconds']:.1f}s (threshold: 120s)")
+            # Log overall status
+            total_successful = result.get('total_successful', 0)
+            total_failed = result.get('total_failed', 0)
+            total_records = result.get('total_records_inserted', 0)
+            orch_time = result.get('execution_time_seconds', elapsed_time)
+            
+            self.logger.success(f"Orchestrator Complete")
+            self.logger.info(f"\nMetrics Summary:")
+            self.logger.info(f"  Total Successful: {total_successful}/17")
+            self.logger.info(f"  Total Failed:     {total_failed}/17")
+            self.logger.info(f"  Total Records:    {total_records:,}")
+            self.logger.info(f"  Execution Time:   {orch_time:.1f}s")
+            
+            # Log phase breakdown
+            phases = result.get('phases', {})
+            self.logger.info(f"\nPhase Breakdown:")
+            
+            phase_1 = phases.get('phase_1', {})
+            self.logger.info(f"  Phase 1 (Basic):        {phase_1.get('successful', 0)}/12 metrics, {phase_1.get('time_seconds', 0):.1f}s")
+            
+            phase_2 = phases.get('phase_2', {})
+            self.logger.info(f"  Phase 2 (Beta):         {phase_2.get('successful', 0)}/1 metrics, {phase_2.get('time_seconds', 0):.1f}s")
+            
+            phase_4 = phases.get('phase_4', {})
+            self.logger.info(f"  Phase 4 (Rf):           {phase_4.get('successful', 0)}/1 metrics, {phase_4.get('time_seconds', 0):.1f}s")
+            
+            phase_3 = phases.get('phase_3', {})
+            self.logger.info(f"  Phase 3 (KE):           {phase_3.get('successful', 0)}/1 metrics, {phase_3.get('time_seconds', 0):.1f}s")
+            
+            # Log any errors
+            errors = result.get('errors', [])
+            if errors:
+                self.logger.info(f"\nWarnings/Errors:")
+                for error in errors:
+                    self.logger.info(f"  - {error}")
+            
+            # Alert if slow
+            if orch_time > 120:
+                self.logger.info(f"\n⚠️  Pre-computation took {orch_time:.1f}s (threshold: 120s)")
                 self.logger.info(f"  Consider optimizing data or increasing server resources")
             
+            # Store results
             self.results['stage_3_precompute'] = {
-                'status': 'SUCCESS',
-                'records_created': result['records_created'],
-                'time_seconds': result['time_seconds'],
-                'alert': result.get('alert', False),
+                'status': 'SUCCESS' if total_failed == 0 else 'WARNING',
+                'total_successful': total_successful,
+                'total_failed': total_failed,
+                'total_records': total_records,
+                'execution_time_seconds': orch_time,
+                'phases': phases,
+                'errors': errors,
             }
             
             self.logger.section("PRE-COMPUTATION COMPLETE")
-            self.logger.info("✓ Stage 3: Metrics pre-computation complete")
+            if total_failed == 0:
+                self.logger.info("✓ Stage 3: All L1 metrics pre-computed successfully")
+            else:
+                self.logger.info(f"⚠ Stage 3: {total_failed} metrics failed (see errors above)")
             
-            return True
+            return True  # Return True per Option A (success even with warnings)
         
         except Exception as e:
-            self.logger.error(f"Metrics pre-computation failed: {e}")
+            self.logger.error(f"Stage 3 failed: {e}")
             import traceback
             self.logger.info(traceback.format_exc())
-            # Don't fail the entire pipeline if pre-computation fails
-            # Log the error but continue
+            
             self.results['stage_3_precompute'] = {
                 'status': 'WARNING',
                 'message': f"Pre-computation encountered error: {str(e)}",
             }
-            return True  # Return True to continue pipeline despite pre-computation error
+            
+            return True  # Return True per Option A (continue pipeline despite failures)
     
     def _log_final_summary(self):
         """Log final execution summary."""

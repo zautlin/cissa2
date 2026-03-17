@@ -6,9 +6,11 @@ from uuid import UUID
 from functools import lru_cache
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
+import asyncio
 
 from app.models.statistics import (
     DatasetStatistics,
+    AllDatasetsStatistics,
     CompaniesStats,
     SectorsStats,
     DataCoverage,
@@ -98,6 +100,44 @@ class StatisticsService:
         self._set_cache(dataset_id, stats)
         
         return stats
+    
+    async def get_all_statistics(self) -> AllDatasetsStatistics:
+        """
+        Get statistics for all datasets with parallel execution.
+        
+        Fetches all dataset IDs, then queries statistics for each in parallel.
+        Results are cached individually per dataset (no special cache for "all").
+        """
+        logger.info("Fetching statistics for all datasets")
+        
+        # Get all dataset IDs
+        dataset_ids = await self.repo.get_all_dataset_ids()
+        logger.info(f"Found {len(dataset_ids)} datasets")
+        
+        # Fetch statistics for all datasets in parallel
+        tasks = [self.get_statistics(dataset_id) for dataset_id in dataset_ids]
+        stats_list = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Build response dict, filtering out exceptions
+        datasets_dict = {}
+        for dataset_id, stats in zip(dataset_ids, stats_list):
+            if isinstance(stats, Exception):
+                logger.error(f"Error fetching statistics for dataset {dataset_id}: {str(stats)}")
+                # Include dataset with null/empty stats on error
+                datasets_dict[str(dataset_id)] = DatasetStatistics(
+                    dataset_id=str(dataset_id),
+                    dataset_created_at=None,
+                    country=None,
+                    companies=CompaniesStats(count=None),
+                    sectors=SectorsStats(count=None),
+                    data_coverage=DataCoverage(min_year=None, max_year=None),
+                    raw_metrics=RawMetricsStats(count=None),
+                )
+            else:
+                datasets_dict[str(dataset_id)] = stats
+        
+        logger.info(f"Successfully retrieved statistics for {len(datasets_dict)} datasets")
+        return AllDatasetsStatistics(datasets=datasets_dict)
     
     @classmethod
     def clear_cache(cls, dataset_id: Optional[UUID] = None) -> None:

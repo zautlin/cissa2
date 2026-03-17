@@ -62,6 +62,34 @@ def get_db_url() -> str:
     return f"postgresql://{user}:{password}@{host}:{port}/{database}?options=-c%20search_path=cissa"
 
 
+def get_async_db_url() -> str:
+    """
+    Build async PostgreSQL connection URL for SQLAlchemy AsyncEngine.
+    
+    Uses postgresql+asyncpg driver for async database operations.
+    
+    Reads from:
+    - POSTGRES_HOST (default: "localhost")
+    - POSTGRES_PORT (default: "5432")
+    - POSTGRES_USER (default: "postgres")
+    - POSTGRES_PASSWORD (default: "changeme")
+    - POSTGRES_DB (default: "rozetta")
+    
+    Note: search_path is set via AsyncSession configuration, not URL options.
+    
+    Returns:
+        str: Async PostgreSQL connection URL (postgresql+asyncpg://...)
+    """
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    user = os.getenv("POSTGRES_USER", "postgres")
+    password = os.getenv("POSTGRES_PASSWORD", "changeme")
+    database = os.getenv("POSTGRES_DB", "rozetta")
+    
+    # Use postgresql+asyncpg driver for async connections
+    return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
+
+
 def create_db_engine(echo: bool = False):
     """
     Create SQLAlchemy database engine.

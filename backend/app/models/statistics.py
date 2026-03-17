@@ -2,7 +2,7 @@
 # Pydantic Models for Dataset Statistics
 # ============================================================================
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict
 from datetime import datetime
 
 
@@ -36,3 +36,8 @@ class DatasetStatistics(BaseModel):
     sectors: SectorsStats = Field(..., description="Sector statistics")
     data_coverage: DataCoverage = Field(..., description="Data coverage period")
     raw_metrics: RawMetricsStats = Field(..., description="Raw metrics statistics")
+
+
+class AllDatasetsStatistics(BaseModel):
+    """Statistics for all datasets"""
+    datasets: Dict[str, DatasetStatistics] = Field(..., description="Statistics keyed by dataset_id")

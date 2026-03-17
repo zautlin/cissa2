@@ -130,3 +130,31 @@ class StatisticsRepository:
         except Exception as e:
             logger.error(f"Error getting dataset info: {str(e)}")
             return None, None
+    
+    async def get_all_dataset_ids(self) -> list[UUID]:
+        """
+        Get all dataset IDs from dataset_versions table.
+        
+        Used to fetch statistics for all datasets.
+        """
+        try:
+            query = text("""
+                SELECT dataset_id
+                FROM cissa.dataset_versions
+                ORDER BY created_at DESC
+            """)
+            result = await self.db.execute(query)
+            rows = result.fetchall()
+            
+            # Handle both string and UUID objects from asyncpg
+            dataset_ids = []
+            for row in rows:
+                dataset_id = row[0]
+                if isinstance(dataset_id, UUID):
+                    dataset_ids.append(dataset_id)
+                else:
+                    dataset_ids.append(UUID(dataset_id))
+            return dataset_ids
+        except Exception as e:
+            logger.error(f"Error getting all dataset IDs: {str(e)}")
+            return []

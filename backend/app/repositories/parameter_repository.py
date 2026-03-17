@@ -108,13 +108,15 @@ class ParameterRepository:
         
         Returns raw data dict or None if not found.
         """
-        query = """
+        from sqlalchemy import text
+        
+        query = text("""
         SELECT param_set_id, param_set_name, is_active, is_default, 
                param_overrides, created_at, updated_at
         FROM cissa.parameter_sets
         WHERE is_default = true
         LIMIT 1
-        """
+        """)
         
         result = await self._session.execute(query)
         row = result.fetchone()
