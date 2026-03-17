@@ -46,12 +46,12 @@ class ParameterRepository:
         
         Returns raw data dict or None if not found.
         """
-        query = """
+        query = text("""
         SELECT param_set_id, param_set_name, is_active, is_default, 
                param_overrides, created_at, updated_at
         FROM cissa.parameter_sets
         WHERE param_set_id = :param_set_id
-        """
+        """)
         
         result = await self._session.execute(
             query,
@@ -78,13 +78,13 @@ class ParameterRepository:
         
         Returns raw data dict or None if not found.
         """
-        query = """
+        query = text("""
         SELECT param_set_id, param_set_name, is_active, is_default, 
                param_overrides, created_at, updated_at
         FROM cissa.parameter_sets
         WHERE is_active = true
         LIMIT 1
-        """
+        """)
         
         result = await self._session.execute(query)
         row = result.fetchone()
@@ -108,8 +108,6 @@ class ParameterRepository:
         
         Returns raw data dict or None if not found.
         """
-        from sqlalchemy import text
-        
         query = text("""
         SELECT param_set_id, param_set_name, is_active, is_default, 
                param_overrides, created_at, updated_at
@@ -148,12 +146,12 @@ class ParameterRepository:
         
         Returns the param_set_id of the newly created set.
         """
-        query = """
+        query = text("""
         INSERT INTO cissa.parameter_sets 
         (param_set_name, description, param_overrides, is_active, is_default, created_by)
         VALUES (:param_set_name, :description, :param_overrides, :is_active, :is_default, :created_by)
         RETURNING param_set_id
-        """
+        """)
         
         result = await self._session.execute(
             query,
@@ -179,19 +177,19 @@ class ParameterRepository:
         Deactivates all others and activates the specified one.
         """
         # First, deactivate all
-        deactivate_query = """
+        deactivate_query = text("""
         UPDATE cissa.parameter_sets
         SET is_active = false
         WHERE is_active = true
-        """
+        """)
         await self._session.execute(deactivate_query)
         
         # Then activate the specified one
-        activate_query = """
+        activate_query = text("""
         UPDATE cissa.parameter_sets
         SET is_active = true
         WHERE param_set_id = :param_set_id
-        """
+        """)
         await self._session.execute(
             activate_query,
             {"param_set_id": str(param_set_id)}
@@ -206,19 +204,19 @@ class ParameterRepository:
         Unsets the previous default and sets the specified one.
         """
         # First, unset all defaults
-        unset_query = """
+        unset_query = text("""
         UPDATE cissa.parameter_sets
         SET is_default = false
         WHERE is_default = true
-        """
+        """)
         await self._session.execute(unset_query)
         
         # Then set the specified one as default
-        set_query = """
+        set_query = text("""
         UPDATE cissa.parameter_sets
         SET is_default = true
         WHERE param_set_id = :param_set_id
-        """
+        """)
         await self._session.execute(
             set_query,
             {"param_set_id": str(param_set_id)}
@@ -234,11 +232,11 @@ class ParameterRepository:
         """
         Update the JSONB overrides for an existing parameter set.
         """
-        query = """
+        query = text("""
         UPDATE cissa.parameter_sets
         SET param_overrides = :param_overrides
         WHERE param_set_id = :param_set_id
-        """
+        """)
         
         await self._session.execute(
             query,
@@ -256,12 +254,12 @@ class ParameterRepository:
         
         Returns list of dicts with parameter set data.
         """
-        query = """
+        query = text("""
         SELECT param_set_id, param_set_name, is_active, is_default, 
                param_overrides, created_at, updated_at
         FROM cissa.parameter_sets
         ORDER BY created_at DESC
-        """
+        """)
         
         result = await self._session.execute(query)
         rows = result.fetchall()
