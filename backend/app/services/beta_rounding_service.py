@@ -456,55 +456,49 @@ class BetaRoundingService:
         
         total_inserted = 0
         
-        try:
-            # Process results in batches
-            for i in range(0, len(results), batch_size):
-                batch = results[i : i + batch_size]
-                
-                # Build batch insert query
-                values_list = []
-                for result in batch:
-                    metadata = {
-                        "metric_level": "L1",
-                        "derived_from_precomputed": True,
-                        "raw_beta": result.get("raw_beta"),
-                        "approach": result.get("approach"),
-                        "rounding": result.get("rounding"),
-                    }
-                    
-                    values_list.append({
-                        "dataset_id": str(dataset_id),
-                        "param_set_id": str(param_set_id),
-                        "ticker": result["ticker"],
-                        "fiscal_year": result["fiscal_year"],
-                        "output_metric_name": "Calc Beta",
-                        "output_metric_value": float(result["beta"]),
-                        "metadata": json.dumps(metadata),
-                    })
-                
-                # Execute batch insert
-                if values_list:
-                    query = text(
-                        """
-                        INSERT INTO cissa.metrics_outputs 
-                        (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
-                        VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata)
-                        ON CONFLICT DO NOTHING
-                    """
-                    )
-                    
-                    for values in values_list:
-                        await self.session.execute(query, values)
-                    
-                    total_inserted += len(values_list)
-                    self.logger.info(f"[BETA-BATCH] Executed batch of {len(values_list)} queries ({total_inserted}/{len(results)} total)")
+        # Process results in batches
+        for i in range(0, len(results), batch_size):
+            batch = results[i : i + batch_size]
             
-            # Single commit at the end
-            await self.session.commit()
-            self.logger.info(f"[BETA-BATCH] Batch insert complete: {total_inserted} records committed")
-            return total_inserted
+            # Build batch insert query
+            values_list = []
+            for result in batch:
+                metadata = {
+                    "metric_level": "L1",
+                    "derived_from_precomputed": True,
+                    "raw_beta": result.get("raw_beta"),
+                    "approach": result.get("approach"),
+                    "rounding": result.get("rounding"),
+                }
+                
+                values_list.append({
+                    "dataset_id": str(dataset_id),
+                    "param_set_id": str(param_set_id),
+                    "ticker": result["ticker"],
+                    "fiscal_year": result["fiscal_year"],
+                    "output_metric_name": "Calc Beta",
+                    "output_metric_value": float(result["beta"]),
+                    "metadata": json.dumps(metadata),
+                })
+            
+            # Execute batch insert
+            if values_list:
+                query = text(
+                    """
+                    INSERT INTO cissa.metrics_outputs 
+                    (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
+                    VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata)
+                    ON CONFLICT DO NOTHING
+                """
+                )
+                
+                for values in values_list:
+                    await self.session.execute(query, values)
+                
+                total_inserted += len(values_list)
+                self.logger.info(f"[BETA-BATCH] Executed batch of {len(values_list)} queries ({total_inserted}/{len(results)} total)")
         
-        except Exception as e:
-            self.logger.error(f"[BETA-BATCH] Failed to batch insert results: {e}", exc_info=True)
-            await self.session.rollback()
-            raise
+        # Single commit at the end
+        await self.session.commit()
+        self.logger.info(f"[BETA-BATCH] Batch insert complete: {total_inserted} records committed")
+        return total_inserted

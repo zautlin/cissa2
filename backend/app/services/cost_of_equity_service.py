@@ -424,39 +424,33 @@ class CostOfEquityService:
         
         metadata = json.dumps({"metric_level": "L1", "calculation_source": "cost_of_equity_service"})
         
-        try:
-            for i in range(0, len(ke_df), batch_size):
-                batch = ke_df.iloc[i:i+batch_size]
-                batch_num = i // batch_size + 1
-                
-                # Build multi-row VALUES clause for all rows in batch
-                rows_sql = ", ".join([
-                    f"('{str(dataset_id)}', '{str(param_set_id)}', '{str(row['ticker'])}', {int(row['fiscal_year'])}, 'Calc KE', {float(row['ke'])}, '{metadata}', now())"
-                    for _, row in batch.iterrows()
-                ])
-                
-                # Execute multi-row INSERT with ON CONFLICT UPSERT (single statement for entire batch)
-                multi_row_insert = text(f"""
-                    INSERT INTO cissa.metrics_outputs 
-                    (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
-                    VALUES {rows_sql}
-                    ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
-                    DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value, created_at = now()
-                """)
-                
-                await self.session.execute(multi_row_insert)
-                total_inserted += len(batch)
-                logger.debug(f"    - Batch {batch_num}: executed {len(batch)} records (multi-row INSERT)")
+        for i in range(0, len(ke_df), batch_size):
+            batch = ke_df.iloc[i:i+batch_size]
+            batch_num = i // batch_size + 1
             
-            # Single commit at the end
-            await self.session.commit()
-            logger.info(f"    - All batches committed: {total_inserted} total records")
-            return total_inserted
+            # Build multi-row VALUES clause for all rows in batch
+            rows_sql = ", ".join([
+                f"('{str(dataset_id)}', '{str(param_set_id)}', '{str(row['ticker'])}', {int(row['fiscal_year'])}, 'Calc KE', {float(row['ke'])}, '{metadata}', now())"
+                for _, row in batch.iterrows()
+            ])
+            
+            # Execute multi-row INSERT with ON CONFLICT UPSERT (single statement for entire batch)
+            multi_row_insert = text(f"""
+                INSERT INTO cissa.metrics_outputs 
+                (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
+                VALUES {rows_sql}
+                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
+                DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value, created_at = now()
+            """)
+            
+            await self.session.execute(multi_row_insert)
+            total_inserted += len(batch)
+            logger.debug(f"    - Batch {batch_num}: executed {len(batch)} records (multi-row INSERT)")
         
-        except Exception as e:
-            logger.error(f"    - Batch insert error: {str(e)}", exc_info=True)
-            await self.session.rollback()
-            raise
+        # Single commit at the end
+        await self.session.commit()
+        logger.info(f"    - All batches committed: {total_inserted} total records")
+        return total_inserted
 
     async def calculate_cost_of_equity_runtime_batch(
         self,

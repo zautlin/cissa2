@@ -1050,38 +1050,32 @@ class RiskFreeRateCalculationService:
         
         total_inserted = 0
         
-        try:
-            # Process results in batches
-            for i in range(0, len(results), batch_size):
-                batch = results[i : i + batch_size]
-                
-                # Build multi-row VALUES clause
-                rows_sql = ", ".join([
-                    f"('{record['dataset_id']}', '{record['param_set_id']}', '{record['ticker']}', {record['fiscal_year']}, '{record['output_metric_name']}', {record['output_metric_value']}, '{json.dumps(record['metadata'])}')"
-                    for record in batch
-                ])
-                
-                # Execute multi-row INSERT with ON CONFLICT UPSERT
-                multi_row_insert = text(f"""
-                    INSERT INTO cissa.metrics_outputs 
-                    (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
-                    VALUES {rows_sql}
-                    ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
-                    DO UPDATE SET
-                        output_metric_value = EXCLUDED.output_metric_value,
-                        metadata = EXCLUDED.metadata
-                """)
-                
-                await self.session.execute(multi_row_insert)
-                total_inserted += len(batch)
-                self.logger.info(f"[RF-BATCH] Executed batch of {len(batch)} records ({total_inserted}/{len(results)} total)")
+        # Process results in batches
+        for i in range(0, len(results), batch_size):
+            batch = results[i : i + batch_size]
             
-            # Single commit at the end
-            await self.session.commit()
-            self.logger.info(f"[RF-BATCH] Batch insert complete: {total_inserted} records committed")
-            return total_inserted
+            # Build multi-row VALUES clause
+            rows_sql = ", ".join([
+                f"('{record['dataset_id']}', '{record['param_set_id']}', '{record['ticker']}', {record['fiscal_year']}, '{record['output_metric_name']}', {record['output_metric_value']}, '{json.dumps(record['metadata'])}')"
+                for record in batch
+            ])
+            
+            # Execute multi-row INSERT with ON CONFLICT UPSERT
+            multi_row_insert = text(f"""
+                INSERT INTO cissa.metrics_outputs 
+                (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
+                VALUES {rows_sql}
+                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
+                DO UPDATE SET
+                    output_metric_value = EXCLUDED.output_metric_value,
+                    metadata = EXCLUDED.metadata
+            """)
+            
+            await self.session.execute(multi_row_insert)
+            total_inserted += len(batch)
+            self.logger.info(f"[RF-BATCH] Executed batch of {len(batch)} records ({total_inserted}/{len(results)} total)")
         
-        except Exception as e:
-            self.logger.error(f"[RF-BATCH] Failed to batch insert results: {e}", exc_info=True)
-            await self.session.rollback()
-            raise
+        # Single commit at the end
+        await self.session.commit()
+        self.logger.info(f"[RF-BATCH] Batch insert complete: {total_inserted} records committed")
+        return total_inserted
