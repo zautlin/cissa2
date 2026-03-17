@@ -263,7 +263,7 @@ class PipelineOrchestrator:
         import requests
         import time
         
-        health_endpoint = f"{api_url}/health"
+        health_endpoint = f"{api_url}/api/v1/metrics/health"
         
         self.logger.info(f"Checking API server health: {health_endpoint}")
         
