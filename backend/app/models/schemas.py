@@ -108,15 +108,19 @@ class EnhancedMetricResultItem(BaseModel):
 
 
 class CalculateEnhancedMetricsResponse(BaseModel):
-    """Response from enhanced metrics calculation."""
+    """Response from enhanced metrics calculation (runtime or pre-computed)."""
     model_config = ConfigDict(from_attributes=True)
     
     dataset_id: UUID
     param_set_id: UUID
-    results_count: int
+    # For runtime calculation
+    value: Optional[float] = Field(default=None, description="Calculated metric value (runtime mode)")
+    # For pre-computed mode (legacy)
+    results_count: Optional[int] = Field(default=None, description="Number of records calculated (pre-compute mode)")
     metrics_calculated: list[str] = Field(default_factory=list)
     status: str = Field(default="success")
     message: Optional[str] = Field(default=None)
+    timestamp: Optional[datetime] = Field(default=None, description="Calculation timestamp (runtime mode)")
 
 
 # ============================================================================
@@ -173,15 +177,19 @@ class RiskFreeRateResultItem(BaseModel):
 
 
 class CalculateRiskFreeRateResponse(BaseModel):
-    """Response from risk-free rate calculation."""
+    """Response from risk-free rate calculation (runtime or pre-computed)."""
     model_config = ConfigDict(from_attributes=True)
     
     dataset_id: UUID
     param_set_id: UUID
-    results_count: int
+    # For runtime calculation
+    value: Optional[float] = Field(default=None, description="Calculated Rf value (runtime mode)")
+    # For pre-computed mode (legacy)
+    results_count: Optional[int] = Field(default=None, description="Number of records calculated (pre-compute mode)")
     results: list[RiskFreeRateResultItem] = Field(default_factory=list)
     status: str = Field(default="success", description="Status: 'success', 'error', or 'cached'")
     message: Optional[str] = Field(default=None, description="Message or error detail")
+    timestamp: Optional[datetime] = Field(default=None, description="Calculation timestamp (runtime mode)")
 
 
 # ============================================================================

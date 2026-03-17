@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from typing import Optional, Union
+from datetime import datetime
 
 from ....core.database import get_db
 from ....models import (
@@ -429,33 +430,29 @@ async def calculate_risk_free_rate(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Calculate risk-free rate (Rf, Rf_1Y, Rf_1Y_Raw) using monthly bond yields.
+    Calculate risk-free rate at runtime using monthly bond yields.
+    
+    **NOTE:** This is now a runtime-only endpoint. Risk-Free Rate is calculated on-demand
+    based on the selected parameter set's approach and rounding settings.
     
     **Risk-Free Rate Calculation Algorithm:**
     1. Fetch monthly RISK_FREE_RATE data for bond index (GACGB10 Index for Australia)
-    2. Group by fiscal year (12 months per year)
-    3. Calculate geometric mean: Rf_1Y_Raw = (∏monthly_rates)^(1/12) - 1
-    4. Apply rounding: Rf_1Y = round((Rf_1Y_Raw / beta_rounding), 0) * beta_rounding
-    5. Apply approach:
-       - FIXED: Rf = benchmark - risk_premium
-       - Floating: Rf = Rf_1Y
-    6. Expand to all companies and store 3 metrics per (ticker, fiscal_year)
+    2. Calculate rolling 12-month geometric mean: Rf_1Y_Raw = (∏monthly_rates)^(1/12) - 1
+    3. Apply rounding: Rf_1Y = round((Rf_1Y_Raw / beta_rounding), 0) * beta_rounding
+    4. Apply approach:
+       - FIXED: Rf = benchmark - risk_premium (static)
+       - FLOATING: Rf = Rf_1Y (dynamic, uses latest monthly data)
     
     **Prerequisites:**
     - Monthly RISK_FREE_RATE data must exist in fundamentals table (GACGB10 Index)
-    - dataset_id must exist in dataset_versions
-    - param_set_id must exist in parameter_sets
-    - L1 metrics must already be calculated for the dataset
+    - dataset_id must exist
+    - param_set_id must exist with proper parameter overrides
     
     **Parameters from param_set:**
-    - bond_index_by_country: JSON mapping country→bond ticker (e.g., {"Australia": "GACGB10 Index"})
-    - beta_rounding: Rounding increment (e.g., 0.1)
-    - cost_of_equity_approach: "FIXED" or "Floating"
-    - fixed_benchmark_return_wealth_preservation: Benchmark return for FIXED approach (e.g., 7.5)
-    - equity_risk_premium: Risk premium for FIXED approach (e.g., 5.0)
-    
-    **Caching:**
-    - If risk-free rate results already exist for this dataset + param_set, returns cached results
+    - cost_of_equity_approach: "FIXED" or "FLOATING"
+    - beta_rounding: Rounding increment (e.g., 0.005 for 0.5%)
+    - benchmark: Benchmark return for FIXED approach
+    - risk_premium: Risk premium amount
     
     **Example Request:**
     ```json
@@ -465,50 +462,37 @@ async def calculate_risk_free_rate(
     }
     ```
     
-    **Output Metrics:**
-    - Rf_1Y_Raw: Raw annualized 1-year rate (geometric mean, no rounding)
-    - Rf_1Y: Rounded annualized 1-year rate
-    - Rf: Final risk-free rate (after approach logic)
-    
     **Response:**
-    - status: 'success', 'error', or 'cached'
-    - results_count: number of records calculated (3× number of tickers × number of fiscal years)
-    - results: array of ticker, fiscal_year, metric_name, value tuples
+    - value: Calculated risk-free rate as a float
+    - status: 'success' or 'error'
+    - timestamp: When calculation was performed
     """
     
-    logger.info(f"Processing risk-free rate calculation request: dataset={request.dataset_id}, param_set={request.param_set_id}")
+    logger.info(f"Processing runtime risk-free rate calculation: dataset={request.dataset_id}, param_set={request.param_set_id}")
     
     try:
         service = RiskFreeRateCalculationService(db)
-        result = await service.calculate_risk_free_rate_async(
+        rf_value = await service.calculate_risk_free_rate_runtime(
             dataset_id=request.dataset_id,
             param_set_id=request.param_set_id
         )
         
-        if result["status"] == "error":
-            logger.warning(f"Risk-free rate calculation failed: {result['message']}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result["message"]
-            )
-        
-        logger.info(f"Risk-free rate calculation {'cached' if result['status'] == 'cached' else 'successful'}: {result['results_count']} records")
+        logger.info(f"Runtime risk-free rate calculation successful: {rf_value:.6f}")
         
         return CalculateRiskFreeRateResponse(
             dataset_id=request.dataset_id,
             param_set_id=request.param_set_id,
-            results_count=result["results_count"],
-            status=result["status"],
-            message=result["message"]
+            value=rf_value,
+            status="success",
+            timestamp=datetime.utcnow(),
+            message=f"Risk-free rate calculated at runtime: {rf_value:.6f}"
         )
     
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Unexpected error during risk-free rate calculation: {str(e)}", exc_info=True)
+        logger.error(f"Runtime risk-free rate calculation failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error during risk-free rate calculation"
+            detail=f"Risk-free rate calculation failed: {str(e)}"
         )
 
 
@@ -522,19 +506,27 @@ async def calculate_cost_of_equity(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Calculate Cost of Equity (Phase 09): KE = Rf + Beta × RiskPremium
+    Calculate Cost of Equity at runtime: KE = Rf + Beta × RiskPremium
     
-    This endpoint efficiently calculates Cost of Equity using existing:
-    - Phase 07 Beta results
-    - Phase 08 Risk-Free Rate (Rf_1Y) results
+    **NOTE:** This is now a runtime-only endpoint. Cost of Equity is calculated on-demand
+    by combining pre-computed Beta with runtime Risk-Free Rate calculation.
+    
+    **Calculation Flow:**
+    1. Fetch pre-computed Beta (stored with param_set_id=NULL) from Phase 2
+    2. Apply param_set-specific rounding and approach (fixed/floating)
+    3. Calculate Risk-Free Rate at runtime using selected approach
+    4. Calculate KE = Rf + Beta × RiskPremium
     
     **Prerequisites:**
-    - Phase 07 (Beta) must be calculated first
-    - Phase 08 (Risk-Free Rate) must be calculated first
+    - Phase 2 (Beta pre-computation) must be completed
+    - Monthly bond yield data must exist in fundamentals
+    - param_set_id must exist with proper parameter overrides
     
-    **Approach Parameter:**
-    - FIXED: Rf = benchmark - risk_premium (deterministic)
-    - FLOATING: Rf = Rf_1Y (from Phase 08, recommended)
+    **Parameters from param_set:**
+    - cost_of_equity_approach: "FIXED" or "FLOATING"
+    - equity_risk_premium: Risk premium multiplier (e.g., 0.05 for 5%)
+    - beta_rounding: Rounding for Beta (e.g., 0.005 for 0.5%)
+    - benchmark: Benchmark return for FIXED Rf approach
     
     **Example Request:**
     ```json
@@ -545,44 +537,37 @@ async def calculate_cost_of_equity(
     ```
     
     **Response:**
+    - value: Calculated Cost of Equity as a float
     - status: 'success' or 'error'
-    - results_count: number of KE records inserted
-     - metrics_calculated: ['Calc KE']
-     """
+    - timestamp: When calculation was performed
+    - message: Includes breakdown (Rf + Beta × RiskPremium)
+    """
     
-    logger.info(f"Phase 09: Calculating Cost of Equity (dataset={request.dataset_id}, param_set={request.param_set_id})")
+    logger.info(f"Processing runtime Cost of Equity calculation: dataset={request.dataset_id}, param_set={request.param_set_id}")
     
     try:
         from ....services.cost_of_equity_service import CostOfEquityService
         
         service = CostOfEquityService(db)
-        result = await service.calculate_cost_of_equity(
+        ke_value = await service.calculate_cost_of_equity_runtime(
             dataset_id=request.dataset_id,
             param_set_id=request.param_set_id
         )
         
-        if result["status"] == "error":
-            logger.warning(f"Phase 09 calculation failed: {result['message']}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result["message"]
-            )
-        
-        logger.info(f"Phase 09 calculation successful: {result['records_inserted']} KE records")
+        logger.info(f"Runtime Cost of Equity calculation successful: {ke_value:.6f}")
         
         return CalculateEnhancedMetricsResponse(
             dataset_id=request.dataset_id,
             param_set_id=request.param_set_id,
-            results_count=result["records_inserted"],
+            value=ke_value,
             metrics_calculated=["Calc KE"],
             status="success",
-            message=result["message"]
+            timestamp=datetime.utcnow(),
+            message=f"Cost of Equity calculated at runtime: {ke_value:.6f}"
         )
     
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Phase 09 error: {str(e)}", exc_info=True)
+        logger.error(f"Runtime Cost of Equity calculation failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Cost of Equity calculation failed: {str(e)}"
