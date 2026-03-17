@@ -112,24 +112,126 @@ class CostOfEquityService:
             inserted = await self._insert_ke_batch(dataset_id, param_set_id, ke_df)
             logger.info(f"    - Inserted {inserted} records")
             
-            logger.info(f"✓ Phase 09 complete: {len(ke_df)} KE values calculated and stored")
+             logger.info(f"✓ Phase 09 complete: {len(ke_df)} KE values calculated and stored")
+             
+             return {
+                 "status": "success",
+                 "records_calculated": len(ke_df),
+                 "records_inserted": inserted,
+                 "message": f"Calculated and stored {inserted} Cost of Equity values"
+             }
+         
+         except Exception as e:
+             logger.error(f"✗ Phase 09 error: {str(e)}", exc_info=True)
+             return {
+                 "status": "error",
+                 "records_calculated": 0,
+                 "records_inserted": 0,
+                 "message": str(e)
+             }
+    
+    async def calculate_cost_of_equity_runtime(
+        self,
+        dataset_id: UUID,
+        param_set_id: UUID,
+        risk_free_rate_service=None,  # Injected for testing
+    ) -> float:
+        """
+        Calculate Cost of Equity at runtime: KE = Rf + Beta × RiskPremium
+        
+        Args:
+            dataset_id: Dataset ID
+            param_set_id: Parameter set ID
+            risk_free_rate_service: RiskFreeRateCalculationService instance (optional, for testing)
             
-            return {
-                "status": "success",
-                "records_calculated": len(ke_df),
-                "records_inserted": inserted,
-                "message": f"Calculated and stored {inserted} Cost of Equity values"
-            }
+        Returns:
+            float: Calculated Cost of Equity value
+            
+        Raises:
+            Exception: If calculation fails
+        """
+        try:
+            logger.info(f"Starting runtime Cost of Equity calculation: dataset={dataset_id}, param_set={param_set_id}")
+            
+            # Load parameters
+            params = await self._load_parameters(param_set_id)
+            risk_premium = params.get('equity_risk_premium', 0.05)
+            approach = params.get('cost_of_equity_approach', 'Floating')
+            
+            logger.info(f"KE calculation params: approach={approach}, risk_premium={risk_premium:.4f}")
+            
+            # Fetch pre-computed Beta (with param_set_id=NULL)
+            beta_df = await self._fetch_beta_for_runtime(dataset_id, param_set_id, approach)
+            if beta_df.empty:
+                raise ValueError("No Beta data found for runtime KE calculation")
+            
+            beta_value = float(beta_df.iloc[0]['beta'])
+            logger.info(f"Beta (from pre-computed): {beta_value:.6f}")
+            
+            # Calculate Risk-Free Rate at runtime
+            if not risk_free_rate_service:
+                from . import RiskFreeRateCalculationService
+                risk_free_rate_service = RiskFreeRateCalculationService(self.session)
+            
+            rf_value = await risk_free_rate_service.calculate_risk_free_rate_runtime(
+                dataset_id,
+                param_set_id,
+                country_code='AU'
+            )
+            logger.info(f"Risk-Free Rate (runtime): {rf_value:.6f}")
+            
+            # Calculate KE = Rf + Beta × RiskPremium
+            ke_value = rf_value + (beta_value * risk_premium)
+            
+            logger.info(f"✓ Runtime KE calculation complete: {ke_value:.6f} = {rf_value:.6f} + {beta_value:.6f} × {risk_premium:.4f}")
+            return float(ke_value)
         
         except Exception as e:
-            logger.error(f"✗ Phase 09 error: {str(e)}", exc_info=True)
-            return {
-                "status": "error",
-                "records_calculated": 0,
-                "records_inserted": 0,
-                "message": str(e)
-            }
+            logger.error(f"Runtime Cost of Equity calculation failed: {e}", exc_info=True)
+            raise
     
+    async def _fetch_beta_for_runtime(self, dataset_id: UUID, param_set_id: UUID, approach: str) -> pd.DataFrame:
+        """Fetch pre-computed Beta and apply approach-specific rounding."""
+        query = text("""
+            SELECT 
+                ticker,
+                fiscal_year,
+                output_metric_value as beta,
+                metadata
+            FROM cissa.metrics_outputs
+            WHERE dataset_id = :dataset_id
+            AND param_set_id IS NULL
+            AND output_metric_name = 'Calc Beta'
+            LIMIT 1
+        """)
+        
+        result = await self.session.execute(query, {"dataset_id": str(dataset_id)})
+        rows = result.fetchall()
+        
+        if not rows:
+            return pd.DataFrame()
+        
+        # Convert to DataFrame
+        data = []
+        for row in rows:
+            ticker, fiscal_year, beta_value, metadata = row[0], row[1], row[2], row[3]
+            
+            # If metadata has approach-specific beta, use that
+            if metadata and isinstance(metadata, dict):
+                if approach.upper() == 'FIXED' and 'fixed_beta_raw' in metadata:
+                    beta_value = metadata['fixed_beta_raw']
+                elif approach.upper() == 'FLOATING' and 'floating_beta_raw' in metadata:
+                    beta_value = metadata['floating_beta_raw']
+            
+            data.append({
+                'ticker': ticker,
+                'fiscal_year': fiscal_year,
+                'beta': beta_value
+            })
+        
+        return pd.DataFrame(data)
+     
+
     # ========================================================================
     # Data Fetching
     # ========================================================================

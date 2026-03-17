@@ -192,14 +192,82 @@ class RiskFreeRateCalculationService:
                 "results_count": stored_count,
                 "message": f"Calculated Calc Rf for {len(all_tickers)} tickers using ticker-specific FY end dates ({stored_count} total records)"
             }
+         
+         except Exception as e:
+             self.logger.error(f"Risk-free rate calculation failed: {e}", exc_info=True)
+             return {
+                 "status": "error",
+                 "results_count": 0,
+                 "message": f"Calculation failed: {str(e)}"
+             }
+    
+    async def calculate_risk_free_rate_runtime(
+        self,
+        dataset_id: UUID,
+        param_set_id: UUID,
+        country_code: str = 'AU',
+    ) -> float:
+        """
+        Calculate risk-free rate at runtime (returns single value for a ticker/year).
+        
+        Used by Cost of Equity service when calculating KE at runtime.
+        
+        Args:
+            dataset_id: Dataset ID
+            param_set_id: Parameter set ID (for approach and rounding)
+            country_code: Country code for fiscal year definitions
+            
+        Returns:
+            float: Calculated risk-free rate value
+            
+        Raises:
+            Exception: If calculation fails
+        """
+        try:
+            self.logger.info(f"Starting runtime risk-free rate calculation: dataset={dataset_id}, param_set={param_set_id}")
+            
+            # Determine currency from country code
+            currency_map = {'AU': 'AUD', 'US': 'USD', 'UK': 'GBP'}
+            currency = currency_map.get(country_code, 'AUD')
+            
+            # Load parameters
+            params = await self._load_parameters_from_db(param_set_id)
+            approach = params.get('cost_of_equity_approach', 'FLOATING').upper()
+            rounding = params.get('beta_rounding', 0.005)
+            benchmark = params.get('benchmark', 0.0)
+            risk_premium = params.get('risk_premium', 0.0)
+            
+            self.logger.info(f"Rf calculation params: approach={approach}, rounding={rounding}, benchmark={benchmark}")
+            
+            # Fetch bond ticker
+            bond_ticker = await self._fetch_bond_ticker_by_currency(currency)
+            if not bond_ticker:
+                raise ValueError(f"No bond ticker found for currency {currency}")
+            
+            # Fetch monthly bond yields
+            monthly_rf_df = await self._fetch_monthly_bond_yields(bond_ticker)
+            if monthly_rf_df.empty:
+                raise ValueError(f"No bond yield data found for {bond_ticker}")
+            
+            # Calculate rolling 12-month geometric mean
+            rf_monthly_df = self._calculate_rolling_geometric_mean(monthly_rf_df)
+            
+            # Get the most recent value (latest fiscal year end)
+            rf_monthly_calc_df = self._calculate_calc_rf(rf_monthly_df, params)
+            
+            if rf_monthly_calc_df.empty:
+                raise ValueError("No risk-free rate values calculated")
+            
+            # Extract the most recent December value (or FY end)
+            latest_value = rf_monthly_calc_df.iloc[-1]['calc_rf']
+            
+            self.logger.info(f"✓ Runtime Rf calculation complete: {latest_value:.6f}")
+            return float(latest_value)
         
         except Exception as e:
-            self.logger.error(f"Risk-free rate calculation failed: {e}", exc_info=True)
-            return {
-                "status": "error",
-                "results_count": 0,
-                "message": f"Calculation failed: {str(e)}"
-            }
+            self.logger.error(f"Runtime risk-free rate calculation failed: {e}", exc_info=True)
+            raise
+
 
     async def _load_parameters_from_db(self, param_set_id: UUID) -> dict:
         """Load calculation parameters from database (from param_overrides JSONB)."""
