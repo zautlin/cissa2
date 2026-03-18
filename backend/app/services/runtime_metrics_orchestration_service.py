@@ -5,11 +5,13 @@
 # 1. Beta Rounding: Apply param-specific rounding/approach to pre-computed Beta
 # 2. Risk-Free Rate: Calculate Rf based on parameter set
 # 3. Cost of Equity: Calculate KE = Rf + Beta × RiskPremium
+# 4. FV ECF: Calculate FV_ECF for 4 intervals (1Y, 3Y, 5Y, 10Y)
 #
 # Execution Strategy:
 # - Beta Rounding & Risk-Free Rate run in PARALLEL (no dependencies)
 # - Cost of Equity runs SEQUENTIAL (depends on both Beta & Rf)
-# - FAIL-FAST: Any metric failure stops entire orchestration
+# - FV ECF runs SEQUENTIAL (depends on Cost of Equity results)
+# - FAIL-SOFT: Phase 4 (FV_ECF) failure logs error but doesn't stop orchestration
 # ============================================================================
 
 import asyncio
@@ -23,6 +25,7 @@ from ..core.config import get_logger
 from .beta_rounding_service import BetaRoundingService
 from .risk_free_rate_service import RiskFreeRateCalculationService
 from .cost_of_equity_service import CostOfEquityService
+from .fv_ecf_service import FVECFService
 
 logger = get_logger(__name__)
 
@@ -52,6 +55,11 @@ class RuntimeMetricsOrchestrationService:
         """
         Main orchestration method for runtime metrics.
 
+        Phases:
+        1. Beta Rounding & Risk-Free Rate (parallel)
+        2. Cost of Equity (sequential, depends on phases 1)
+        3. FV ECF (sequential, depends on phase 2)
+
         Args:
             dataset_id: Dataset ID
             param_set_id: Parameter set ID for storing results
@@ -68,7 +76,8 @@ class RuntimeMetricsOrchestrationService:
                 "metrics_completed": {
                     "beta_rounding": {...},
                     "risk_free_rate": {...},
-                    "cost_of_equity": {...}
+                    "cost_of_equity": {...},
+                    "fv_ecf": {...}
                 },
                 "error": "..." (if failed)
             }
@@ -163,10 +172,36 @@ class RuntimeMetricsOrchestrationService:
                     "metrics_completed": {},
                 }
 
+            self.logger.info(
+                f"[RUNTIME-METRICS] ✓ Phase 2 (Cost of Equity) complete: {ke_result.get('records_inserted', 0)} records"
+            )
+
+            # Step 4: Run FV ECF SEQUENTIALLY (depends on Cost of Equity results)
+            # NOTE: Phase 4 failure is logged but doesn't fail the orchestration (FAIL-SOFT)
+            self.logger.info(
+                "[RUNTIME-METRICS] Step 3: Running FV ECF (sequential, depends on Cost of Equity)..."
+            )
+
+            fv_ecf_result = await self._orchestrate_fv_ecf(
+                dataset_id, param_set_id, resolved_param_id
+            )
+
+            if fv_ecf_result["status"] == "error":
+                self.logger.warning(
+                    f"[RUNTIME-METRICS] FV ECF calculation failed: {fv_ecf_result['message']}. Continuing with results from Phases 1-3."
+                )
+                # Log the error but don't fail orchestration
+                fv_ecf_result_for_response = fv_ecf_result
+            else:
+                self.logger.info(
+                    f"[RUNTIME-METRICS] ✓ Phase 3 (FV ECF) complete: {fv_ecf_result.get('total_inserted', 0)} records"
+                )
+                fv_ecf_result_for_response = fv_ecf_result
+
             elapsed_time = time.time() - start_time
 
             self.logger.info(
-                f"[RUNTIME-METRICS] ✓ Orchestration complete: all metrics successful in {elapsed_time:.1f}s"
+                f"[RUNTIME-METRICS] ✓ Orchestration complete: all phases processed in {elapsed_time:.1f}s"
             )
 
             return {
@@ -194,6 +229,13 @@ class RuntimeMetricsOrchestrationService:
                         "records_inserted": ke_result.get("records_inserted", 0),
                         "time_seconds": ke_result.get("time_seconds", 0),
                         "message": ke_result.get("message", ""),
+                    },
+                    "fv_ecf": {
+                        "status": fv_ecf_result_for_response.get("status", "unknown"),
+                        "records_inserted": fv_ecf_result_for_response.get("total_inserted", 0),
+                        "intervals_summary": fv_ecf_result_for_response.get("intervals_summary", {}),
+                        "time_seconds": fv_ecf_result_for_response.get("duration_seconds", 0),
+                        "message": fv_ecf_result_for_response.get("message", ""),
                     },
                 },
             }
@@ -333,6 +375,38 @@ class RuntimeMetricsOrchestrationService:
                 "records_inserted": 0,
                 "message": str(e),
                 "time_seconds": time.time() - start_time,
+            }
+
+    async def _orchestrate_fv_ecf(
+        self, dataset_id: UUID, param_set_id: UUID, parameter_id: UUID
+    ) -> dict:
+        """
+        Execute FV ECF calculation for Phase 4.
+        
+        Note: Failures in this phase are logged but don't fail the orchestration (FAIL-SOFT).
+        """
+        try:
+            start_time = time.time()
+            service = FVECFService(self.session)
+
+            result = await service.calculate_fv_ecf_for_runtime(
+                dataset_id=dataset_id,
+                param_set_id=param_set_id,
+                parameter_id=parameter_id,
+            )
+
+            # Ensure required fields are present in result
+            result["duration_seconds"] = time.time() - start_time
+            return result
+
+        except Exception as e:
+            self.logger.error(f"[RUNTIME-METRICS] FV ECF calculation error: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "total_inserted": 0,
+                "intervals_summary": {"1Y": 0, "3Y": 0, "5Y": 0, "10Y": 0},
+                "message": str(e),
+                "duration_seconds": time.time() - start_time,
             }
 
     @staticmethod
