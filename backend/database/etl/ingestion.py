@@ -455,6 +455,33 @@ class Ingester:
             else:
                 fy_report_month = None
             
+            # Helper function to find column name that matches pattern (handles variations like newlines, extra spaces)
+            def get_column_value(row_data, col_pattern):
+                """Get value from row using flexible column name matching.
+                
+                Normalizes column names by removing internal whitespace/newlines to match patterns.
+                """
+                # Normalize pattern: remove internal whitespace/newlines
+                normalized_pattern = ' '.join(col_pattern.split())
+                
+                # Try exact match first
+                if col_pattern in row_data.index:
+                    return row_data[col_pattern]
+                
+                # Try matching with normalized whitespace
+                for col in row_data.index:
+                    normalized_col = ' '.join(col.split())
+                    if normalized_col == normalized_pattern:
+                        return row_data[col]
+                return None
+            
+            # Get begin_year with flexible column name matching
+            begin_year_value = get_column_value(row, 'Begin Year')
+            try:
+                begin_year = int(begin_year_value) if begin_year_value is not None and begin_year_value != '' else None
+            except (ValueError, TypeError):
+                begin_year = None
+            
             company_rows.append({
                 'ticker': str(row.get('Ticker', '')).strip(),
                 'name': str(row.get('Name', '')).strip(),
@@ -467,7 +494,7 @@ class Ingester:
                 'country': country,
                 'parent_index': parent_index,
                 'fy_report_month': fy_report_month,
-                'begin_year': int(row.get('Begin Year', 2002)) if 'Begin Year' in df.columns else None,
+                'begin_year': begin_year,
             })
         
         # Upsert into database
