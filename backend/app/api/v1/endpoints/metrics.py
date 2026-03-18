@@ -861,12 +861,16 @@ async def calculate_ter_metrics(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Calculate Phase 10c Total Expense Ratio (TER) Metrics
+    Calculate Phase 10c Total Expense Ratio (TER) and TER-KE Metrics
     
-    Calculates TER metrics for all 4 time intervals using FV_ECF, Calc MC, and Calc KE.
+    Calculates both TER and TER-KE metrics for all 4 time intervals using FV_ECF, Calc MC, and Calc KE.
+    Both metrics are calculated simultaneously for efficiency (shared intermediate calculations).
     
-    **Metrics Calculated:**
-    - Calc 1Y TER, Calc 3Y TER, Calc 5Y TER, Calc 10Y TER
+    **Metrics Calculated (8 total):**
+    - Calc 1Y TER, Calc 1Y TER-KE
+    - Calc 3Y TER, Calc 3Y TER-KE
+    - Calc 5Y TER, Calc 5Y TER-KE
+    - Calc 10Y TER, Calc 10Y TER-KE
     
     **Example Request:**
     ```

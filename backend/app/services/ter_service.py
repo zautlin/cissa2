@@ -34,20 +34,23 @@ def to_float(value):
 
 class TERService:
     """
-    Total Expense Ratio (TER) Service (Phase 10c)
+    Total Expense Ratio (TER) and TER-KE Service (Phase 10c)
     
     Calculates:
-    - TER_1Y: 1-year total expense ratio
-    - TER_3Y: 3-year total expense ratio
-    - TER_5Y: 5-year total expense ratio
-    - TER_10Y: 10-year total expense ratio
+    - TER_1Y, TER_3Y, TER_5Y, TER_10Y: 1/3/5/10-year total expense ratio
+    - TER-KE_1Y, TER-KE_3Y, TER-KE_5Y, TER-KE_10Y: 1/3/5/10-year TER-KE (wealth creation component)
     
-    These are L2 metrics calculated after FV_ECF metrics.
+    These are L2 metrics calculated after FV_ECF metrics, computed simultaneously for efficiency.
     
-    Formula:
+    Formulas:
     TER = ((WC + WP) / Open MC)^(1/1) - 1
+        = (WC + WP) / Open MC - 1
     
-    Where:
+    TER-KE = ((WC + WP) / Open MC)^(1/1) - (WP / Open MC)^(1/1)
+           = (WC + WP) / Open MC - WP / Open MC
+           = WC / Open MC
+    
+    Shared components (calculated once per interval):
     - Load TRTE = Calc {interval}Y FV ECF + (Calc MC - LAG(Calc MC, 1))
     - Load TER = (Load TRTE / Open MC) - 1
     - WC = Open MC × (1 + Load TER) - Open MC × (1 + Ke)
@@ -55,10 +58,11 @@ class TERService:
     - Open MC = LAG(Calc MC, 1)
     
     Key optimizations:
+    - Calculates both TER and TER-KE from same intermediate values
     - Fetches Calc MC, Calc KE, and FV_ECF from metrics_outputs table
     - Vectorized Pandas operations (no row-by-row iteration)
-    - Batch database inserts (1000 records per batch)
-    - 4 intervals × ~9,189 records = ~36,756 total inserts
+    - Single batch database insert for all metrics
+    - 8 metrics (4 intervals × 2 types) × ~9,189 records = ~73,512 total inserts
     
     Prerequisites:
     - Phase 10a Core L2 Metrics (Calc MC, Calc KE in metrics_outputs)
@@ -74,7 +78,7 @@ class TERService:
         param_set_id: UUID,
     ) -> dict:
         """
-        Calculate Phase 10c TER metrics.
+        Calculate Phase 10c TER and TER-KE metrics simultaneously.
         
         Args:
             dataset_id: Dataset version ID
@@ -208,10 +212,10 @@ class TERService:
                 'total_records_with_nulls': len(ter_combined),
                 'null_row_breakdown': null_breakdown,
                 'metrics_inserted': [
-                    'Calc 1Y TER',
-                    'Calc 3Y TER',
-                    'Calc 5Y TER',
-                    'Calc 10Y TER'
+                    'Calc 1Y TER', 'Calc 1Y TER-KE',
+                    'Calc 3Y TER', 'Calc 3Y TER-KE',
+                    'Calc 5Y TER', 'Calc 5Y TER-KE',
+                    'Calc 10Y TER', 'Calc 10Y TER-KE'
                 ],
                 'calculation_time_ms': elapsed_ms
             }
@@ -271,12 +275,17 @@ class TERService:
         interval: int
     ) -> pd.DataFrame:
         """
-        Calculate TER for a specific interval.
+        Calculate both TER and TER-KE for a specific interval simultaneously.
         
-        Formula:
+        Formulas:
         TER = ((WC + WP) / Open MC)^(1/1) - 1
+            = (WC + WP) / Open MC - 1
         
-        Where:
+        TER-KE = ((WC + WP) / Open MC)^(1/1) - (WP / Open MC)^(1/1)
+               = (WC + WP) / Open MC - WP / Open MC
+               = WC / Open MC
+        
+        Shared components (calculated once):
         - Load TRTE = Calc {interval}Y FV ECF + (Calc MC - LAG(Calc MC, 1))
         - Load TER = (Load TRTE / Open MC) - 1
         - WC = Open MC × (1 + Load TER) - Open MC × (1 + Ke)
@@ -329,46 +338,67 @@ class TERService:
             np.nan
         )
         
-        # Build result dataframe
-        result = pd.DataFrame({
+        # Step 5: Calculate TER-KE (new)
+        # TER-KE = WC / Open MC
+        df['ter_ke'] = np.where(
+            df['open_mc'].notna() & (df['open_mc'] != 0),
+            df['wc'] / df['open_mc'],
+            np.nan
+        )
+        
+        # Build result dataframe with BOTH TER and TER-KE
+        ter_results = pd.DataFrame({
             'ticker': df['ticker'],
             'fiscal_year': df['fiscal_year'],
             'TER_Y': df['ter'],
             'TER_TYPE': f'Calc {interval}Y TER'
         })
         
-        return result
+        ter_ke_results = pd.DataFrame({
+            'ticker': df['ticker'],
+            'fiscal_year': df['fiscal_year'],
+            'TER_Y': df['ter_ke'],
+            'TER_TYPE': f'Calc {interval}Y TER-KE'
+        })
+        
+        return pd.concat([ter_results, ter_ke_results], ignore_index=True)
     
     def _add_null_rows_for_ter(
         self,
         ter_df: pd.DataFrame,
         fundamentals_df: pd.DataFrame
-    ) -> pd.DataFrame:
+    ) -> tuple:
         """
         Add NULL rows for fiscal years with insufficient lag history.
         
+        Generates NULL rows for both TER and TER-KE metrics.
+        
         For each interval, we need a minimum number of prior years of data:
-        - 1Y: First year (min_year) = 1 NULL row
-        - 3Y: First 2 years = 2 NULL rows (fiscal_year - 1, -2)
-        - 5Y: First 4 years = 4 NULL rows (fiscal_year - 1, -2, -3, -4)
-        - 10Y: First 9 years = 9 NULL rows (fiscal_year - 1 through -9)
+        - 1Y: First year (min_year) = 1 NULL row per metric type
+        - 3Y: First 2 years = 2 NULL rows per metric type (fiscal_year - 1, -2)
+        - 5Y: First 4 years = 4 NULL rows per metric type (fiscal_year - 1, -2, -3, -4)
+        - 10Y: First 9 years = 9 NULL rows per metric type (fiscal_year - 1 through -9)
         
         Args:
-            ter_df: DataFrame with calculated TER values
+            ter_df: DataFrame with calculated TER and TER-KE values
             fundamentals_df: Original fundamentals data with all ticker-year combinations
         
         Returns:
-            DataFrame with original ter_df rows PLUS new NULL rows for insufficient history
+            Tuple of (DataFrame with NULL rows added, null_row_breakdown dict)
         """
         # Get unique tickers and their min/max fiscal years from fundamentals
         ticker_year_info = fundamentals_df.groupby('ticker')['fiscal_year'].agg(['min', 'max']).reset_index()
         
         null_rows = []
         null_row_breakdown = {
-            '1Y': 0,
-            '3Y': 0,
-            '5Y': 0,
-            '10Y': 0
+            '1Y_TER': 0,
+            '1Y_TER-KE': 0,
+            '3Y_TER': 0,
+            '3Y_TER-KE': 0,
+            '5Y_TER': 0,
+            '5Y_TER-KE': 0,
+            '10Y_TER': 0,
+            '10Y_TER-KE': 0
         }
         
         for _, row in ticker_year_info.iterrows():
@@ -378,49 +408,85 @@ class TERService:
             
             # For 1Y: first year (min_year) should have NULL
             if min_year <= max_year:
+                # Add NULL for TER
                 null_rows.append({
                     'ticker': ticker,
                     'fiscal_year': min_year,
                     'TER_Y': np.nan,
                     'TER_TYPE': 'Calc 1Y TER'
                 })
-                null_row_breakdown['1Y'] += 1
+                null_row_breakdown['1Y_TER'] += 1
+                # Add NULL for TER-KE
+                null_rows.append({
+                    'ticker': ticker,
+                    'fiscal_year': min_year,
+                    'TER_Y': np.nan,
+                    'TER_TYPE': 'Calc 1Y TER-KE'
+                })
+                null_row_breakdown['1Y_TER-KE'] += 1
             
             # For 3Y: first 3 years should have NULL
             for year_offset in range(1, 3):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
+                    # Add NULL for TER
                     null_rows.append({
                         'ticker': ticker,
                         'fiscal_year': target_year,
                         'TER_Y': np.nan,
                         'TER_TYPE': 'Calc 3Y TER'
                     })
-                    null_row_breakdown['3Y'] += 1
+                    null_row_breakdown['3Y_TER'] += 1
+                    # Add NULL for TER-KE
+                    null_rows.append({
+                        'ticker': ticker,
+                        'fiscal_year': target_year,
+                        'TER_Y': np.nan,
+                        'TER_TYPE': 'Calc 3Y TER-KE'
+                    })
+                    null_row_breakdown['3Y_TER-KE'] += 1
             
             # For 5Y: first 5 years should have NULL
             for year_offset in range(1, 5):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
+                    # Add NULL for TER
                     null_rows.append({
                         'ticker': ticker,
                         'fiscal_year': target_year,
                         'TER_Y': np.nan,
                         'TER_TYPE': 'Calc 5Y TER'
                     })
-                    null_row_breakdown['5Y'] += 1
+                    null_row_breakdown['5Y_TER'] += 1
+                    # Add NULL for TER-KE
+                    null_rows.append({
+                        'ticker': ticker,
+                        'fiscal_year': target_year,
+                        'TER_Y': np.nan,
+                        'TER_TYPE': 'Calc 5Y TER-KE'
+                    })
+                    null_row_breakdown['5Y_TER-KE'] += 1
             
             # For 10Y: first 10 years should have NULL
             for year_offset in range(1, 10):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
+                    # Add NULL for TER
                     null_rows.append({
                         'ticker': ticker,
                         'fiscal_year': target_year,
                         'TER_Y': np.nan,
                         'TER_TYPE': 'Calc 10Y TER'
                     })
-                    null_row_breakdown['10Y'] += 1
+                    null_row_breakdown['10Y_TER'] += 1
+                    # Add NULL for TER-KE
+                    null_rows.append({
+                        'ticker': ticker,
+                        'fiscal_year': target_year,
+                        'TER_Y': np.nan,
+                        'TER_TYPE': 'Calc 10Y TER-KE'
+                    })
+                    null_row_breakdown['10Y_TER-KE'] += 1
         
         null_rows_df = pd.DataFrame(null_rows)
         
@@ -456,16 +522,16 @@ class TERService:
         param_set_id: UUID
     ) -> None:
         """
-        Insert TER metrics into metrics_outputs using single multi-row INSERT.
+        Insert TER and TER-KE metrics into metrics_outputs using single multi-row INSERT.
         
         Uses PostgreSQL multi-row VALUES clause for efficiency:
-        - Single INSERT statement instead of 49k+ individual statements
-        - Reduces database roundtrips from 49k to 1
-        - Expected performance: <500ms for insert phase (was 5+ minutes)
+        - Single INSERT statement for all metrics (TER + TER-KE + NULL rows)
+        - Reduces database roundtrips significantly
+        - Expected performance: <1s for insert phase
         
         Args:
-            ter_df: DataFrame with TER values and NULL rows
-            null_breakdown: Dictionary with NULL row counts per interval
+            ter_df: DataFrame with both TER and TER-KE values plus NULL rows
+            null_breakdown: Dictionary with NULL row counts per metric type and interval
             dataset_id: Dataset version ID
             param_set_id: Parameter set ID
         """
