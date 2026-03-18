@@ -311,24 +311,24 @@ COMMENT ON TABLE parameter_sets IS 'Named bundles of parameter configurations fo
 -- ============================================================================
 
 -- Metrics Outputs: Computed metrics from fundamentals + parameters
- CREATE TABLE metrics_outputs (
-   metrics_output_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-   dataset_id UUID NOT NULL REFERENCES dataset_versions(dataset_id) ON DELETE CASCADE,
-   param_set_id UUID REFERENCES parameter_sets(param_set_id) ON DELETE CASCADE,
-   ticker TEXT NOT NULL,
-   fiscal_year INTEGER NOT NULL,
-   
-   output_metric_name TEXT NOT NULL,
-   output_metric_value NUMERIC NOT NULL,
-   
-   metadata JSONB NOT NULL DEFAULT '{}',
-   
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CREATE TABLE metrics_outputs (
+    metrics_output_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    dataset_id UUID NOT NULL REFERENCES dataset_versions(dataset_id) ON DELETE CASCADE,
+    param_set_id UUID REFERENCES parameter_sets(param_set_id) ON DELETE CASCADE,
+    ticker TEXT NOT NULL,
+    fiscal_year INTEGER NOT NULL,
     
-    -- Unique constraint for ON CONFLICT upserts
-    -- Required by metrics calculation service for idempotent inserts
-    UNIQUE (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
-  );
+    output_metric_name TEXT NOT NULL,
+    output_metric_value NUMERIC,
+    
+    metadata JSONB NOT NULL DEFAULT '{}',
+    
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     
+     -- Unique constraint for ON CONFLICT upserts
+     -- Required by metrics calculation service for idempotent inserts
+     UNIQUE (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
+   );
 
   -- Uniqueness: one row per (dataset, params, ticker, fiscal_year, metric)
   -- When param_set_id is NULL (pre-computed metrics), allow only one row
@@ -345,7 +345,8 @@ CREATE INDEX idx_metrics_outputs_dataset ON metrics_outputs (dataset_id);
 CREATE INDEX idx_metrics_outputs_param_set ON metrics_outputs (param_set_id);
 CREATE INDEX idx_metrics_outputs_ticker_fy ON metrics_outputs (ticker, fiscal_year);
 
-COMMENT ON TABLE metrics_outputs IS 'Computed metric outputs derived from fundamentals + parameter sets. One row per (dataset, param_set, ticker, fiscal_year, metric).';
+COMMENT ON TABLE metrics_outputs IS 'Computed metric outputs derived from fundamentals + parameter sets. One row per (dataset, param_set, ticker, fiscal_year, metric). output_metric_value can be NULL for rows representing insufficient data periods (e.g., first years of interval-based calculations like FV_ECF that require prior year data).';
+COMMENT ON COLUMN metrics_outputs.output_metric_value IS 'Metric value (can be NULL for rows representing insufficient historical data for calculation, such as early fiscal years in forward-looking interval calculations).';
 
 -- Optimization Outputs: Results from optimization algorithms
 -- Stores hierarchical projection results organized by base_year for efficient multi-year charting
