@@ -914,12 +914,11 @@ class FVECFService:
         """
         Add NULL rows for fiscal years with insufficient lag history.
         
-        For each interval, we need a minimum number of prior years of data:
-        - 1Y: All rows can be calculated (no prior year needed for current year)
-              But 1Y uses lagged KE, so first year gets NULL
-        - 3Y: Needs 2 prior years, so first 2 years get NULL (fiscal_year - 1, -2)
-        - 5Y: Needs 4 prior years, so first 4 years get NULL (fiscal_year - 1, -2, -3, -4)
-        - 10Y: Needs 9 prior years, so first 9 years get NULL (fiscal_year - 1 through -9)
+        For each interval, we need N prior years of data (due to lagged calculations):
+        - 1Y: Needs 1 prior year → NULL for min_year (1 row)
+        - 3Y: Needs 3 prior years → NULL for min_year through min_year+2 (3 rows)
+        - 5Y: Needs 5 prior years → NULL for min_year through min_year+4 (5 rows)
+        - 10Y: Needs 10 prior years → NULL for min_year through min_year+8 (9 rows)
         
         Args:
             fv_ecf_df: DataFrame with calculated FV_ECF values (has rows only for valid intervals)
@@ -938,17 +937,16 @@ class FVECFService:
             min_year = int(row['min'])
             max_year = int(row['max'])
             
-            # For 1Y: first year (min_year) should have NULL because it needs lagged KE from year before
-            if min_year <= max_year:
-                null_rows.append({
-                    'ticker': ticker,
-                    'fiscal_year': min_year,
-                    'FV_ECF_Y': np.nan,
-                    'FV_ECF_TYPE': 'Calc 1Y FV ECF'
-                })
+            # For 1Y: 1 NULL row (min_year only)
+            null_rows.append({
+                'ticker': ticker,
+                'fiscal_year': min_year,
+                'FV_ECF_Y': np.nan,
+                'FV_ECF_TYPE': 'Calc 1Y FV ECF'
+            })
             
-            # For 3Y: first 2 years should have NULL
-            for year_offset in range(1, 2):
+            # For 3Y: 3 NULL rows (min_year through min_year+2)
+            for year_offset in range(0, 3):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
                     null_rows.append({
@@ -958,8 +956,8 @@ class FVECFService:
                         'FV_ECF_TYPE': 'Calc 3Y FV ECF'
                     })
             
-            # For 5Y: first 4 years should have NULL
-            for year_offset in range(1, 4):
+            # For 5Y: 5 NULL rows (min_year through min_year+4)
+            for year_offset in range(0, 5):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
                     null_rows.append({
@@ -969,8 +967,8 @@ class FVECFService:
                         'FV_ECF_TYPE': 'Calc 5Y FV ECF'
                     })
             
-            # For 10Y: first 9 years should have NULL
-            for year_offset in range(1, 9):
+            # For 10Y: 9 NULL rows (min_year through min_year+8)
+            for year_offset in range(0, 9):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
                     null_rows.append({
