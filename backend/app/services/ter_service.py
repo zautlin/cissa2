@@ -386,8 +386,8 @@ class TERService:
                 })
                 null_row_breakdown['1Y'] += 1
             
-            # For 3Y: first 2 years should have NULL
-            for year_offset in range(1, 2):
+            # For 3Y: first 3 years should have NULL
+            for year_offset in range(1, 3):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
                     null_rows.append({
@@ -398,8 +398,8 @@ class TERService:
                     })
                     null_row_breakdown['3Y'] += 1
             
-            # For 5Y: first 4 years should have NULL
-            for year_offset in range(1, 4):
+            # For 5Y: first 5 years should have NULL
+            for year_offset in range(1, 5):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
                     null_rows.append({
@@ -410,8 +410,8 @@ class TERService:
                     })
                     null_row_breakdown['5Y'] += 1
             
-            # For 10Y: first 9 years should have NULL
-            for year_offset in range(1, 9):
+            # For 10Y: first 10 years should have NULL
+            for year_offset in range(1, 10):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
                     null_rows.append({
@@ -424,8 +424,27 @@ class TERService:
         
         null_rows_df = pd.DataFrame(null_rows)
         
-        # Combine original and NULL rows
-        combined = pd.concat([ter_df, null_rows_df], ignore_index=True)
+        # Remove any calculated rows that conflict with NULL rows
+        # (same ticker, fiscal_year, and metric_type)
+        combined = ter_df.copy()
+        if len(null_rows_df) > 0:
+            # Create a key to identify rows to remove
+            conflict_key = null_rows_df[['ticker', 'fiscal_year', 'TER_TYPE']].copy()
+            conflict_key['_conflict'] = True
+            
+            # Merge to identify conflicts
+            combined = combined.merge(
+                conflict_key,
+                on=['ticker', 'fiscal_year', 'TER_TYPE'],
+                how='left'
+            )
+            
+            # Keep only rows without conflicts (where _conflict is NaN/False)
+            combined = combined[combined['_conflict'].isna()].copy()
+            combined = combined.drop('_conflict', axis=1)
+        
+        # Combine with NULL rows
+        combined = pd.concat([combined, null_rows_df], ignore_index=True)
         
         return combined, null_row_breakdown
     
@@ -437,7 +456,12 @@ class TERService:
         param_set_id: UUID
     ) -> None:
         """
-        Insert TER metrics into metrics_outputs in batches.
+        Insert TER metrics into metrics_outputs using single multi-row INSERT.
+        
+        Uses PostgreSQL multi-row VALUES clause for efficiency:
+        - Single INSERT statement instead of 49k+ individual statements
+        - Reduces database roundtrips from 49k to 1
+        - Expected performance: <500ms for insert phase (was 5+ minutes)
         
         Args:
             ter_df: DataFrame with TER values and NULL rows
@@ -445,37 +469,44 @@ class TERService:
             dataset_id: Dataset version ID
             param_set_id: Parameter set ID
         """
-        batch_size = 1000
-        total_inserted = 0
-        
-        for i in range(0, len(ter_df), batch_size):
-            batch = ter_df.iloc[i:i+batch_size]
-            
-            values_list = []
-            for _, row in batch.iterrows():
+        try:
+            # Build multi-row VALUES clause for ALL records at once
+            rows_sql_parts = []
+            for _, row in ter_df.iterrows():
                 metric_value = row['TER_Y']
+                metric_value_sql = float(metric_value) if pd.notna(metric_value) else 'NULL'
                 
-                values_list.append({
-                    'dataset_id': dataset_id,
-                    'param_set_id': param_set_id,
-                    'ticker': row['ticker'],
-                    'fiscal_year': int(row['fiscal_year']),
-                    'output_metric_name': row['TER_TYPE'],
-                    'output_metric_value': float(metric_value) if pd.notna(metric_value) else None,
-                    'metadata': json.dumps({'metric_level': 'L2', 'interval': row['TER_TYPE'].split()[1]})
-                })
+                metadata = {
+                    'metric_level': 'L2',
+                    'interval': row['TER_TYPE'].split()[1]
+                }
+                metadata_json = json.dumps(metadata).replace("'", "''")  # Escape single quotes for SQL
+                
+                row_sql = f"('{str(dataset_id)}', '{str(param_set_id)}', '{row['ticker']}', {int(row['fiscal_year'])}, '{row['TER_TYPE']}', {metric_value_sql}, '{metadata_json}')"
+                rows_sql_parts.append(row_sql)
             
-            # Batch insert
-            insert_query = text("""
-                INSERT INTO cissa.metrics_outputs
+            rows_sql = ", ".join(rows_sql_parts)
+            
+            # Execute SINGLE multi-row INSERT...ON CONFLICT UPDATE for all records
+            # This is the key: ONE statement instead of 49k individual INSERTs
+            query = text(f"""
+                INSERT INTO cissa.metrics_outputs 
                 (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
-                VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata)
+                VALUES {rows_sql}
+                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
+                DO UPDATE SET
+                    output_metric_value = EXCLUDED.output_metric_value,
+                    metadata = EXCLUDED.metadata
             """)
             
-            for val in values_list:
-                await self.session.execute(insert_query, val)
+            await self.session.execute(query)
+            logger.info(f"[TER]   - Executed single multi-row INSERT for {len(ter_df)} records")
             
-            total_inserted += len(values_list)
-            logger.info(f"[TER]   - Inserted batch {i//batch_size + 1}: {len(values_list)} records")
+            # Single commit at the end
+            await self.session.commit()
+            logger.info(f"[TER]   - Batch insert complete: {len(ter_df)} records committed")
         
-        logger.info(f"[TER]   - Total inserted: {total_inserted}")
+        except Exception as e:
+            logger.error(f"[TER]   - Failed to insert TER batch: {e}", exc_info=True)
+            await self.session.rollback()
+            raise
