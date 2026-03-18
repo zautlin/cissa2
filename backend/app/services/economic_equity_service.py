@@ -13,6 +13,7 @@ This represents the cumulative economic equity where:
 - Subsequent years track equity changes through retained earnings (PAT - ECF)
 """
 
+import json
 import logging
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
@@ -185,6 +186,8 @@ class EconomicEquityService:
         logger.info(f"Deleted {deleted_count} existing Calc EE records")
 
         # Prepare insertion data
+        metadata = json.dumps({"metric_level": "L1"})
+        
         insert_data = [
             {
                 "ticker": ticker,
@@ -193,6 +196,7 @@ class EconomicEquityService:
                 "output_metric_value": calc_ee,
                 "dataset_id": str(dataset_id),
                 "param_set_id": str(param_set_id),
+                "metadata": metadata,
             }
             for ticker, fiscal_year, calc_ee in calculated_records
         ]
@@ -205,9 +209,9 @@ class EconomicEquityService:
             insert_query = text("""
                 INSERT INTO cissa.metrics_outputs
                 (ticker, fiscal_year, output_metric_name, output_metric_value, 
-                 dataset_id, param_set_id)
+                 dataset_id, param_set_id, metadata, created_at)
                 VALUES (:ticker, :fiscal_year, :output_metric_name, :output_metric_value,
-                        :dataset_id, :param_set_id)
+                        :dataset_id, :param_set_id, :metadata, now())
             """)
 
             for record in batch:
