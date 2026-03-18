@@ -62,7 +62,7 @@ class CalculateL1OrchestratorResponse(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     
     # Overall stats
-    total_successful: int = Field(..., description="Total successful metrics (13 target: 12 Phase 1 + 1 Phase 2)")
+    total_successful: int = Field(..., description="Total successful metrics (13 target: 11 Phase 1 + 2 Phase 2)")
     total_failed: int = Field(..., description="Total failed metrics")
     total_records_inserted: int = Field(..., description="Total records inserted across all metrics")
     
@@ -135,7 +135,7 @@ async def orchestrate_l1_metrics_async(
     # Phase 1: Basic Metrics (Parallelized)
     # ========================================================================
     
-    logger.info("Phase 1: Starting basic metrics (12 metrics, parallelized)...")
+    logger.info("Phase 1: Starting basic metrics (11 metrics, parallelized)...")
     phase_1_start = time.time()
     
     # Group metrics into 4 groups of 3-4 each, respecting dependencies
@@ -143,7 +143,7 @@ async def orchestrate_l1_metrics_async(
     phase_1_groups = [
         ["Calc MC", "Calc Op Cost", "Calc Non Op Cost"],           # Group 1: Independent metrics
         ["Calc Tax Cost", "Calc XO Cost", "Calc Assets"],          # Group 2: Calc Assets alone
-        ["Calc OA", "Calc ECF", "Non Div ECF"],                    # Group 3: Calc OA after Calc Assets inserted
+        ["Calc OA", "Calc ECF"],                                   # Group 3: Calc OA after Calc Assets inserted
         ["Calc EE", "Calc FY TSR", "Calc FY TSR PREL"],            # Group 4: Other temporal metrics
     ]
     
@@ -178,18 +178,20 @@ async def orchestrate_l1_metrics_async(
                 logger.warning(f"    ✗ {metric_name}: Invalid response")
     
     phase_1_time = time.time() - phase_1_start
-    logger.info(f"Phase 1 complete: {len(phase_1_successful)}/12 successful in {phase_1_time:.1f}s")
+    logger.info(f"Phase 1 complete: {len(phase_1_successful)}/11 successful in {phase_1_time:.1f}s")
     
     # ========================================================================
-    # Phase 2: Beta Pre-Computation (Sequential)
+    # Phase 2: Derived Metrics (Sequential) - depends on Phase 1 completion
     # ========================================================================
     
-    logger.info("Phase 2: Starting beta pre-computation...")
+    logger.info("Phase 2: Starting derived metrics (2 metrics, sequential)...")
     phase_2_start = time.time()
     phase_2_successful = []
     phase_2_failed = {}
     phase_2_records = 0
+    phase_2_metrics = ["Calc Beta", "Non Div ECF"]
     
+    # 2.1: Calc Beta Pre-Computation
     try:
         # Call NEW pre-computation endpoint instead of deprecated /beta/calculate
         # This endpoint uses PreComputedBetaService to store raw components in metadata
@@ -199,14 +201,36 @@ async def orchestrate_l1_metrics_async(
             logger.warning(f"  ✗ Calc Beta: {result.get('message', 'Unknown')[:60]}")
         elif isinstance(result, dict):
             phase_2_successful.append("Calc Beta")
-            phase_2_records = result.get("results_count", 0)
-            logger.info(f"  ✓ Calc Beta (Pre-computed): {phase_2_records} records")
+            calc_beta_records = result.get("results_count", 0)
+            phase_2_records += calc_beta_records
+            logger.info(f"  ✓ Calc Beta (Pre-computed): {calc_beta_records} records")
     except Exception as e:
         phase_2_failed["Calc Beta"] = str(e)
         logger.warning(f"  ✗ Calc Beta: {str(e)[:60]}")
     
+    # 2.2: Non Div ECF (derived metric based on Calc ECF + DIVIDENDS)
+    try:
+        result = await call_metric_api("/api/v1/metrics/calculate", metric_name="Non Div ECF")
+        if isinstance(result, Exception):
+            phase_2_failed["Non Div ECF"] = str(result)
+            logger.warning(f"  ✗ Non Div ECF: {str(result)[:60]}")
+        elif isinstance(result, dict) and result.get("status") == "error":
+            phase_2_failed["Non Div ECF"] = result.get("message", "Unknown error")
+            logger.warning(f"  ✗ Non Div ECF: {result.get('message', 'Unknown')[:60]}")
+        elif isinstance(result, dict):
+            phase_2_successful.append("Non Div ECF")
+            ndiv_ecf_records = result.get("results_count", 0)
+            phase_2_records += ndiv_ecf_records
+            logger.info(f"  ✓ Non Div ECF: {ndiv_ecf_records} records")
+        else:
+            phase_2_failed["Non Div ECF"] = "Invalid response format"
+            logger.warning(f"  ✗ Non Div ECF: Invalid response")
+    except Exception as e:
+        phase_2_failed["Non Div ECF"] = str(e)
+        logger.warning(f"  ✗ Non Div ECF: {str(e)[:60]}")
+    
     phase_2_time = time.time() - phase_2_start
-    logger.info(f"Phase 2 complete: {len(phase_2_successful)}/1 successful in {phase_2_time:.1f}s")
+    logger.info(f"Phase 2 complete: {len(phase_2_successful)}/2 successful in {phase_2_time:.1f}s")
     
     # ========================================================================
     # Compile Results (2-Phase Pre-computation Only)
@@ -234,24 +258,24 @@ async def orchestrate_l1_metrics_async(
         total_successful=total_successful,
         total_failed=total_failed,
         total_records_inserted=total_records,
-        phases={
-            "phase_1": {
-                "status": "success" if len(phase_1_failed) == 0 else ("partial" if len(phase_1_successful) > 0 else "failed"),
-                "metrics": 12,
-                "successful": len(phase_1_successful),
-                "failed": len(phase_1_failed),
-                "time_seconds": phase_1_time,
-                "records_inserted": phase_1_records,
-            },
-            "phase_2": {
-                "status": "success" if len(phase_2_failed) == 0 else "failed",
-                "metrics": 1,
-                "successful": len(phase_2_successful),
-                "failed": len(phase_2_failed),
-                "time_seconds": phase_2_time,
-                "records_inserted": phase_2_records,
-            },
-        },
+         phases={
+             "phase_1": {
+                 "status": "success" if len(phase_1_failed) == 0 else ("partial" if len(phase_1_successful) > 0 else "failed"),
+                 "metrics": 11,
+                 "successful": len(phase_1_successful),
+                 "failed": len(phase_1_failed),
+                 "time_seconds": phase_1_time,
+                 "records_inserted": phase_1_records,
+             },
+             "phase_2": {
+                 "status": "success" if len(phase_2_failed) == 0 else ("partial" if len(phase_2_successful) > 0 else "failed"),
+                 "metrics": 2,
+                 "successful": len(phase_2_successful),
+                 "failed": len(phase_2_failed),
+                 "time_seconds": phase_2_time,
+                 "records_inserted": phase_2_records,
+             },
+         },
         errors=errors,
     )
 
