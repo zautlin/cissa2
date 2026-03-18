@@ -1,217 +1,238 @@
-# CISSA Metrics API - Quick Reference Guide
+# CISSA Codebase Quick Reference
 
-## The Main Post-Ingestion Endpoint
+## Key File Paths
 
-```bash
-POST /api/v1/metrics/runtime-metrics?dataset_id=<UUID>&param_set_id=<UUID>
+### Service Layer (L2 Metrics Calculation)
+```
+/home/ubuntu/cissa/backend/app/services/ter_service.py           (581 lines) - Phase 10c TER calculation
+/home/ubuntu/cissa/backend/app/services/fv_ecf_service.py        (1069 lines) - Phase 10b FV_ECF calculation
+/home/ubuntu/cissa/backend/app/services/cost_of_equity_service.py (604 lines) - Phase 09 Cost of Equity
+/home/ubuntu/cissa/backend/app/services/economic_profit_service.py (520 lines) - Phase 10a Core L2
+/home/ubuntu/cissa/backend/app/services/risk_free_rate_service.py (1108 lines) - Phase 08 Risk-Free Rate
+/home/ubuntu/cissa/backend/app/services/runtime_metrics_orchestration_service.py (474 lines) - Orchestrator
+/home/ubuntu/cissa/backend/app/services/parameter_service.py     (240 lines) - Parameter management
 ```
 
-This single endpoint orchestrates all Phase 3+ runtime metrics:
-1. **Beta Rounding** - Applies parameter set rounding to pre-computed beta
-2. **Risk-Free Rate** - Calculates Rf based on bond yields
-3. **Cost of Equity** - Computes KE = Rf + Beta × RiskPremium
-
-**Response includes:**
-- Execution time: 45-50 seconds
-- Records per metric: ~11,000
-- Total records: ~33,000
-- Detailed status for each sub-metric
-
----
-
-## Individual Metric Endpoints
-
-### Beta Calculation
-```bash
-POST /api/v1/metrics/beta/calculate-from-precomputed
-Body: {"dataset_id": "UUID", "param_set_id": "UUID"}
-Performance: <10ms (with precomputed) or 60s (fallback)
+### Database & Models
+```
+/home/ubuntu/cissa/backend/database/schema/schema.sql            (459 lines) - All 12 tables
+/home/ubuntu/cissa/backend/database/schema/schema_manager.py     (446 lines) - Schema init + parameter setup
+/home/ubuntu/cissa/backend/app/models/metrics_output.py          (68 lines) - ORM model
+/home/ubuntu/cissa/backend/app/models/schemas.py                 - Request/response Pydantic models
 ```
 
-### Risk-Free Rate
-```bash
-POST /api/v1/metrics/rates/calculate
-Body: {"dataset_id": "UUID", "param_set_id": "UUID"}
-Performance: 10-15 seconds
+### API Layer
+```
+/home/ubuntu/cissa/backend/app/api/v1/endpoints/metrics.py       (1233 lines) - All metric endpoints
 ```
 
-### Cost of Equity
-```bash
-POST /api/v1/metrics/cost-of-equity/calculate
-Body: {"dataset_id": "UUID", "param_set_id": "UUID"}
-Performance: 10-15 seconds
+## Core Concepts
+
+### 1. TERService Structure
+- **Location**: `/home/ubuntu/cissa/backend/app/services/ter_service.py`
+- **Main Method**: `calculate_ter_metrics(dataset_id, param_set_id)`
+- **Metrics Produced**: 8 (Calc 1Y/3Y/5Y/10Y TER + TER-KE)
+- **Pattern**: Fetch → Merge → Calculate (Vectorized) → Insert (Batch)
+
+### 2. Parameters Table
+- **Location**: Schema defined in `/home/ubuntu/cissa/backend/database/schema/schema_manager.py` lines 277-295
+- **Key Parameter**: `equity_risk_premium` (default: 5.0, used in KE = Rf + Beta × RP)
+- **How to Fetch**:
+  ```python
+  # Method 1: Baseline
+  query = text("SELECT default_value FROM cissa.parameters WHERE parameter_name = 'equity_risk_premium'")
+  
+  # Method 2: With overrides
+  service = ParameterService(session)
+  params = await service.get_merged_parameters(param_set_id)
+  equity_risk_premium = params['equity_risk_premium']
+  ```
+
+### 3. Metrics Storage
+- **Table**: `metrics_outputs` in `/home/ubuntu/cissa/backend/database/schema/schema.sql`
+- **Structure**: (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value)
+- **Key Feature**: Unique constraint allows ON CONFLICT upserts for idempotent calculations
+- **Fetch Pattern**:
+  ```python
+  query = text("""
+      SELECT ticker, fiscal_year, output_metric_value
+      FROM cissa.metrics_outputs
+      WHERE dataset_id = :dataset_id
+        AND param_set_id = :param_set_id
+        AND output_metric_name = :metric_name
+  """)
+  ```
+
+### 4. Phase Structure (Phase 10)
+```
+Phase 10a: Core L2 metrics (EP, PAT_EX, XO_COST_EX, FC)
+Phase 10b: FV_ECF metrics (1Y, 3Y, 5Y, 10Y)
+Phase 10c: TER & TER-KE metrics (8 total: 1Y, 3Y, 5Y, 10Y × 2 types)
+Phase 10d: TER Alpha (NOT YET IMPLEMENTED) - would fit here
 ```
 
-### Core L2 Metrics (EP, PAT_EX, XO_COST_EX, FC)
-```bash
-POST /api/v1/metrics/l2-core/calculate
-Body: {"dataset_id": "UUID", "param_set_id": "UUID"}
-Performance: 5-10 seconds
+### 5. Cross-Metric Dependencies
+TER depends on:
+- Calc MC (Phase 10a)
+- Calc KE (Phase 10a)
+- Calc 1Y/3Y/5Y/10Y FV_ECF (Phase 10b)
+
+FV_ECF depends on:
+- Calc KE lagged (Phase 10a, offset by fiscal_year)
+- DIVIDENDS, FRANKING (Phase 06, fundamentals table)
+
+## Common Query Patterns
+
+### Pattern 1: Fetch Single Metric
+```python
+async def _fetch_metric(self, dataset_id, metric_name, param_set_id):
+    query = text("""
+        SELECT ticker, fiscal_year, output_metric_value
+        FROM cissa.metrics_outputs
+        WHERE dataset_id = :dataset_id
+          AND param_set_id = :param_set_id
+          AND output_metric_name = :metric_name
+        ORDER BY ticker, fiscal_year
+    """)
+    result = await session.execute(query, {...})
+    rows = result.fetchall()
+    return pd.DataFrame(rows, columns=['ticker', 'fiscal_year', 'value'])
 ```
 
-### FV_ECF Metrics (1Y, 3Y, 5Y, 10Y)
-```bash
-POST /api/v1/metrics/l2-fv-ecf/calculate?dataset_id=<UUID>&param_set_id=<UUID>&incl_franking=Yes
-Performance: 10-15 seconds
+### Pattern 2: Lag Calculation (Prior Year Value)
+```python
+df['calc_mc_lag'] = df.groupby('ticker')['calc_mc'].shift(1)
+# Now for FY2023, calc_mc_lag contains FY2022's calc_mc value
 ```
 
----
-
-## Query Endpoints
-
-### Get All Metrics
-```bash
-GET /api/v1/metrics/get_metrics/?dataset_id=<UUID>&parameter_set_id=<UUID>
+### Pattern 3: Vectorized Calculation
+```python
+# Instead of iterating rows:
+df['ter'] = np.where(
+    df['open_mc'].notna() & (df['open_mc'] != 0),
+    ((df['wc'] + df['wp']) / df['open_mc']) ** (1/interval) - 1,
+    np.nan
+)
 ```
 
-### Get Metrics by Ticker
-```bash
-GET /api/v1/metrics/get_metrics/?dataset_id=<UUID>&parameter_set_id=<UUID>&ticker=AAPL
+### Pattern 4: Batch Insert
+```python
+query = text(f"""
+    INSERT INTO cissa.metrics_outputs 
+    (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata)
+    VALUES {rows_sql}
+    ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
+    DO UPDATE SET
+        output_metric_value = EXCLUDED.output_metric_value,
+        metadata = EXCLUDED.metadata
+""")
+await session.execute(query)
+await session.commit()
 ```
 
-### Get Metrics by Name
-```bash
-GET /api/v1/metrics/get_metrics/?dataset_id=<UUID>&parameter_set_id=<UUID>&metric_name=Calc ECF
+### Pattern 5: Generate NULL Rows (Insufficient History)
+```python
+# For metrics needing prior year data:
+# - 1Y metric: NULL for first fiscal year
+# - 3Y metric: NULL for first 2 fiscal years
+# - 5Y metric: NULL for first 4 fiscal years
+
+null_rows = []
+for ticker in unique_tickers:
+    for year_offset in range(1, num_prior_years_needed):
+        null_rows.append({
+            'ticker': ticker,
+            'fiscal_year': min_year + year_offset,
+            'metric_value': np.nan,
+            'metric_type': f'Calc {interval}Y TER'
+        })
 ```
 
-### Get Ratio Metrics
-```bash
-GET /api/v1/metrics/ratio-metrics?metric=mb_ratio&tickers=AAPL,MSFT&dataset_id=<UUID>&temporal_window=3Y
+## Orchestration Flow
+
+**Runtime Orchestration** (`runtime_metrics_orchestration_service.py`):
+```
+Step 1: Resolve parameter_id (use provided or fallback to is_active)
+Step 2: Beta Rounding & Risk-Free Rate (SEQUENTIAL)
+Step 3: Cost of Equity (SEQUENTIAL, depends on step 2)
+Step 4: FV_ECF (SEQUENTIAL, depends on step 3) - FAIL-SOFT
+Step 5: TER (SEQUENTIAL, depends on step 4) - FAIL-SOFT
+Step 6: (PROPOSED) TER Alpha (depends on step 5) - FAIL-SOFT
 ```
 
----
+Error Handling:
+- Phases 1-3: FAIL-FAST (errors stop orchestration)
+- Phases 4-6: FAIL-SOFT (errors logged, orchestration continues)
 
-## Key Parameters by Endpoint
+## Recommendations for Phase 10d (TER Alpha)
 
-### Beta Endpoints
-- `beta_rounding` - Rounding increment (0.1, 0.05, 0.01)
-- `beta_relative_error_tolerance` - Error tolerance % (40.0)
-- `cost_of_equity_approach` - "FIXED" or "Floating"
+### Implementation Strategy
+1. Create: `/home/ubuntu/cissa/backend/app/services/ter_alpha_service.py`
+2. Add Endpoint: `/home/ubuntu/cissa/backend/app/api/v1/endpoints/metrics.py` after line 900
+3. Add Orchestration: Add step 6 to `runtime_metrics_orchestration_service.py` line ~442
 
-### Risk-Free Rate Endpoint
-- `cost_of_equity_approach` - "FIXED" or "FLOATING"
-- `beta_rounding` - Rounding increment (0.005)
-- `benchmark` - Benchmark return (for FIXED approach)
-- `risk_premium` - Risk premium amount
-
-### Cost of Equity Endpoint
-- `equity_risk_premium` - Risk premium (0.05 for 5%)
-- `cost_of_equity_approach` - "FIXED" or "FLOATING"
-- `beta_rounding` - Beta rounding (0.005)
-- `benchmark` - Benchmark return
-
-### L2 Endpoints
-- `incl_franking` - "Yes" or "No"
-- `frank_tax_rate` - Franking tax rate (0.30)
-- `value_franking_cr` - Franking credit value (0.75)
-
----
-
-## Example Workflow: Complete Post-Ingestion Metrics
-
-```bash
-# 1. Calculate all runtime metrics at once
-curl -X POST "http://localhost:8000/api/v1/metrics/runtime-metrics?dataset_id=550e8400-e29b-41d4-a716-446655440000&param_set_id=660e8400-e29b-41d4-a716-446655440001"
-
-# Response will show:
-# - beta_rounding: status, records_inserted, time_seconds
-# - risk_free_rate: status, records_inserted, time_seconds
-# - cost_of_equity: status, records_inserted, time_seconds
-
-# 2. Query results
-curl "http://localhost:8000/api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&metric_name=Calc KE"
-
-# 3. Calculate L2 metrics
-curl -X POST "http://localhost:8000/api/v1/metrics/l2-core/calculate" \
-  -H "Content-Type: application/json" \
-  -d '{"dataset_id": "550e8400-e29b-41d4-a716-446655440000", "param_set_id": "660e8400-e29b-41d4-a716-446655440001"}'
-
-# 4. Calculate FV_ECF
-curl -X POST "http://localhost:8000/api/v1/metrics/l2-fv-ecf/calculate?dataset_id=550e8400-e29b-41d4-a716-446655440000&param_set_id=660e8400-e29b-41d4-a716-446655440001&incl_franking=Yes"
+### Service Structure (Follow TERService Pattern)
+```python
+class TERAlphaService:
+    async def calculate_ter_alpha_metrics(self, dataset_id: UUID, param_set_id: UUID) -> dict:
+        # Step 1: Fetch TER metrics (all 4 intervals)
+        ter_1y = await self._fetch_metric(..., 'Calc 1Y TER')
+        # ... 3Y, 5Y, 10Y
+        
+        # Step 2: Fetch TER-KE metrics (all 4 intervals)
+        ter_ke_1y = await self._fetch_metric(..., 'Calc 1Y TER-KE')
+        # ... 3Y, 5Y, 10Y
+        
+        # Step 3: Fetch market benchmark TER (TBD - may need new source)
+        benchmark_ter = await self._fetch_benchmark_ter(...)
+        
+        # Step 4: Calculate TER Alpha = TER - Benchmark TER (vectorized)
+        ter_alpha = self._calculate_ter_alpha_vectorized(ter_df, benchmark_ter)
+        
+        # Step 5: Generate NULL rows for insufficient history
+        ter_alpha = self._add_null_rows_for_ter_alpha(ter_alpha, fundamentals_df)
+        
+        # Step 6: Single batch insert
+        await self._insert_ter_alpha_batch(ter_alpha, dataset_id, param_set_id)
 ```
 
----
+### Metrics to Calculate (8 total)
+- Calc 1Y TER Alpha, Calc 3Y TER Alpha, Calc 5Y TER Alpha, Calc 10Y TER Alpha
+- Calc 1Y TER-KE Alpha, Calc 3Y TER-KE Alpha, Calc 5Y TER-KE Alpha, Calc 10Y TER-KE Alpha
 
-## Endpoint Summary Table
+## Testing Key Areas
 
-| Purpose | Endpoint | Method | Time |
-|---------|----------|--------|------|
-| All Phase 3+ metrics | `/runtime-metrics` | POST | 45-50s |
-| Beta only | `/beta/calculate-from-precomputed` | POST | <10ms |
-| Risk-free rate only | `/rates/calculate` | POST | 10-15s |
-| Cost of equity only | `/cost-of-equity/calculate` | POST | 10-15s |
-| Core L2 metrics | `/l2-core/calculate` | POST | 5-10s |
-| FV_ECF metrics | `/l2-fv-ecf/calculate` | POST | 10-15s |
-| Query metrics | `/get_metrics/` | GET | <1s |
-| Query ratio metrics | `/ratio-metrics` | GET | <1s |
+### For TERService
+1. Fetch operations (Calc MC, KE, FV_ECF)
+2. Lagging calculations (LAG operations)
+3. Vectorized TER formula accuracy
+4. NULL row generation (different counts per interval)
+5. Batch insert idempotency (re-run test)
 
----
+### For Parameter Fetching
+1. Baseline parameter fetch
+2. Override merging (overrides take precedence)
+3. Parameter type conversion (% to decimal)
+4. Default fallbacks (equity_risk_premium = 5.0%)
 
-## Important Notes
+### For Phase 10d (TER Alpha)
+1. Fetch TER metrics (should exist after Phase 10c)
+2. Fetch/calculate benchmark TER (TBD)
+3. Alpha calculation logic
+4. NULL row generation (same as TER)
+5. Batch insert with metadata
 
-1. **Runtime Metrics Orchestration is the primary endpoint** for post-ingestion calculations
-   - All three metrics (Beta, Rf, KE) run in coordinated fashion
-   - Individual endpoints also available if you need specific metrics
+## Performance Notes
 
-2. **Parameter Set ID is crucial**
-   - All endpoints require a valid parameter set ID
-   - Parameters define rounding, approach (FIXED/Floating), risk premiums, etc.
-   - Create/modify parameter sets via `/api/v1/parameters` endpoints
+- TERService processes ~73,512 metric values (8 metrics × 9,189 records)
+- Uses single multi-row INSERT instead of 73k individual INSERTs
+- Vectorized Pandas operations (no Python loops over rows)
+- Expected runtime: <1 second for insert phase
+- Total calculation time: ~2-5 seconds depending on merge complexity
 
-3. **Pre-computed Beta provides 6000x speedup**
-   - Pre-computed during ingestion (Phase 2)
-   - First calculation <10ms, fallback ~60s if not precomputed
+## Related Issues
 
-4. **Query endpoints are fast**
-   - Use them to retrieve calculated metrics
-   - Supports filtering by ticker, metric name
-   - Can retrieve multiple metrics at once
-
-5. **Phase Dependencies**
-   - L1 Basic Metrics (Phase 1): Must calculate with `/calculate` endpoint first
-   - Runtime Metrics (Phase 3+): Depend on precomputed Beta from Phase 2
-   - L2 Metrics: Depend on L1 metrics and runtime metrics
-
----
-
-## Response Status Values
-
-- `success` - Operation completed successfully
-- `error` - Operation failed with error message
-- `cached` - Results returned from cache (beta only)
-- `precomputed` - Using pre-computed values (beta only)
-- `fallback_legacy` - Fell back to legacy calculation (beta only)
-
----
-
-## Metric Names for Queries
-
-### Runtime Metrics
-- `Calc Beta` or `Beta`
-- `Calc Rf` or `Rf`
-- `Calc KE`
-
-### L2 Metrics
-- `EP` - Economic Profit
-- `PAT_EX` - Adjusted Profit
-- `XO_COST_EX` - Adjusted XO Cost
-- `FC` - Franking Credit
-- `FV_ECF_1Y`, `FV_ECF_3Y`, `FV_ECF_5Y`, `FV_ECF_10Y`
-
-### L1 Metrics
-- `Calc MC` - Market Capitalization
-- `Calc ECF` - Economic Cash Flow
-- `Calc EE` - Economic Equity
-- `Calc Assets`
-- `Calc OA` - Operating Assets
-- And more...
-
----
-
-## Health Check
-
-```bash
-GET /api/v1/metrics/health
-Response: {"status": "ok", "message": "Metrics service is running", "database": "connected"}
-```
-
+- Phase 10d (TER Alpha) is NOT YET IMPLEMENTED
+- TER Alpha calculations will follow same pattern as TER (Phase 10c)
+- Benchmark TER source needs to be determined
+- NULL row counts for TER Alpha may differ from TER (TBD based on alpha calculation requirements)
