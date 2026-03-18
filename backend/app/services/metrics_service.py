@@ -199,7 +199,7 @@ class MetricsService:
         
         param_set_id = str(param_row[0])
         
-        # Prepare batch insert statement
+        # Prepare parameterized insert statement (handles NULL values properly)
         insert_query = text("""
             INSERT INTO cissa.metrics_outputs 
             (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
@@ -208,30 +208,29 @@ class MetricsService:
             DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
         """)
         
-        # Batch insert in groups using PostgreSQL multi-row INSERT for performance
-        # This replaces individual INSERTs (10,000+ statements) with multi-row INSERT (1 statement)
+        # Batch insert using parameterized queries
         batch_size = 1000
+        metadata_json = json.dumps({"metric_level": "L1"})
+        
         for i in range(0, len(results), batch_size):
             batch = results[i:i + batch_size]
             
-            # Build multi-row VALUES clause: (val1, val2, ...), (val1, val2, ...), ...
-            metadata_json = json.dumps({"metric_level": "L1"})
-            rows_sql = ", ".join([
-                f"('{str(dataset_id)}', '{param_set_id}', '{item.ticker}', {item.fiscal_year}, '{metric_name}', {item.value}, '{metadata_json}', now())"
-                for item in batch
-            ])
+            # Execute parameterized query for each result (properly handles NULL values)
+            for item in batch:
+                await self.session.execute(
+                    insert_query,
+                    {
+                        "dataset_id": str(dataset_id),
+                        "param_set_id": param_set_id,
+                        "ticker": item.ticker,
+                        "fiscal_year": item.fiscal_year,
+                        "output_metric_name": metric_name,
+                        "output_metric_value": item.value,  # NULL will be handled properly by SQLAlchemy
+                        "metadata": metadata_json
+                    }
+                )
             
-            # Execute multi-row INSERT with ON CONFLICT UPSERT (all rows in single statement)
-            multi_row_insert = text(f"""
-                INSERT INTO cissa.metrics_outputs 
-                (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
-                VALUES {rows_sql}
-                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
-                DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
-            """)
-            
-            await self.session.execute(multi_row_insert)
-            logger.info(f"Inserted batch of {len(batch)} metric results (multi-row INSERT)")
+            logger.info(f"Inserted batch of {len(batch)} metric results")
         
         # Commit the transaction
         await self.session.commit()
@@ -302,11 +301,12 @@ class MetricsService:
                 logger.warning(f"No rows returned from {function_name} for dataset {dataset_id}")
             
             # Convert rows to MetricResultItem objects
+            # Keep NULL values as NULL (don't convert to 0.0) - important for metrics like ECF at begin_year
             results = [
                 MetricResultItem(
                     ticker=row[0],
                     fiscal_year=row[1],
-                    value=float(row[2]) if row[2] is not None else 0.0
+                    value=float(row[2]) if row[2] is not None else None
                 )
                 for row in rows
             ]
@@ -378,8 +378,9 @@ class MetricsService:
             metadata_str = json.dumps(metadata)
             
             # Build multi-row VALUES clause for all records in batch
+            # Handle NULL values properly - use NULL literal instead of None string
             rows_sql = ", ".join([
-                f"('{str(dataset_id)}', '{param_set_id}', '{item.ticker}', {item.fiscal_year}, '{metric_name}', {item.value}, '{metadata_str}', now())"
+                f"('{str(dataset_id)}', '{param_set_id}', '{item.ticker}', {item.fiscal_year}, '{metric_name}', {item.value if item.value is not None else 'NULL'}, '{metadata_str}', now())"
                 for item in batch
             ])
             

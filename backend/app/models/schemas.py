@@ -22,7 +22,7 @@ class MetricResultItem(BaseModel):
     """Single metric result (ticker, fiscal_year, value)"""
     ticker: str
     fiscal_year: int
-    value: float
+    value: Optional[float] = None  # Allow NULL values for metrics like ECF at begin_year
 
 
 class CalculateMetricsResponse(BaseModel):
