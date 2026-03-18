@@ -40,8 +40,7 @@ class EPGrowthCalculator:
         Formula: EP Growth = Calc EP / ABS(Open EE)
         Where:
         - Calc EP is current year Economic Profitability
-        - Open EE is prior year's Economic Equity (year_shift = 1)
-        - Calc Incl check: both EP and EE must exist (no errors)
+        - Open EE is prior year's Economic Equity (via LAG from Calc EE)
         
         Args:
             tickers: List of ticker symbols
@@ -88,40 +87,47 @@ class EPGrowthCalculator:
             ) AS ep_rolling_avg
           FROM ep_data
         ),
-        ee_rolling AS (
-          SELECT
-            ticker,
-            fiscal_year,
-            AVG(ee) OVER (
-              PARTITION BY ticker 
-              ORDER BY fiscal_year 
-              ROWS BETWEEN :rows_between PRECEDING AND CURRENT ROW
-            ) AS ee_rolling_avg
-          FROM ee_data
-        ),
-        ep_with_lag AS (
-          SELECT
-            ep.ticker,
-            ep.fiscal_year,
-            ep.ep_rolling_avg,
-            LAG(ee.ee_rolling_avg) OVER (
-              PARTITION BY ep.ticker 
-              ORDER BY ep.fiscal_year
-            ) AS prior_year_avg_ee
-          FROM ep_rolling ep
-          LEFT JOIN ee_rolling ee 
-            ON ep.ticker = ee.ticker 
-            AND ep.fiscal_year = ee.fiscal_year
-        )
-        SELECT
-          ticker,
-          fiscal_year,
-          CASE
-            WHEN prior_year_avg_ee IS NULL THEN NULL
-            WHEN ABS(prior_year_avg_ee) = 0 THEN NULL
-            ELSE ep_rolling_avg / ABS(prior_year_avg_ee)
-          END AS ep_growth
-        FROM ep_with_lag
+         ee_with_lag AS (
+           SELECT
+             ticker,
+             fiscal_year,
+             LAG(ee) OVER (
+               PARTITION BY ticker 
+               ORDER BY fiscal_year
+             ) AS prior_year_ee
+           FROM ee_data
+         ),
+        ee_rolling_lag AS (
+           SELECT
+             ticker,
+             fiscal_year,
+             AVG(prior_year_ee) OVER (
+               PARTITION BY ticker 
+               ORDER BY fiscal_year 
+               ROWS BETWEEN :rows_between PRECEDING AND CURRENT ROW
+             ) AS prior_year_avg_ee
+           FROM ee_with_lag
+         ),
+         ep_with_prior_ee AS (
+           SELECT
+             ep.ticker,
+             ep.fiscal_year,
+             ep.ep_rolling_avg,
+             ee.prior_year_avg_ee
+           FROM ep_rolling ep
+           LEFT JOIN ee_rolling_lag ee 
+             ON ep.ticker = ee.ticker 
+             AND ep.fiscal_year = ee.fiscal_year
+         )
+         SELECT
+           ticker,
+           fiscal_year,
+           CASE
+             WHEN prior_year_avg_ee IS NULL THEN NULL
+             WHEN ABS(prior_year_avg_ee) = 0 THEN NULL
+             ELSE ep_rolling_avg / ABS(prior_year_avg_ee)
+           END AS ep_growth
+         FROM ep_with_prior_ee
         """
         
         # Add year filtering if provided
@@ -141,7 +147,7 @@ class EPGrowthCalculator:
             "dataset_id": str(dataset_id),
             "param_set_id": str(param_set_id),
             "ep_metric_name": "Calc EP",
-            "ee_metric_name": "Calc Open EE",
+            "ee_metric_name": "Calc EE",
             "tickers": tickers,
             "rows_between": int(self.rows_between)  # Convert to int for SQL
         }

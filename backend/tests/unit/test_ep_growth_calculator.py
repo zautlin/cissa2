@@ -71,9 +71,10 @@ class TestEPGrowthCalculator:
         assert "WITH ep_data AS" in sql_normalized
         assert "ee_data AS" in sql_normalized
         assert "ep_rolling AS" in sql_normalized
-        assert "ee_rolling AS" in sql_normalized
-        assert "ep_with_lag AS" in sql_normalized
-        assert "LAG(ee.ee_rolling_avg) OVER" in sql_normalized
+        assert "ee_with_lag AS" in sql_normalized
+        assert "ee_rolling_lag AS" in sql_normalized
+        assert "ep_with_prior_ee AS" in sql_normalized
+        assert "LAG(ee) OVER" in sql_normalized
         assert "ROWS BETWEEN" in sql_normalized
         assert "ORDER BY ticker, fiscal_year" in sql_normalized
         
@@ -81,7 +82,7 @@ class TestEPGrowthCalculator:
         assert params["dataset_id"] == str(TEST_DATASET_ID)
         assert params["param_set_id"] == str(TEST_PARAM_SET_ID)
         assert params["ep_metric_name"] == "Calc EP"
-        assert params["ee_metric_name"] == "Calc Open EE"
+        assert params["ee_metric_name"] == "Calc EE"
         assert params["tickers"] == ["BHP"]
         assert params["rows_between"] == 0  # 1Y = no preceding rows
     
