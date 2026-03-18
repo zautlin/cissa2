@@ -694,8 +694,8 @@ class PipelineOrchestrator:
             
             self.logger.success(f"Orchestrator Complete")
             self.logger.info(f"\nMetrics Summary:")
-            self.logger.info(f"  Total Successful: {total_successful}/17")
-            self.logger.info(f"  Total Failed:     {total_failed}/17")
+            self.logger.info(f"  Total Successful: {total_successful}/13")
+            self.logger.info(f"  Total Failed:     {total_failed}/13")
             self.logger.info(f"  Total Records:    {total_records:,}")
             self.logger.info(f"  Execution Time:   {orch_time:.1f}s")
             
@@ -707,13 +707,8 @@ class PipelineOrchestrator:
             self.logger.info(f"  Phase 1 (Basic):        {phase_1.get('successful', 0)}/12 metrics, {phase_1.get('time_seconds', 0):.1f}s")
             
             phase_2 = phases.get('phase_2', {})
-            self.logger.info(f"  Phase 2 (Beta):         {phase_2.get('successful', 0)}/1 metrics, {phase_2.get('time_seconds', 0):.1f}s")
+            self.logger.info(f"  Phase 2 (Pre-calc Beta):         {phase_2.get('successful', 0)}/1 metrics, {phase_2.get('time_seconds', 0):.1f}s")
             
-            phase_4 = phases.get('phase_4', {})
-            self.logger.info(f"  Phase 4 (Rf):           {phase_4.get('successful', 0)}/1 metrics, {phase_4.get('time_seconds', 0):.1f}s")
-            
-            phase_3 = phases.get('phase_3', {})
-            self.logger.info(f"  Phase 3 (KE):           {phase_3.get('successful', 0)}/1 metrics, {phase_3.get('time_seconds', 0):.1f}s")
             
             # Log any errors
             errors = result.get('errors', [])
@@ -740,7 +735,7 @@ class PipelineOrchestrator:
             
             self.logger.section("PRE-COMPUTATION COMPLETE")
             if total_failed == 0:
-                self.logger.info("✓ Stage 3: All L1 metrics pre-computed successfully")
+                self.logger.info("✓ Stage 3: Basic and Beta L1 metrics pre-computed successfully")
             else:
                 self.logger.info(f"⚠ Stage 3: {total_failed} metrics failed (see errors above)")
             
