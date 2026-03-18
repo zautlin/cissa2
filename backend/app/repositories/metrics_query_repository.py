@@ -12,7 +12,7 @@ class MetricsQueryRepository:
     """Repository for querying and retrieving metrics_outputs data.
     
     Handles filtering by dataset_id, parameter_set_id, ticker, and metric_name
-    with support for case-insensitive matching.
+    with support for case-insensitive matching and comma-separated metric names.
     """
     
     def __init__(self, session: AsyncSession) -> None:
@@ -33,7 +33,9 @@ class MetricsQueryRepository:
             dataset_id: UUID of the dataset (required)
             parameter_set_id: UUID of the parameter set (required)
             ticker: Optional ticker to filter by (case-insensitive)
-            metric_name: Optional metric name to filter by (case-insensitive)
+            metric_name: Optional metric name(s) to filter by (case-insensitive)
+                        - Single metric: "Calc 1Y TER"
+                        - Multiple metrics: "Calc 1Y TER,Calc 5Y TER" (comma-separated, no spaces)
         
         Returns:
             List of dictionaries containing metric data with units, ordered by:
@@ -45,7 +47,8 @@ class MetricsQueryRepository:
             >>> records = await repo.get_metrics(
             ...     dataset_id=UUID("..."),
             ...     parameter_set_id=UUID("..."),
-            ...     ticker="AAPL"
+            ...     ticker="AAPL",
+            ...     metric_name="Calc 1Y TER,Calc 5Y TER"
             ... )
             >>> # Returns list of dicts with keys:
             >>> # {dataset_id, parameter_set_id, ticker, fiscal_year, metric_name, value, unit}
@@ -60,9 +63,22 @@ class MetricsQueryRepository:
             where_clauses.append(f"LOWER(mo.ticker) = LOWER('{ticker.replace(chr(39), chr(39)+chr(39))}')")
         
         if metric_name is not None:
-            where_clauses.append(
-                f"LOWER(mo.output_metric_name) = LOWER('{metric_name.replace(chr(39), chr(39)+chr(39))}')"
-            )
+            # Support comma-separated metric names
+            metric_names = [m.strip() for m in metric_name.split(',')]
+            
+            if len(metric_names) == 1:
+                # Single metric - use exact match for efficiency
+                where_clauses.append(
+                    f"LOWER(mo.output_metric_name) = LOWER('{metric_names[0].replace(chr(39), chr(39)+chr(39))}')"
+                )
+            else:
+                # Multiple metrics - use IN clause with case-insensitive matching
+                escaped_names = [f"'{m.replace(chr(39), chr(39)+chr(39))}'" for m in metric_names]
+                metric_conditions = " OR ".join([
+                    f"LOWER(mo.output_metric_name) = LOWER({escaped_names[i]})"
+                    for i in range(len(metric_names))
+                ])
+                where_clauses.append(f"({metric_conditions})")
         
         where_clause = " AND ".join(where_clauses)
         

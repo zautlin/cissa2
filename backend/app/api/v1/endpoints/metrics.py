@@ -907,7 +907,7 @@ async def get_metrics(
     dataset_id: UUID = Query(..., description="UUID of the dataset to retrieve metrics for"),
     parameter_set_id: UUID = Query(..., description="UUID of the parameter set"),
     ticker: Optional[str] = Query(None, description="Optional: filter by ticker (case-insensitive)"),
-    metric_name: Optional[str] = Query(None, description="Optional: filter by metric name (case-insensitive)"),
+     metric_name: Optional[str] = Query(None, description="Optional: filter by metric name (case-insensitive). Supports comma-separated values to query multiple metrics (e.g., 'Calc 1Y TER,Calc 5Y TER')"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -941,6 +941,11 @@ async def get_metrics(
     Get a specific metric for a specific ticker:
     ```
     GET /api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&ticker=AAPL&metric_name=Calc ECF
+    ```
+    
+    Get multiple metrics for a specific ticker (comma-separated):
+    ```
+    GET /api/v1/metrics/get_metrics/?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&ticker=AAPL&metric_name=Calc%201Y%20TER,Calc%205Y%20TER
     ```
     
     **Response:**
