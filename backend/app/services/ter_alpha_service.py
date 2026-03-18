@@ -290,6 +290,7 @@ class TERAlphaService:
             logger.info(f"[TER Alpha] ✓ TER Alpha calculation completed in {elapsed_ms:.0f}ms")
             
             return {
+                'status': 'success',
                 'dataset_id': str(dataset_id),
                 'param_set_id': str(param_set_id),
                 'intervals': ['1Y', '3Y', '5Y', '10Y'],
