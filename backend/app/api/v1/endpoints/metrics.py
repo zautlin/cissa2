@@ -1295,3 +1295,231 @@ async def calculate_runtime_metrics(
             detail=f"Runtime metrics calculation failed: {str(e)}"
         )
 
+
+@router.get("/economic-profitability", response_model=dict)
+async def get_economic_profitability(
+    dataset_id: UUID = Query(..., description="UUID of the dataset"),
+    parameter_set_id: UUID = Query(..., description="UUID of the parameter set"),
+    ticker: Optional[str] = Query(None, description="Optional: filter by ticker (case-insensitive)"),
+    temporal_window: str = Query("1Y", min_length=2, max_length=50, description="Temporal window: 1Y, 3Y, 5Y, or 10Y"),
+    start_year: Optional[int] = Query(None, description="Optional: start fiscal year"),
+    end_year: Optional[int] = Query(None, description="Optional: end fiscal year"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Retrieve Economic Profitability (EP) metrics with temporal aggregation.
+    
+    Economic Profitability = Adjusted Profit After Tax - (Cost of Equity × Equity)
+    
+    This endpoint calculates EP on-the-fly based on stored Calc EP values and temporal windows:
+    - 1Y: Single annual Calc EP value
+    - 3Y: Average of 3 annual Calc EP values
+    - 5Y: Average of 5 annual Calc EP values
+    - 10Y: Average of 10 annual Calc EP values
+    
+    **Parameters:**
+    - `dataset_id` (required): UUID of the dataset
+    - `parameter_set_id` (required): UUID of the parameter set
+    - `ticker` (optional): Filter by ticker (case-insensitive, e.g., "AAPL")
+    - `temporal_window` (optional): Temporal window - "1Y" (default), "3Y", "5Y", or "10Y"
+    - `start_year` (optional): Start fiscal year for filtering
+    - `end_year` (optional): End fiscal year for filtering
+    
+    **Example Requests:**
+    
+    Get 1Y EP for all companies:
+    ```
+    GET /api/v1/metrics/economic-profitability?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001
+    ```
+    
+    Get 3Y EP for a specific ticker:
+    ```
+    GET /api/v1/metrics/economic-profitability?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&ticker=AAPL&temporal_window=3Y
+    ```
+    
+    Get 5Y EP for a specific ticker within a year range:
+    ```
+    GET /api/v1/metrics/economic-profitability?dataset_id=550e8400-e29b-41d4-a716-446655440000&parameter_set_id=660e8400-e29b-41d4-a716-446655440001&ticker=AAPL&temporal_window=5Y&start_year=2015&end_year=2020
+    ```
+    
+    **Response:**
+    Returns EP values with aggregation details:
+    ```json
+    {
+        "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+        "parameter_set_id": "660e8400-e29b-41d4-a716-446655440001",
+        "temporal_window": "3Y",
+        "results_count": 42,
+        "results": [
+            {
+                "ticker": "AAPL",
+                "fiscal_year": 2020,
+                "ep_1y": 15000000000.0,
+                "ep_3y": 14500000000.0,
+                "ep_3y_components": {
+                    "years_included": [2018, 2019, 2020],
+                    "calc_ep_values": [14000000000.0, 14500000000.0, 15000000000.0],
+                    "count": 3
+                }
+            },
+            {
+                "ticker": "AAPL",
+                "fiscal_year": 2021,
+                "ep_1y": 16000000000.0,
+                "ep_3y": 15500000000.0,
+                "ep_3y_components": {
+                    "years_included": [2019, 2020, 2021],
+                    "calc_ep_values": [14500000000.0, 15000000000.0, 16000000000.0],
+                    "count": 3
+                }
+            }
+        ],
+        "filters_applied": {
+            "ticker": "AAPL",
+            "temporal_window": "3Y"
+        },
+        "status": "success",
+        "message": null
+    }
+    ```
+    """
+    try:
+        logger.info(
+            f"[API] GET /economic-profitability: dataset={dataset_id}, param_set={parameter_set_id}, "
+            f"ticker={ticker}, temporal_window={temporal_window}"
+        )
+        
+        # Validate temporal window
+        valid_windows = ["1Y", "3Y", "5Y", "10Y"]
+        if temporal_window not in valid_windows:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid temporal_window: {temporal_window}. Must be one of: {', '.join(valid_windows)}"
+            )
+        
+        # Parse window to numeric value
+        window_years = int(temporal_window.rstrip('Y'))
+        
+        # Fetch Calc EP from database
+        query = text("""
+            SELECT 
+                ticker,
+                fiscal_year,
+                output_metric_value as calc_ep
+            FROM cissa.metrics_outputs
+            WHERE dataset_id = :dataset_id
+              AND param_set_id = :parameter_set_id
+              AND output_metric_name = 'Calc EP'
+              AND output_metric_value IS NOT NULL
+        """)
+        
+        params = {
+            "dataset_id": str(dataset_id),
+            "param_set_id": str(parameter_set_id),
+        }
+        
+        # Add optional filters
+        if ticker:
+            query = text(str(query) + " AND LOWER(ticker) = LOWER(:ticker)")
+            params["ticker"] = ticker
+        
+        if start_year:
+            query = text(str(query) + " AND fiscal_year >= :start_year")
+            params["start_year"] = start_year
+        
+        if end_year:
+            query = text(str(query) + " AND fiscal_year <= :end_year")
+            params["end_year"] = end_year
+        
+        query = text(str(query) + " ORDER BY ticker, fiscal_year")
+        
+        result = await db.execute(query, params)
+        rows = result.fetchall()
+        
+        if not rows:
+            logger.warning(f"[API] No Calc EP data found for filters: {params}")
+            return {
+                "dataset_id": str(dataset_id),
+                "parameter_set_id": str(parameter_set_id),
+                "temporal_window": temporal_window,
+                "results_count": 0,
+                "results": [],
+                "filters_applied": {
+                    "ticker": ticker,
+                    "temporal_window": temporal_window,
+                    "start_year": start_year,
+                    "end_year": end_year
+                },
+                "status": "success",
+                "message": "No Calc EP data found for the given criteria"
+            }
+        
+        # Convert rows to dict and organize by ticker
+        import pandas as pd
+        df = pd.DataFrame(rows, columns=["ticker", "fiscal_year", "calc_ep"])
+        
+        # Calculate EP based on temporal window
+        results = []
+        for (ticker_val, fiscal_year), group in df.groupby(["ticker", "fiscal_year"]):
+            result_row = {
+                "ticker": ticker_val,
+                "fiscal_year": int(fiscal_year),
+                "ep_1y": None,
+                f"ep_{window_years}y": None,
+                f"ep_{window_years}y_components": {
+                    "years_included": [],
+                    "calc_ep_values": [],
+                    "count": 0
+                }
+            }
+            
+            # Get 1Y EP (current year)
+            current_year_data = df[(df["ticker"] == ticker_val) & (df["fiscal_year"] == fiscal_year)]
+            if not current_year_data.empty:
+                result_row["ep_1y"] = float(current_year_data["calc_ep"].iloc[0])
+            
+            # Get N-year average EP
+            start_window_year = fiscal_year - window_years + 1
+            window_data = df[(df["ticker"] == ticker_val) & 
+                           (df["fiscal_year"] >= start_window_year) & 
+                           (df["fiscal_year"] <= fiscal_year)]
+            
+            if not window_data.empty:
+                ep_values = window_data["calc_ep"].tolist()
+                ep_avg = sum(ep_values) / len(ep_values)
+                result_row[f"ep_{window_years}y"] = float(ep_avg)
+                result_row[f"ep_{window_years}y_components"] = {
+                    "years_included": sorted(window_data["fiscal_year"].tolist()),
+                    "calc_ep_values": [float(v) for v in ep_values],
+                    "count": len(ep_values)
+                }
+            
+            results.append(result_row)
+        
+        logger.info(f"[API] Returned {len(results)} Economic Profitability records")
+        
+        return {
+            "dataset_id": str(dataset_id),
+            "parameter_set_id": str(parameter_set_id),
+            "temporal_window": temporal_window,
+            "results_count": len(results),
+            "results": results,
+            "filters_applied": {
+                "ticker": ticker,
+                "temporal_window": temporal_window,
+                "start_year": start_year,
+                "end_year": end_year
+            },
+            "status": "success",
+            "message": None
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[API] Error retrieving Economic Profitability: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve Economic Profitability: {str(e)}"
+        )
+

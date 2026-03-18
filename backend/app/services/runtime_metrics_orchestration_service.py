@@ -28,6 +28,7 @@ from .cost_of_equity_service import CostOfEquityService
 from .fv_ecf_service import FVECFService
 from .ter_service import TERService
 from .ter_alpha_service import TERAlphaService
+from .economic_profitability_service import EconomicProfitabilityService
 
 logger = get_logger(__name__)
 
@@ -178,10 +179,32 @@ class RuntimeMetricsOrchestrationService:
                 f"[RUNTIME-METRICS] ✓ Phase 2 (Cost of Equity) complete: {ke_result.get('records_inserted', 0)} records"
             )
 
+            # Step 3: Run Economic Profitability SEQUENTIALLY (depends on Cost of Equity results)
+            # NOTE: Phase 3 failure is logged but doesn't fail the orchestration (FAIL-SOFT)
+            self.logger.info(
+                "[RUNTIME-METRICS] Step 3: Running Economic Profitability (sequential, depends on Cost of Equity)..."
+            )
+
+            ep_result = await self._orchestrate_economic_profitability(
+                dataset_id, param_set_id
+            )
+
+            if ep_result.get("status") == "error":
+                self.logger.warning(
+                    f"[RUNTIME-METRICS] Economic Profitability calculation failed: {ep_result.get('message', 'Unknown error')}. Continuing with results from Phases 1-2."
+                )
+                # Log the error but don't fail orchestration
+                ep_result_for_response = ep_result
+            else:
+                self.logger.info(
+                    f"[RUNTIME-METRICS] ✓ Phase 3 (Economic Profitability) complete: {ep_result.get('records_inserted', 0)} records"
+                )
+                ep_result_for_response = ep_result
+
             # Step 4: Run FV ECF SEQUENTIALLY (depends on Cost of Equity results)
             # NOTE: Phase 4 failure is logged but doesn't fail the orchestration (FAIL-SOFT)
             self.logger.info(
-                "[RUNTIME-METRICS] Step 3: Running FV ECF (sequential, depends on Cost of Equity)..."
+                "[RUNTIME-METRICS] Step 4: Running FV ECF (sequential, depends on Cost of Equity)..."
             )
 
             fv_ecf_result = await self._orchestrate_fv_ecf(
@@ -196,14 +219,14 @@ class RuntimeMetricsOrchestrationService:
                 fv_ecf_result_for_response = fv_ecf_result
             else:
                 self.logger.info(
-                    f"[RUNTIME-METRICS] ✓ Phase 3 (FV ECF) complete: {fv_ecf_result.get('total_inserted', 0)} records"
+                    f"[RUNTIME-METRICS] ✓ Phase 4 (FV ECF) complete: {fv_ecf_result.get('total_inserted', 0)} records"
                 )
                 fv_ecf_result_for_response = fv_ecf_result
 
             # Step 5: Run TER SEQUENTIALLY (depends on FV ECF results)
             # NOTE: Phase 5 failure is logged but doesn't fail the orchestration (FAIL-SOFT)
             self.logger.info(
-                "[RUNTIME-METRICS] Step 4: Running TER (sequential, depends on FV ECF)..."
+                "[RUNTIME-METRICS] Step 5: Running TER (sequential, depends on FV ECF)..."
             )
 
             ter_result = await self._orchestrate_ter(
@@ -218,14 +241,14 @@ class RuntimeMetricsOrchestrationService:
                 ter_result_for_response = ter_result
             else:
                 self.logger.info(
-                    f"[RUNTIME-METRICS] ✓ Phase 4 (TER) complete: {ter_result.get('total_records_with_nulls', 0)} records"
+                    f"[RUNTIME-METRICS] ✓ Phase 5 (TER) complete: {ter_result.get('total_records_with_nulls', 0)} records"
                 )
                 ter_result_for_response = ter_result
 
-            # Step 6: Run TER Alpha SEQUENTIALLY (depends on TER results)
-            # NOTE: Phase 6 failure is logged but doesn't fail the orchestration (FAIL-SOFT)
+            # Step 7: Run TER Alpha SEQUENTIALLY (depends on TER results)
+            # NOTE: Phase 7 failure is logged but doesn't fail the orchestration (FAIL-SOFT)
             self.logger.info(
-                "[RUNTIME-METRICS] Step 5: Running TER Alpha (sequential, depends on TER)..."
+                "[RUNTIME-METRICS] Step 7: Running TER Alpha (sequential, depends on TER)..."
             )
 
             ter_alpha_result = await self._orchestrate_ter_alpha(
@@ -234,13 +257,13 @@ class RuntimeMetricsOrchestrationService:
 
             if ter_alpha_result.get("status") == "error":
                 self.logger.warning(
-                    f"[RUNTIME-METRICS] TER Alpha calculation failed: {ter_alpha_result.get('message', 'Unknown error')}. Continuing with results from Phases 1-5."
+                    f"[RUNTIME-METRICS] TER Alpha calculation failed: {ter_alpha_result.get('message', 'Unknown error')}. Continuing with results from Phases 1-6."
                 )
                 # Log the error but don't fail orchestration
                 ter_alpha_result_for_response = ter_alpha_result
             else:
                 self.logger.info(
-                    f"[RUNTIME-METRICS] ✓ Phase 5 (TER Alpha) complete: {ter_alpha_result.get('total_records_with_nulls', 0)} records"
+                    f"[RUNTIME-METRICS] ✓ Phase 7 (TER Alpha) complete: {ter_alpha_result.get('total_records_with_nulls', 0)} records"
                 )
                 ter_alpha_result_for_response = ter_alpha_result
 
@@ -275,6 +298,12 @@ class RuntimeMetricsOrchestrationService:
                         "records_inserted": ke_result.get("records_inserted", 0),
                         "time_seconds": ke_result.get("time_seconds", 0),
                         "message": ke_result.get("message", ""),
+                    },
+                    "economic_profitability": {
+                        "status": ep_result_for_response.get("status", "unknown"),
+                        "records_inserted": ep_result_for_response.get("records_inserted", 0),
+                        "time_seconds": ep_result_for_response.get("calculation_time_ms", 0) / 1000,
+                        "message": ep_result_for_response.get("message", ""),
                     },
                     "fv_ecf": {
                         "status": fv_ecf_result_for_response.get("status", "unknown"),
@@ -435,6 +464,37 @@ class RuntimeMetricsOrchestrationService:
                 "records_inserted": 0,
                 "message": str(e),
                 "time_seconds": time.time() - start_time,
+            }
+
+    async def _orchestrate_economic_profitability(
+        self, dataset_id: UUID, param_set_id: UUID
+    ) -> dict:
+        """
+        Execute Economic Profitability calculation for Phase 3.
+        
+        Note: Failures in this phase are logged but don't fail the orchestration (FAIL-SOFT).
+        """
+        try:
+            start_time = time.time()
+            service = EconomicProfitabilityService(self.session)
+
+            result = await service.calculate_economic_profitability(
+                dataset_id=dataset_id,
+                param_set_id=param_set_id,
+            )
+
+            # Ensure required fields are present in result
+            if "calculation_time_ms" not in result:
+                result["calculation_time_ms"] = (time.time() - start_time) * 1000
+            return result
+
+        except Exception as e:
+            self.logger.error(f"[RUNTIME-METRICS] Economic Profitability calculation error: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "records_inserted": 0,
+                "message": str(e),
+                "calculation_time_ms": (time.time() - start_time) * 1000,
             }
 
     async def _orchestrate_fv_ecf(
