@@ -1099,13 +1099,8 @@ async def calculate_runtime_metrics(
     1. Beta Rounding (parallel with Rf)
     2. Risk-Free Rate (parallel with Beta)
     3. Cost of Equity (sequential, depends on Beta & Rf)
-    4. FV ECF (sequential, depends on Cost of Equity)
     
-    Calculates ~36k+ total records:
-    - Beta Rounding: 11k records
-    - Risk-Free Rate: 11k records
-    - Cost of Equity: 11k records
-    - FV ECF: ~3.6k records (across 4 intervals)
+    Calculates ~33k total records (11k per metric).
     
     Query Parameters:
     - dataset_id: Dataset ID (required)
@@ -1116,7 +1111,7 @@ async def calculate_runtime_metrics(
     ```json
     {
         "success": true,
-        "execution_time_seconds": 60.45,
+        "execution_time_seconds": 45.23,
         "dataset_id": "...",
         "param_set_id": "...",
         "parameter_id": "...",
@@ -1138,18 +1133,6 @@ async def calculate_runtime_metrics(
                 "status": "success",
                 "records_inserted": 11000,
                 "time_seconds": 15.3,
-                "message": "..."
-            },
-            "fv_ecf": {
-                "status": "success",
-                "records_inserted": 3600,
-                "intervals_summary": {
-                    "1Y": 1000,
-                    "3Y": 800,
-                    "5Y": 600,
-                    "10Y": 200
-                },
-                "time_seconds": 15.2,
                 "message": "..."
             }
         }

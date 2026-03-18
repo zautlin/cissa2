@@ -335,20 +335,28 @@ class TestRuntimeIntegration:
                         'ke_open': [0.08, 0.09, 0.10, 0.11, 0.12]
                     })
                 ):
-                    # Mock insert
+                    # Mock NULL rows addition
+                    async def mock_add_null_rows(fv_ecf_df, dataset_id):
+                        return fv_ecf_df
+                    
                     with patch.object(
-                        service, '_insert_fv_ecf_batch',
-                        return_value=20  # Total records inserted across 4 intervals
+                        service, '_add_null_rows_for_insufficient_history_async',
+                        side_effect=mock_add_null_rows
                     ):
-                        # Execute
-                        result = await service.calculate_fv_ecf_for_runtime(dataset_id, param_set_id)
-                        
-                        # Verify
-                        assert result['status'] == 'success'
-                        assert result['total_inserted'] == 20
-                        assert 'intervals_summary' in result
-                        assert set(result['intervals_summary'].keys()) == {'1Y', '3Y', '5Y', '10Y'}
-                        assert result['duration_seconds'] > 0
+                        # Mock insert
+                        with patch.object(
+                            service, '_insert_fv_ecf_batch',
+                            return_value=20  # Total records inserted across 4 intervals
+                        ):
+                            # Execute
+                            result = await service.calculate_fv_ecf_for_runtime(dataset_id, param_set_id)
+                            
+                            # Verify
+                            assert result['status'] == 'success'
+                            assert result['total_inserted'] == 20
+                            assert 'intervals_summary' in result
+                            assert set(result['intervals_summary'].keys()) == {'1Y', '3Y', '5Y', '10Y'}
+                            assert result['duration_seconds'] > 0
     
     @pytest.mark.asyncio
     async def test_calculate_fv_ecf_for_runtime_with_no_fundamentals(self):
