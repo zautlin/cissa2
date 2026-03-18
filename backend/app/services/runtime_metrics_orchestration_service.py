@@ -27,6 +27,7 @@ from .risk_free_rate_service import RiskFreeRateCalculationService
 from .cost_of_equity_service import CostOfEquityService
 from .fv_ecf_service import FVECFService
 from .ter_service import TERService
+from .ter_alpha_service import TERAlphaService
 
 logger = get_logger(__name__)
 
@@ -221,6 +222,28 @@ class RuntimeMetricsOrchestrationService:
                 )
                 ter_result_for_response = ter_result
 
+            # Step 6: Run TER Alpha SEQUENTIALLY (depends on TER results)
+            # NOTE: Phase 6 failure is logged but doesn't fail the orchestration (FAIL-SOFT)
+            self.logger.info(
+                "[RUNTIME-METRICS] Step 5: Running TER Alpha (sequential, depends on TER)..."
+            )
+
+            ter_alpha_result = await self._orchestrate_ter_alpha(
+                dataset_id, param_set_id
+            )
+
+            if ter_alpha_result["status"] == "error":
+                self.logger.warning(
+                    f"[RUNTIME-METRICS] TER Alpha calculation failed: {ter_alpha_result['message']}. Continuing with results from Phases 1-5."
+                )
+                # Log the error but don't fail orchestration
+                ter_alpha_result_for_response = ter_alpha_result
+            else:
+                self.logger.info(
+                    f"[RUNTIME-METRICS] ✓ Phase 5 (TER Alpha) complete: {ter_alpha_result.get('total_records_with_nulls', 0)} records"
+                )
+                ter_alpha_result_for_response = ter_alpha_result
+
             elapsed_time = time.time() - start_time
 
             self.logger.info(
@@ -266,6 +289,13 @@ class RuntimeMetricsOrchestrationService:
                         "intervals_summary": ter_result_for_response.get("intervals", []),
                         "time_seconds": ter_result_for_response.get("calculation_time_ms", 0) / 1000,
                         "message": ter_result_for_response.get("message", ""),
+                    },
+                    "ter_alpha": {
+                        "status": ter_alpha_result_for_response.get("status", "unknown"),
+                        "records_inserted": ter_alpha_result_for_response.get("total_records_with_nulls", 0),
+                        "intervals_summary": ter_alpha_result_for_response.get("intervals", []),
+                        "time_seconds": ter_alpha_result_for_response.get("calculation_time_ms", 0) / 1000,
+                        "message": ter_alpha_result_for_response.get("message", ""),
                     },
                 },
             }
@@ -469,6 +499,39 @@ class RuntimeMetricsOrchestrationService:
                 "message": str(e),
                 "calculation_time_ms": (time.time() - start_time) * 1000,
             }
+
+    async def _orchestrate_ter_alpha(
+        self, dataset_id: UUID, param_set_id: UUID
+    ) -> dict:
+        """
+        Execute TER Alpha calculation for Phase 10d.
+        
+        Note: Failures in this phase are logged but don't fail the orchestration (FAIL-SOFT).
+        """
+        try:
+            start_time = time.time()
+            service = TERAlphaService(self.session)
+
+            result = await service.calculate_ter_alpha_metrics(
+                dataset_id=dataset_id,
+                param_set_id=param_set_id,
+            )
+
+            # Ensure required fields are present in result
+            result["calculation_time_ms"] = (time.time() - start_time) * 1000
+            return result
+
+        except Exception as e:
+            self.logger.error(f"[RUNTIME-METRICS] TER Alpha calculation error: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "total_records_with_nulls": 0,
+                "intervals": {"1Y": 0, "3Y": 0, "5Y": 0, "10Y": 0},
+                "message": str(e),
+                "calculation_time_ms": (time.time() - start_time) * 1000,
+            }
+
+    def _get_timestamp(self) -> str:
         """Get ISO format timestamp."""
         from datetime import datetime
         return datetime.utcnow().isoformat()

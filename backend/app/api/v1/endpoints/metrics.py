@@ -903,6 +903,70 @@ async def calculate_ter_metrics(
 
 
 # ============================================================================
+# Phase 10d: TER Alpha Metrics Endpoint
+# ============================================================================
+
+@router.post("/l2-ter-alpha/calculate", status_code=status.HTTP_200_OK)
+async def calculate_ter_alpha_metrics(
+    dataset_id: UUID = Query(..., description="Dataset version ID"),
+    param_set_id: UUID = Query(..., description="Parameter set ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Calculate Phase 10d TER Alpha Metrics
+    
+    Calculates TER Alpha metrics for all 4 time intervals using:
+    - Calc MC (market cap)
+    - Calc KE (cost of equity)
+    - Calc TER (total expense ratio)
+    - Calc TER-KE (TER minus cost of equity)
+    - Calc {interval}Y FV ECF (future value of equity cash flows)
+    - Risk-free rate from fundamentals
+    - Equity risk premium parameter
+    
+    **Metrics Calculated (12 total):**
+    - Load RA MM (1Y, 3Y, 5Y, 10Y) - Portfolio-level risk adjustment metric
+    - Calc 1Y WC TERA, Calc 3Y WC TERA, Calc 5Y WC TERA, Calc 10Y WC TERA
+    - Calc 1Y TER Alpha, Calc 3Y TER Alpha, Calc 5Y TER Alpha, Calc 10Y TER Alpha
+    
+    **Formula:**
+    ```
+    Load RA MM = (Load Rm - (Load Rf + ERP)) × (Load Ke - Load Rf) / ERP
+    WC TERA = Load Open MC × (1 + Load TER)^1 - Load Open MC × (1 + Load Ke + Load RA MM)^1
+    TER Alpha = TER-KE - (((1 + TER) - WC TERA / Open MC)^(1/interval) - (TER - TER-KE) - 1)
+    ```
+    
+    **Example Request:**
+    ```
+    POST /api/v1/metrics/l2-ter-alpha/calculate?dataset_id=...&param_set_id=...
+    ```
+    """
+    logger.info(f"Phase 10d: Calculating TER Alpha metrics (dataset={dataset_id}, param_set={param_set_id})")
+    
+    try:
+        from ....services.ter_alpha_service import TERAlphaService
+        
+        service = TERAlphaService(db)
+        result = await service.calculate_ter_alpha_metrics(
+            dataset_id=dataset_id,
+            param_set_id=param_set_id
+        )
+        
+        logger.info(f"Phase 10d calculation successful: {result['total_records_with_nulls']} TER Alpha metric records inserted")
+        
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Phase 10d error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"TER Alpha metrics calculation failed: {str(e)}"
+        )
+
+
+# ============================================================================
 # Metrics Query/Retrieval Endpoint
 # ============================================================================
 
