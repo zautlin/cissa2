@@ -42,13 +42,13 @@ class TERService:
     
     These are L2 metrics calculated after FV_ECF metrics, computed simultaneously for efficiency.
     
-    Formulas:
-    TER = ((WC + WP) / Open MC)^(1/1) - 1
-        = (WC + WP) / Open MC - 1
+    Formulas (for each interval n):
+    TER = ((WC + WP) / Open MC)^(1/n) - 1
     
-    TER-KE = ((WC + WP) / Open MC)^(1/1) - (WP / Open MC)^(1/1)
-           = (WC + WP) / Open MC - WP / Open MC
-           = WC / Open MC
+    TER-KE = ((WC + WP) / Open MC)^(1/n) - (WP / Open MC)^(1/n)
+    
+    For 1Y (n=1): Simplifies to TER-KE = WC / Open MC
+    For 3Y, 5Y, 10Y (n>1): Cannot be algebraically simplified; must compute full formula
     
     Shared components (calculated once per interval):
     - Load TRTE = Calc {interval}Y FV ECF + (Calc MC - LAG(Calc MC, 1))
@@ -277,13 +277,13 @@ class TERService:
         """
         Calculate both TER and TER-KE for a specific interval simultaneously.
         
-        Formulas:
-        TER = ((WC + WP) / Open MC)^(1/1) - 1
-            = (WC + WP) / Open MC - 1
+        Formulas (for each interval n):
+        TER = ((WC + WP) / Open MC)^(1/n) - 1
         
-        TER-KE = ((WC + WP) / Open MC)^(1/1) - (WP / Open MC)^(1/1)
-               = (WC + WP) / Open MC - WP / Open MC
-               = WC / Open MC
+        TER-KE = ((WC + WP) / Open MC)^(1/n) - (WP / Open MC)^(1/n)
+        
+        For 1Y (n=1): TER-KE simplifies to WC / Open MC
+        For 3Y, 5Y, 10Y (n>1): Cannot be algebraically simplified; full formula required
         
         Shared components (calculated once):
         - Load TRTE = Calc {interval}Y FV ECF + (Calc MC - LAG(Calc MC, 1))
@@ -331,18 +331,21 @@ class TERService:
         df['wp'] = df['open_mc'] * (1 + df['calc_ke'])
         
         # Step 4: Calculate TER (final)
-        # TER = ((WC + WP) / Open MC) - 1
+        # TER = ((WC + WP) / Open MC)^(1/interval) - 1
+        exponent = 1.0 / interval
+        ratio_wc_wp = (df['wc'] + df['wp']) / df['open_mc']
         df['ter'] = np.where(
             df['open_mc'].notna() & (df['open_mc'] != 0),
-            ((df['wc'] + df['wp']) / df['open_mc']) - 1,
+            np.power(ratio_wc_wp, exponent) - 1,
             np.nan
         )
         
         # Step 5: Calculate TER-KE (new)
-        # TER-KE = WC / Open MC
+        # TER-KE = ((WC + WP) / Open MC)^(1/interval) - (WP / Open MC)^(1/interval)
+        ratio_wp = df['wp'] / df['open_mc']
         df['ter_ke'] = np.where(
             df['open_mc'].notna() & (df['open_mc'] != 0),
-            df['wc'] / df['open_mc'],
+            np.power(ratio_wc_wp, exponent) - np.power(ratio_wp, exponent),
             np.nan
         )
         
