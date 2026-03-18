@@ -333,7 +333,12 @@ class FVECFService:
             
             # Combine all intervals
             fv_ecf_combined = pd.concat(all_fv_ecf, ignore_index=True)
-            logger.info(f"[Phase 4]   - Total records ready to insert: {len(fv_ecf_combined)}")
+            logger.info(f"[Phase 4]   - Total records calculated: {len(fv_ecf_combined)}")
+            
+            # Step 5b: Add NULL rows for insufficient history (runtime only)
+            logger.info("[Phase 4] Step 5b: Adding NULL rows for insufficient history...")
+            fv_ecf_combined = self._add_null_rows_for_insufficient_history(fv_ecf_combined, fundamentals_df)
+            logger.info(f"[Phase 4]   - Total records after NULL rows: {len(fv_ecf_combined)}")
             
             # Step 6: Insert results in batches
             logger.info("[Phase 4] Step 6: Inserting into metrics_outputs...")
@@ -896,10 +901,94 @@ class FVECFService:
                         'ticker': ticker,
                         'fiscal_year': int(valid_row['fiscal_year']),
                         'FV_ECF_Y': float(fv_ecf),
-                        'FV_ECF_TYPE': f'{interval}Y_FV_ECF'
+                        'FV_ECF_TYPE': f'Calc {interval}Y FV ECF'
                     })
         
         return pd.DataFrame(result_rows)
+    
+    def _add_null_rows_for_insufficient_history(
+        self,
+        fv_ecf_df: pd.DataFrame,
+        fundamentals_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """
+        Add NULL rows for fiscal years with insufficient lag history.
+        
+        For each interval, we need a minimum number of prior years of data:
+        - 1Y: All rows can be calculated (no prior year needed for current year)
+              But 1Y uses lagged KE, so first year gets NULL
+        - 3Y: Needs 2 prior years, so first 2 years get NULL (fiscal_year - 1, -2)
+        - 5Y: Needs 4 prior years, so first 4 years get NULL (fiscal_year - 1, -2, -3, -4)
+        - 10Y: Needs 9 prior years, so first 9 years get NULL (fiscal_year - 1 through -9)
+        
+        Args:
+            fv_ecf_df: DataFrame with calculated FV_ECF values (has rows only for valid intervals)
+            fundamentals_df: Original fundamentals data with all ticker-year combinations
+        
+        Returns:
+            DataFrame with original fv_ecf_df rows PLUS new NULL rows for insufficient history
+        """
+        # Get unique tickers and their min/max fiscal years from fundamentals
+        ticker_year_info = fundamentals_df.groupby('ticker')['fiscal_year'].agg(['min', 'max']).reset_index()
+        
+        null_rows = []
+        
+        for _, row in ticker_year_info.iterrows():
+            ticker = row['ticker']
+            min_year = int(row['min'])
+            max_year = int(row['max'])
+            
+            # For 1Y: first year (min_year) should have NULL because it needs lagged KE from year before
+            if min_year <= max_year:
+                null_rows.append({
+                    'ticker': ticker,
+                    'fiscal_year': min_year,
+                    'FV_ECF_Y': np.nan,
+                    'FV_ECF_TYPE': 'Calc 1Y FV ECF'
+                })
+            
+            # For 3Y: first 2 years should have NULL
+            for year_offset in range(1, 2):
+                target_year = min_year + year_offset
+                if target_year <= max_year:
+                    null_rows.append({
+                        'ticker': ticker,
+                        'fiscal_year': target_year,
+                        'FV_ECF_Y': np.nan,
+                        'FV_ECF_TYPE': 'Calc 3Y FV ECF'
+                    })
+            
+            # For 5Y: first 4 years should have NULL
+            for year_offset in range(1, 4):
+                target_year = min_year + year_offset
+                if target_year <= max_year:
+                    null_rows.append({
+                        'ticker': ticker,
+                        'fiscal_year': target_year,
+                        'FV_ECF_Y': np.nan,
+                        'FV_ECF_TYPE': 'Calc 5Y FV ECF'
+                    })
+            
+            # For 10Y: first 9 years should have NULL
+            for year_offset in range(1, 9):
+                target_year = min_year + year_offset
+                if target_year <= max_year:
+                    null_rows.append({
+                        'ticker': ticker,
+                        'fiscal_year': target_year,
+                        'FV_ECF_Y': np.nan,
+                        'FV_ECF_TYPE': 'Calc 10Y FV ECF'
+                    })
+        
+        # Create DataFrame from NULL rows
+        if null_rows:
+            null_df = pd.DataFrame(null_rows)
+            # Combine with original fv_ecf_df
+            result = pd.concat([fv_ecf_df, null_df], ignore_index=True)
+            logger.info(f"[Phase 4] Added {len(null_df)} NULL rows for insufficient history (total: {len(result)})")
+            return result
+        else:
+            return fv_ecf_df
     
     # ========================================================================
     # Storage (Batch Insert)
@@ -914,7 +1003,8 @@ class FVECFService:
         """
         Insert FV_ECF metrics in batches (1000 per batch).
         
-        Skips NaN values. Logs and continues on batch errors.
+        Includes both calculated values and NULL rows for insufficient history.
+        Logs and continues on batch errors.
         """
         if fv_ecf_df.empty:
             return 0
@@ -933,24 +1023,24 @@ class FVECFService:
         
         metadata = json.dumps({"metric_level": "L2", "calculation_source": "fv_ecf_service"})
         
-        # Prepare records to insert
+        # Prepare records to insert (including NULL rows)
         records_to_insert = []
         for _, row in fv_ecf_df.iterrows():
             metric_value = row['FV_ECF_Y']
             
-            # Skip NaN values
-            if pd.notna(metric_value):
-                records_to_insert.append({
-                    "dataset_id": str(dataset_id),
-                    "param_set_id": str(param_set_id),
-                    "ticker": str(row["ticker"]),
-                    "fiscal_year": int(row["fiscal_year"]),
-                    "output_metric_name": row['FV_ECF_TYPE'],
-                    "output_metric_value": float(metric_value),
-                    "metadata": metadata
-                })
+            # Include both non-NaN and NaN values
+            # NaN values will be inserted as NULL in the database
+            records_to_insert.append({
+                "dataset_id": str(dataset_id),
+                "param_set_id": str(param_set_id),
+                "ticker": str(row["ticker"]),
+                "fiscal_year": int(row["fiscal_year"]),
+                "output_metric_name": row['FV_ECF_TYPE'],
+                "output_metric_value": None if pd.isna(metric_value) else float(metric_value),
+                "metadata": metadata
+            })
         
-        logger.info(f"    - Prepared {len(records_to_insert)} non-NaN metric records for insert")
+        logger.info(f"    - Prepared {len(records_to_insert)} metric records for insert ({sum(1 for r in records_to_insert if r['output_metric_value'] is not None)} calculated + {sum(1 for r in records_to_insert if r['output_metric_value'] is None)} NULL)")
         
         # Insert in batches
         for i in range(0, len(records_to_insert), batch_size):

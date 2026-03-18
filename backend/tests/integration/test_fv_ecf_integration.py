@@ -52,7 +52,7 @@ class TestFVECFIntegration:
         assert list(result['ticker'].unique()) == [self.ticker]
         assert 'FV_ECF_Y' in result.columns
         assert 'FV_ECF_TYPE' in result.columns
-        assert result['FV_ECF_TYPE'].iloc[0] == '1Y_FV_ECF'
+        assert result['FV_ECF_TYPE'].iloc[0] == 'Calc 1Y FV ECF'
     
     def test_3y_fv_ecf_calculation_produces_8_rows(self):
         """Test that 3Y interval produces 8 rows (skips first 2)"""
