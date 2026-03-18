@@ -26,6 +26,7 @@ from .beta_rounding_service import BetaRoundingService
 from .risk_free_rate_service import RiskFreeRateCalculationService
 from .cost_of_equity_service import CostOfEquityService
 from .fv_ecf_service import FVECFService
+from .ter_service import TERService
 
 logger = get_logger(__name__)
 
@@ -198,6 +199,28 @@ class RuntimeMetricsOrchestrationService:
                 )
                 fv_ecf_result_for_response = fv_ecf_result
 
+            # Step 5: Run TER SEQUENTIALLY (depends on FV ECF results)
+            # NOTE: Phase 5 failure is logged but doesn't fail the orchestration (FAIL-SOFT)
+            self.logger.info(
+                "[RUNTIME-METRICS] Step 4: Running TER (sequential, depends on FV ECF)..."
+            )
+
+            ter_result = await self._orchestrate_ter(
+                dataset_id, param_set_id
+            )
+
+            if ter_result["status"] == "error":
+                self.logger.warning(
+                    f"[RUNTIME-METRICS] TER calculation failed: {ter_result['message']}. Continuing with results from Phases 1-4."
+                )
+                # Log the error but don't fail orchestration
+                ter_result_for_response = ter_result
+            else:
+                self.logger.info(
+                    f"[RUNTIME-METRICS] ✓ Phase 4 (TER) complete: {ter_result.get('total_records_with_nulls', 0)} records"
+                )
+                ter_result_for_response = ter_result
+
             elapsed_time = time.time() - start_time
 
             self.logger.info(
@@ -236,6 +259,13 @@ class RuntimeMetricsOrchestrationService:
                         "intervals_summary": fv_ecf_result_for_response.get("intervals_summary", {}),
                         "time_seconds": fv_ecf_result_for_response.get("duration_seconds", 0),
                         "message": fv_ecf_result_for_response.get("message", ""),
+                    },
+                    "ter": {
+                        "status": ter_result_for_response.get("status", "unknown"),
+                        "records_inserted": ter_result_for_response.get("total_records_with_nulls", 0),
+                        "intervals_summary": ter_result_for_response.get("intervals", []),
+                        "time_seconds": ter_result_for_response.get("calculation_time_ms", 0) / 1000,
+                        "message": ter_result_for_response.get("message", ""),
                     },
                 },
             }
@@ -409,8 +439,36 @@ class RuntimeMetricsOrchestrationService:
                 "duration_seconds": time.time() - start_time,
             }
 
-    @staticmethod
-    def _get_timestamp() -> str:
+    async def _orchestrate_ter(
+        self, dataset_id: UUID, param_set_id: UUID
+    ) -> dict:
+        """
+        Execute TER (Total Expense Ratio) calculation for Phase 5.
+        
+        Note: Failures in this phase are logged but don't fail the orchestration (FAIL-SOFT).
+        """
+        try:
+            start_time = time.time()
+            service = TERService(self.session)
+
+            result = await service.calculate_ter_metrics(
+                dataset_id=dataset_id,
+                param_set_id=param_set_id,
+            )
+
+            # Ensure required fields are present in result
+            result["calculation_time_ms"] = (time.time() - start_time) * 1000
+            return result
+
+        except Exception as e:
+            self.logger.error(f"[RUNTIME-METRICS] TER calculation error: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "total_records_with_nulls": 0,
+                "intervals": {"1Y": 0, "3Y": 0, "5Y": 0, "10Y": 0},
+                "message": str(e),
+                "calculation_time_ms": (time.time() - start_time) * 1000,
+            }
         """Get ISO format timestamp."""
         from datetime import datetime
         return datetime.utcnow().isoformat()

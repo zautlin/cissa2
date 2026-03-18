@@ -851,6 +851,54 @@ async def calculate_fv_ecf_metrics(
 
 
 # ============================================================================
+# Phase 10c: Total Expense Ratio (TER) Metrics Endpoint
+# ============================================================================
+
+@router.post("/l2-ter/calculate", status_code=status.HTTP_200_OK)
+async def calculate_ter_metrics(
+    dataset_id: UUID = Query(..., description="Dataset version ID"),
+    param_set_id: UUID = Query(..., description="Parameter set ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Calculate Phase 10c Total Expense Ratio (TER) Metrics
+    
+    Calculates TER metrics for all 4 time intervals using FV_ECF, Calc MC, and Calc KE.
+    
+    **Metrics Calculated:**
+    - Calc 1Y TER, Calc 3Y TER, Calc 5Y TER, Calc 10Y TER
+    
+    **Example Request:**
+    ```
+    POST /api/v1/metrics/l2-ter/calculate?dataset_id=...&param_set_id=...
+    ```
+    """
+    logger.info(f"Phase 10c: Calculating TER metrics (dataset={dataset_id}, param_set={param_set_id})")
+    
+    try:
+        from ....services.ter_service import TERService
+        
+        service = TERService(db)
+        result = await service.calculate_ter_metrics(
+            dataset_id=dataset_id,
+            param_set_id=param_set_id
+        )
+        
+        logger.info(f"Phase 10c calculation successful: {result['total_records_with_nulls']} TER metric records inserted")
+        
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Phase 10c error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"TER metrics calculation failed: {str(e)}"
+        )
+
+
+# ============================================================================
 # Metrics Query/Retrieval Endpoint
 # ============================================================================
 
