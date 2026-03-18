@@ -304,20 +304,35 @@
          "negative_handling": "use_absolute",
          "requires_prior_year": true
        },
-       {
-         "id": "ee_growth",
-         "display_name": "EE Growth",
-         "description": "Year-over-year Economic Equity growth based on rolling averages",
-         "formula_type": "ee_growth",
-         "data_source": "metrics_outputs",
-         "data_source_field": "output_metric_value",
-         "metric_name": "Calc EE",
-         "metric_source": "metrics_outputs",
-         "parameter_dependent": true,
-         "operation": "growth",
-         "null_handling": "skip_year",
-         "negative_handling": "use_absolute",
-         "requires_prior_year": true
+        {
+          "id": "ee_growth",
+          "display_name": "EE Growth",
+          "description": "Year-over-year Economic Equity growth based on rolling averages",
+          "formula_type": "ee_growth",
+          "data_source": "metrics_outputs",
+          "data_source_field": "output_metric_value",
+          "metric_name": "Calc EE",
+          "metric_source": "metrics_outputs",
+          "parameter_dependent": true,
+          "operation": "growth",
+          "null_handling": "skip_year",
+          "negative_handling": "use_absolute",
+          "requires_prior_year": true
+        },
+        {
+          "id": "ep_growth",
+          "display_name": "EP Growth",
+          "description": "Year-over-year Economic Profitability growth based on rolling averages (EP / ABS(Open EE))",
+          "formula_type": "ep_growth",
+          "data_source": "metrics_outputs",
+          "data_source_field": "output_metric_value",
+          "metric_name": "Calc EP",
+          "metric_source": "metrics_outputs",
+          "parameter_dependent": true,
+          "operation": "growth",
+          "null_handling": "skip_year",
+          "negative_handling": "use_absolute",
+          "requires_prior_year": true
+        }
+         ]
        }
-        ]
-      }

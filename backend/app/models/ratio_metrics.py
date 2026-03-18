@@ -109,7 +109,7 @@ class MetricDefinition(BaseModel):
     id: str = Field(..., description="Unique metric identifier")
     display_name: str = Field(..., description="Human-readable name")
     description: str = Field(..., description="Metric documentation")
-    formula_type: Literal["ratio", "complex_ratio", "revenue_growth", "ee_growth"] = Field(..., description="Formula type")
+    formula_type: Literal["ratio", "complex_ratio", "revenue_growth", "ee_growth", "ep_growth"] = Field(..., description="Formula type")
     
     # Numerator and denominator (for ratio-based metrics)
     numerator: Optional[MetricComponent] = Field(None, description="Numerator metric")

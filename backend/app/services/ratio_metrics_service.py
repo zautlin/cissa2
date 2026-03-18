@@ -19,9 +19,11 @@ from ..models.ratio_metrics import (
 from ..repositories.ratio_metrics_repository import RatioMetricsRepository
 from ..repositories.revenue_growth_repository import RevenueGrowthRepository
 from ..repositories.ee_growth_repository import EEGrowthRepository
+from ..repositories.ep_growth_repository import EPGrowthRepository
 from ..services.ratio_metrics_calculator import RatioMetricsCalculator
 from ..services.revenue_growth_calculator import RevenueGrowthCalculator
 from ..services.ee_growth_calculator import EEGrowthCalculator
+from ..services.ep_growth_calculator import EPGrowthCalculator
 from ..core.config import get_logger
 
 logger = get_logger(__name__)
@@ -35,6 +37,7 @@ class RatioMetricsService:
         self.ratio_repo = RatioMetricsRepository(session)
         self.revenue_growth_repo = RevenueGrowthRepository(session)
         self.ee_growth_repo = EEGrowthRepository(session)
+        self.ep_growth_repo = EPGrowthRepository(session)
         self.metric_config = self._load_ratio_metrics_config()
     
     @staticmethod
@@ -135,6 +138,16 @@ class RatioMetricsService:
             )
         elif metric_def.formula_type == "ee_growth":
             return await self._calculate_ee_growth(
+                metric_def=metric_def,
+                tickers=tickers,
+                dataset_id=dataset_id,
+                temporal_window=temporal_window,
+                param_set_id=param_set_id,
+                start_year=start_year,
+                end_year=end_year
+            )
+        elif metric_def.formula_type == "ep_growth":
+            return await self._calculate_ep_growth(
                 metric_def=metric_def,
                 tickers=tickers,
                 dataset_id=dataset_id,
@@ -328,6 +341,53 @@ class RatioMetricsService:
                 "ticker": row["ticker"],
                 "fiscal_year": row["fiscal_year"],
                 "value": row["ee_growth"]
+            }
+            for row in results
+        ]
+        
+        # Format response
+        return self._format_response(metric_def, temporal_window, formatted_results)
+    
+    async def _calculate_ep_growth(
+        self,
+        metric_def: MetricDefinition,
+        tickers: List[str],
+        dataset_id: UUID,
+        temporal_window: str,
+        param_set_id: Optional[UUID],
+        start_year: Optional[int],
+        end_year: Optional[int]
+    ) -> RatioMetricsResponse:
+        """Calculate EP growth metric"""
+        
+        # Resolve param_set_id if needed
+        if param_set_id is None:
+            param_set_id = await self._get_default_param_set_id()
+            if param_set_id is None:
+                raise ValueError("No parameter set ID provided and no default parameter set found")
+        
+        # Build SQL query using EP growth calculator
+        calculator = EPGrowthCalculator(metric_def, temporal_window)
+        sql_query, params = calculator.build_query(
+            tickers=tickers,
+            dataset_id=dataset_id,
+            param_set_id=param_set_id,
+            start_year=start_year,
+            end_year=end_year
+        )
+        
+        logger.debug(f"EP Growth SQL:\n{sql_query}")
+        logger.debug(f"EP Growth params: {params}")
+        
+        # Execute query
+        results = await self.ep_growth_repo.execute_ep_growth_query(sql_query, params)
+        
+        # Format results: convert ep_growth -> value for consistent response format
+        formatted_results = [
+            {
+                "ticker": row["ticker"],
+                "fiscal_year": row["fiscal_year"],
+                "value": row["ep_growth"]
             }
             for row in results
         ]
