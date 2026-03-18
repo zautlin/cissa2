@@ -142,7 +142,7 @@ class MetricsService:
                 MetricResultItem(
                     ticker=row[0],
                     fiscal_year=row[1],
-                    value=float(row[2]) if row[2] is not None else 0.0
+                    value=float(row[2]) if row[2] is not None else None
                 )
                 for row in rows
             ]

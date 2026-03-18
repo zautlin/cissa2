@@ -459,20 +459,23 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
   RETURN QUERY
-  SELECT
-    mo.ticker,
-    mo.fiscal_year,
-    (COALESCE(mo.output_metric_value, 0) + COALESCE(f.numeric_value, 0)) AS non_div_ecf
-  FROM cissa.metrics_outputs mo
-  LEFT JOIN cissa.fundamentals f
-    ON mo.ticker = f.ticker
-     AND mo.fiscal_year = f.fiscal_year
-     AND mo.dataset_id = f.dataset_id
-     AND f.metric_name = 'DIVIDENDS'
-    WHERE
-      mo.dataset_id = p_dataset_id
-      AND mo.output_metric_name = 'Calc ECF'
-    ORDER BY mo.ticker, mo.fiscal_year;
+   SELECT
+     mo.ticker,
+     mo.fiscal_year,
+     CASE
+       WHEN mo.output_metric_value IS NULL THEN 0
+       ELSE (mo.output_metric_value + COALESCE(f.numeric_value, 0))
+     END AS non_div_ecf
+   FROM cissa.metrics_outputs mo
+   LEFT JOIN cissa.fundamentals f
+     ON mo.ticker = f.ticker
+      AND mo.fiscal_year = f.fiscal_year
+      AND mo.dataset_id = f.dataset_id
+      AND f.metric_name = 'DIVIDENDS'
+     WHERE
+       mo.dataset_id = p_dataset_id
+       AND mo.output_metric_name = 'Calc ECF'
+     ORDER BY mo.ticker, mo.fiscal_year;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
