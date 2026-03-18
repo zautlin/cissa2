@@ -96,7 +96,7 @@ class MetricsQueryRepository:
                     "ticker": row[2],
                     "fiscal_year": row[3],
                     "metric_name": row[4],
-                    "value": float(row[5]),
+                    "value": float(row[5]) if row[5] is not None else None,
                     "unit": row[6],  # Can be None if not in metric_units table
                 })
             

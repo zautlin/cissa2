@@ -210,7 +210,7 @@ class MetricRecord(BaseModel):
     ticker: str
     fiscal_year: int
     metric_name: str
-    value: float
+    value: Optional[float] = Field(None, description="Metric value. None if insufficient data or marked as NULL.")
     unit: Optional[str] = Field(None, description="Unit of measurement (e.g., 'USD', '%', 'dimensionless'). None if not defined in metric_units table.")
 
 
