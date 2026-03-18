@@ -11,7 +11,9 @@ import asyncio
 from app.models.statistics import (
     DatasetStatistics,
     AllDatasetsStatistics,
+    Company,
     CompaniesStats,
+    Sector,
     SectorsStats,
     DataCoverage,
     RawMetricsStats,
@@ -64,17 +66,26 @@ class StatisticsService:
         self._cache[cache_key] = CachedStatistics(stats, datetime.utcnow())
         logger.info(f"Cached statistics for dataset {dataset_id}")
     
-    async def get_statistics(self, dataset_id: UUID) -> DatasetStatistics:
+    async def get_statistics(
+        self, 
+        dataset_id: UUID,
+        ticker_filter: str = None,
+        company_name_filter: str = None,
+        sector_filter: str = None
+    ) -> DatasetStatistics:
         """
         Get statistics for a dataset with caching.
         
         Returns cached result if available (not expired).
         Otherwise queries database and caches result.
+        
+        Supports optional filtering on companies (case-insensitive).
         """
-        # Check cache first
-        cached_result = self._get_from_cache(dataset_id)
-        if cached_result is not None:
-            return cached_result
+        # Check cache first (only if no filters applied)
+        if not any([ticker_filter, company_name_filter, sector_filter]):
+            cached_result = self._get_from_cache(dataset_id)
+            if cached_result is not None:
+                return cached_result
         
         logger.info(f"Calculating statistics for dataset {dataset_id}")
         
@@ -85,19 +96,51 @@ class StatisticsService:
         min_year, max_year = await self.repo.get_data_coverage(dataset_id)
         created_at, country = await self.repo.get_dataset_info(dataset_id)
         
+        # Get companies and sectors lists with optional filtering
+        companies_data = await self.repo.get_companies_list(
+            dataset_id,
+            ticker_filter=ticker_filter,
+            company_name_filter=company_name_filter,
+            sector_filter=sector_filter
+        )
+        sectors_data = await self.repo.get_sectors_list(
+            dataset_id,
+            sector_filter=sector_filter
+        )
+        
+        # Build Company objects from raw data
+        companies_list = [
+            Company(
+                ticker=c["ticker"],
+                company_name=c["company_name"],
+                sector=c["sector"]
+            )
+            for c in companies_data
+        ]
+        
+        # Build Sector objects from raw data
+        sectors_list = [
+            Sector(
+                name=s["name"],
+                company_count=s["company_count"]
+            )
+            for s in sectors_data
+        ]
+        
         # Build response
         stats = DatasetStatistics(
             dataset_id=str(dataset_id),
             dataset_created_at=created_at,
             country=country,
-            companies=CompaniesStats(count=company_count),
-            sectors=SectorsStats(count=sector_count),
+            companies=CompaniesStats(count=company_count, items=companies_list),
+            sectors=SectorsStats(count=sector_count, items=sectors_list),
             data_coverage=DataCoverage(min_year=min_year, max_year=max_year),
             raw_metrics=RawMetricsStats(count=metrics_count),
         )
         
-        # Cache the result
-        self._set_cache(dataset_id, stats)
+        # Cache the result (only if no filters applied)
+        if not any([ticker_filter, company_name_filter, sector_filter]):
+            self._set_cache(dataset_id, stats)
         
         return stats
     
@@ -128,8 +171,8 @@ class StatisticsService:
                     dataset_id=str(dataset_id),
                     dataset_created_at=None,
                     country=None,
-                    companies=CompaniesStats(count=None),
-                    sectors=SectorsStats(count=None),
+                    companies=CompaniesStats(count=None, items=[]),
+                    sectors=SectorsStats(count=None, items=[]),
                     data_coverage=DataCoverage(min_year=None, max_year=None),
                     raw_metrics=RawMetricsStats(count=None),
                 )

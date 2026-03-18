@@ -158,3 +158,121 @@ class StatisticsRepository:
         except Exception as e:
             logger.error(f"Error getting all dataset IDs: {str(e)}")
             return []
+    
+    async def get_companies_list(
+        self, 
+        dataset_id: UUID,
+        ticker_filter: Optional[str] = None,
+        company_name_filter: Optional[str] = None,
+        sector_filter: Optional[str] = None
+    ) -> list[dict]:
+        """
+        Get list of companies (ticker, company_name, sector) for a dataset.
+        
+        Returns list of dicts with keys: ticker, company_name, sector.
+        Supports optional case-insensitive filtering.
+        """
+        try:
+            # Build base query
+            query_str = """
+                SELECT DISTINCT c.ticker, c.company_name, c.sector
+                FROM cissa.companies c
+                WHERE c.ticker IN (
+                    SELECT DISTINCT ticker
+                    FROM cissa.fundamentals
+                    WHERE dataset_id = :dataset_id and period_type = 'FISCAL'
+                )
+            """
+            
+            params = {"dataset_id": str(dataset_id)}
+            
+            # Add optional filters (case-insensitive for text fields)
+            filters = []
+            if ticker_filter:
+                filters.append("LOWER(c.ticker) LIKE LOWER(:ticker_filter)")
+                params["ticker_filter"] = f"%{ticker_filter}%"
+            
+            if company_name_filter:
+                filters.append("LOWER(c.company_name) LIKE LOWER(:company_name_filter)")
+                params["company_name_filter"] = f"%{company_name_filter}%"
+            
+            if sector_filter:
+                # Sector filter is case-insensitive exact match
+                filters.append("LOWER(c.sector) = LOWER(:sector_filter)")
+                params["sector_filter"] = sector_filter
+            
+            if filters:
+                query_str += " AND " + " AND ".join(filters)
+            
+            # Order by ticker for consistency
+            query_str += " ORDER BY c.ticker ASC"
+            
+            query = text(query_str)
+            result = await self.db.execute(query, params)
+            rows = result.fetchall()
+            
+            # Convert to list of dicts
+            companies = []
+            for row in rows:
+                companies.append({
+                    "ticker": row[0],
+                    "company_name": row[1],
+                    "sector": row[2]
+                })
+            
+            logger.debug(f"Retrieved {len(companies)} companies for dataset {dataset_id}")
+            return companies
+        except Exception as e:
+            logger.error(f"Error getting companies list: {str(e)}")
+            return []
+    
+    async def get_sectors_list(
+        self,
+        dataset_id: UUID,
+        sector_filter: Optional[str] = None
+    ) -> list[dict]:
+        """
+        Get list of sectors with company counts for a dataset.
+        
+        Returns list of dicts with keys: name, company_count.
+        Supports optional case-insensitive filtering.
+        """
+        try:
+            # Build base query
+            query_str = """
+                SELECT DISTINCT c.sector, COUNT(DISTINCT c.ticker) as company_count
+                FROM cissa.companies c
+                WHERE c.ticker IN (
+                    SELECT DISTINCT ticker
+                    FROM cissa.fundamentals
+                    WHERE dataset_id = :dataset_id and period_type = 'FISCAL'
+                )
+            """
+            
+            params = {"dataset_id": str(dataset_id)}
+            
+            # Add optional filter (case-insensitive)
+            if sector_filter:
+                query_str += " AND LOWER(c.sector) = LOWER(:sector_filter)"
+                params["sector_filter"] = sector_filter
+            
+            # Group by sector and order by name
+            query_str += " GROUP BY c.sector ORDER BY c.sector ASC"
+            
+            query = text(query_str)
+            result = await self.db.execute(query, params)
+            rows = result.fetchall()
+            
+            # Convert to list of dicts
+            sectors = []
+            for row in rows:
+                sectors.append({
+                    "name": row[0],
+                    "company_count": row[1]
+                })
+            
+            logger.debug(f"Retrieved {len(sectors)} sectors for dataset {dataset_id}")
+            return sectors
+        except Exception as e:
+            logger.error(f"Error getting sectors list: {str(e)}")
+            return []

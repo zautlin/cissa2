@@ -26,6 +26,9 @@ class MetricsExistResponse(BaseModel):
 @router.get("/statistics", response_model=Union[DatasetStatistics, AllDatasetsStatistics])
 async def get_dataset_statistics(
     dataset_id: Optional[UUID] = Query(None, description="Dataset ID (optional - omit to get stats for all datasets)"),
+    ticker_filter: Optional[str] = Query(None, description="Optional case-insensitive filter on ticker (substring match)"),
+    company_name_filter: Optional[str] = Query(None, description="Optional case-insensitive filter on company name (substring match)"),
+    sector_filter: Optional[str] = Query(None, description="Optional case-insensitive filter on sector (exact match)"),
     db: AsyncSession = Depends(get_db)
 ) -> Union[DatasetStatistics, AllDatasetsStatistics]:
     """
@@ -43,21 +46,31 @@ async def get_dataset_statistics(
     - Uses parallel execution for efficiency
     
     **Statistics Included:**
-    - Number of distinct companies (tickers)
-    - Number of distinct sectors
-    - Number of distinct raw metrics (metric names)
+    - List of companies with ticker, name, and sector
+    - List of sectors with company counts
     - Data coverage (min and max fiscal years)
     - Dataset creation date
     - Country/geography
     
+    **Optional Filtering (single dataset mode only):**
+    - `ticker_filter`: Case-insensitive substring match on ticker
+    - `company_name_filter`: Case-insensitive substring match on company name
+    - `sector_filter`: Case-insensitive exact match on sector
+    
     **Caching:**
-    - Results are cached per dataset for 1 hour
+    - Results are cached per dataset for 1 hour (only when no filters applied)
     - Cache is dataset-specific
     
     **Example Requests:**
     ```
     # Single dataset
     GET /api/v1/metrics/statistics?dataset_id=550e8400-e29b-41d4-a716-446655440000
+    
+    # With ticker filter
+    GET /api/v1/metrics/statistics?dataset_id=550e8400-e29b-41d4-a716-446655440000&ticker_filter=BHP
+    
+    # With sector filter
+    GET /api/v1/metrics/statistics?dataset_id=550e8400-e29b-41d4-a716-446655440000&sector_filter=Materials
     
     # All datasets
     GET /api/v1/metrics/statistics
@@ -69,28 +82,27 @@ async def get_dataset_statistics(
         "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
         "dataset_created_at": "2026-03-12T10:15:30Z",
         "country": "Australia",
-        "companies": {"count": 250},
-        "sectors": {"count": 12},
+        "companies": {
+            "count": 250,
+            "items": [
+                {
+                    "ticker": "BHP AU Equity",
+                    "company_name": "BHP Group Limited",
+                    "sector": "Materials"
+                }
+            ]
+        },
+        "sectors": {
+            "count": 12,
+            "items": [
+                {
+                    "name": "Materials",
+                    "company_count": 45
+                }
+            ]
+        },
         "data_coverage": {"min_year": 2002, "max_year": 2023},
         "raw_metrics": {"count": 15}
-    }
-    ```
-    
-    **Example Response (All Datasets):**
-    ```json
-    {
-        "datasets": {
-            "550e8400-e29b-41d4-a716-446655440000": {
-                "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
-                "dataset_created_at": "2026-03-12T10:15:30Z",
-                "country": "Australia",
-                "companies": {"count": 250},
-                "sectors": {"count": 12},
-                "data_coverage": {"min_year": 2002, "max_year": 2023},
-                "raw_metrics": {"count": 15}
-            },
-            "550e8400-e29b-41d4-a716-446655440001": {...}
-        }
     }
     ```
     
@@ -106,7 +118,12 @@ async def get_dataset_statistics(
         # If dataset_id provided, get single dataset stats
         if dataset_id:
             logger.info(f"Fetching statistics for dataset {dataset_id}")
-            stats = await service.get_statistics(dataset_id)
+            stats = await service.get_statistics(
+                dataset_id,
+                ticker_filter=ticker_filter,
+                company_name_filter=company_name_filter,
+                sector_filter=sector_filter
+            )
             logger.info(f"Successfully retrieved statistics for dataset {dataset_id}")
             return stats
         
