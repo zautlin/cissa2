@@ -210,9 +210,9 @@ class RuntimeMetricsOrchestrationService:
                 dataset_id, param_set_id
             )
 
-            if ter_result["status"] == "error":
+            if ter_result.get("status") == "error":
                 self.logger.warning(
-                    f"[RUNTIME-METRICS] TER calculation failed: {ter_result['message']}. Continuing with results from Phases 1-4."
+                    f"[RUNTIME-METRICS] TER calculation failed: {ter_result.get('message', 'Unknown error')}. Continuing with results from Phases 1-4."
                 )
                 # Log the error but don't fail orchestration
                 ter_result_for_response = ter_result
@@ -232,9 +232,9 @@ class RuntimeMetricsOrchestrationService:
                 dataset_id, param_set_id
             )
 
-            if ter_alpha_result["status"] == "error":
+            if ter_alpha_result.get("status") == "error":
                 self.logger.warning(
-                    f"[RUNTIME-METRICS] TER Alpha calculation failed: {ter_alpha_result['message']}. Continuing with results from Phases 1-5."
+                    f"[RUNTIME-METRICS] TER Alpha calculation failed: {ter_alpha_result.get('message', 'Unknown error')}. Continuing with results from Phases 1-5."
                 )
                 # Log the error but don't fail orchestration
                 ter_alpha_result_for_response = ter_alpha_result
