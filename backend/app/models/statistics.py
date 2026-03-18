@@ -21,13 +21,13 @@ class Sector(BaseModel):
 
 class CompaniesStats(BaseModel):
     """Statistics about companies in the dataset"""
-    count: int = Field(..., description="Total number of distinct companies (tickers)")
+    count: Optional[int] = Field(None, description="Total number of distinct companies (tickers)")
     items: List[Company] = Field(..., description="List of companies with ticker, name, and sector")
 
 
 class SectorsStats(BaseModel):
     """Statistics about sectors in the dataset"""
-    count: int = Field(..., description="Total number of distinct sectors")
+    count: Optional[int] = Field(None, description="Total number of distinct sectors")
     items: List[Sector] = Field(..., description="List of sectors with company counts")
 
 
@@ -42,6 +42,11 @@ class RawMetricsStats(BaseModel):
     count: Optional[int] = Field(None, description="Total number of distinct raw metric names")
 
 
+class ParentIndexStats(BaseModel):
+    """Statistics about parent index for the dataset"""
+    value: Optional[str] = Field(None, description="Distinct parent_index value for the dataset")
+
+
 class DatasetStatistics(BaseModel):
     """Complete statistics for a dataset"""
     dataset_id: str = Field(..., description="UUID of the dataset")
@@ -51,6 +56,7 @@ class DatasetStatistics(BaseModel):
     sectors: SectorsStats = Field(..., description="Sector statistics with list")
     data_coverage: DataCoverage = Field(..., description="Data coverage period")
     raw_metrics: RawMetricsStats = Field(..., description="Raw metrics statistics")
+    parent_index: ParentIndexStats = Field(..., description="Parent index information for the dataset")
 
 
 class AllDatasetsStatistics(BaseModel):

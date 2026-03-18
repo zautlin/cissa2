@@ -94,6 +94,32 @@ class StatisticsRepository:
             logger.error(f"Error getting data coverage: {str(e)}")
             return None, None
     
+    async def get_parent_index(self, dataset_id: UUID) -> Optional[str]:
+        """
+        Get the distinct parent_index value for a dataset.
+        
+        Returns the first (and should be only) parent_index value from the companies table
+        for tickers that appear in the dataset.
+        Uses LIMIT 1 to ensure only one value is returned.
+        """
+        try:
+            query = text("""
+                SELECT DISTINCT c.parent_index
+                FROM cissa.companies c
+                WHERE c.ticker IN (
+                    SELECT DISTINCT ticker
+                    FROM cissa.fundamentals
+                    WHERE dataset_id = :dataset_id and period_type = 'FISCAL'
+                )
+                LIMIT 1
+            """)
+            result = await self.db.execute(query, {"dataset_id": str(dataset_id)})
+            parent_index = result.scalar()
+            return parent_index if parent_index is not None else None
+        except Exception as e:
+            logger.error(f"Error getting parent_index: {str(e)}")
+            return None
+    
     async def get_dataset_info(self, dataset_id: UUID) -> tuple[Optional[str], Optional[str]]:
         """
         Get dataset creation date and country.
@@ -167,7 +193,7 @@ class StatisticsRepository:
         sector_filter: Optional[str] = None
     ) -> list[dict]:
         """
-        Get list of companies (ticker, company_name, sector) for a dataset.
+        Get list of companies (ticker, name, sector) for a dataset.
         
         Returns list of dicts with keys: ticker, company_name, sector.
         Supports optional case-insensitive filtering.
@@ -175,7 +201,7 @@ class StatisticsRepository:
         try:
             # Build base query
             query_str = """
-                SELECT DISTINCT c.ticker, c.company_name, c.sector
+                SELECT DISTINCT c.ticker, c.name, c.sector
                 FROM cissa.companies c
                 WHERE c.ticker IN (
                     SELECT DISTINCT ticker
@@ -193,7 +219,7 @@ class StatisticsRepository:
                 params["ticker_filter"] = f"%{ticker_filter}%"
             
             if company_name_filter:
-                filters.append("LOWER(c.company_name) LIKE LOWER(:company_name_filter)")
+                filters.append("LOWER(c.name) LIKE LOWER(:company_name_filter)")
                 params["company_name_filter"] = f"%{company_name_filter}%"
             
             if sector_filter:

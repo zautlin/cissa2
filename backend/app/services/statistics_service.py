@@ -17,6 +17,7 @@ from app.models.statistics import (
     SectorsStats,
     DataCoverage,
     RawMetricsStats,
+    ParentIndexStats,
 )
 from app.repositories.statistics_repository import StatisticsRepository
 from app.core.config import get_logger
@@ -69,9 +70,9 @@ class StatisticsService:
     async def get_statistics(
         self, 
         dataset_id: UUID,
-        ticker_filter: str = None,
-        company_name_filter: str = None,
-        sector_filter: str = None
+        ticker_filter: Optional[str] = None,
+        company_name_filter: Optional[str] = None,
+        sector_filter: Optional[str] = None
     ) -> DatasetStatistics:
         """
         Get statistics for a dataset with caching.
@@ -95,6 +96,7 @@ class StatisticsService:
         metrics_count = await self.repo.get_raw_metrics_count(dataset_id)
         min_year, max_year = await self.repo.get_data_coverage(dataset_id)
         created_at, country = await self.repo.get_dataset_info(dataset_id)
+        parent_index = await self.repo.get_parent_index(dataset_id)
         
         # Get companies and sectors lists with optional filtering
         companies_data = await self.repo.get_companies_list(
@@ -136,6 +138,7 @@ class StatisticsService:
             sectors=SectorsStats(count=sector_count, items=sectors_list),
             data_coverage=DataCoverage(min_year=min_year, max_year=max_year),
             raw_metrics=RawMetricsStats(count=metrics_count),
+            parent_index=ParentIndexStats(value=parent_index),
         )
         
         # Cache the result (only if no filters applied)
@@ -175,6 +178,7 @@ class StatisticsService:
                     sectors=SectorsStats(count=None, items=[]),
                     data_coverage=DataCoverage(min_year=None, max_year=None),
                     raw_metrics=RawMetricsStats(count=None),
+                    parent_index=ParentIndexStats(value=None),
                 )
             else:
                 datasets_dict[str(dataset_id)] = stats
