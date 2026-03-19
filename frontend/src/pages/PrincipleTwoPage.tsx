@@ -95,14 +95,18 @@ export default function PrincipleTwoPage() {
 
   const ep1Y  = useEPSeries(ctx.datasetId, ctx.paramSetId, "1Y");
   const ep3Y  = useEPSeries(ctx.datasetId, ctx.paramSetId, "3Y");
+  const ep5Y  = useEPSeries(ctx.datasetId, ctx.paramSetId, "5Y");
+  const ep10Y = useEPSeries(ctx.datasetId, ctx.paramSetId, "10Y");
   const multiMetrics = useMultipleMetrics(ctx.datasetId, ctx.paramSetId, ["Calc ECF", "Non Div ECF", "Calc FY TSR", "Calc EE", "Calc MC"]);
   const mbRatio = useRatioMetric(ctx.datasetId, ctx.paramSetId, "mb_ratio", "1Y");
 
   const loading = ctx.loading || ep1Y.loading;
 
   // Build bow-wave from live EP
-  const epAgg1Y = aggregateByYear((ep1Y.data || []).map(r => ({ ticker: r.ticker, fiscal_year: r.fiscal_year, value: r.ep_1y ?? null })));
-  const epAgg3Y = aggregateByYear((ep3Y.data || []).map(r => ({ ticker: r.ticker, fiscal_year: r.fiscal_year, value: r.ep_3y ?? null })));
+  const epAgg1Y  = aggregateByYear((ep1Y.data  || []).map(r => ({ ticker: r.ticker, fiscal_year: r.fiscal_year, value: r.ep_1y  ?? null })));
+  const epAgg3Y  = aggregateByYear((ep3Y.data  || []).map(r => ({ ticker: r.ticker, fiscal_year: r.fiscal_year, value: r.ep_3y  ?? null })));
+  const epAgg5Y  = aggregateByYear((ep5Y.data  || []).map(r => ({ ticker: r.ticker, fiscal_year: r.fiscal_year, value: r.ep_5y  ?? null })));
+  const epAgg10Y = aggregateByYear((ep10Y.data || []).map(r => ({ ticker: r.ticker, fiscal_year: r.fiscal_year, value: r.ep_10y ?? null })));
   const isLiveEP = epAgg1Y.length >= 4;
 
   // Static bow wave
@@ -317,86 +321,98 @@ export default function PrincipleTwoPage() {
         </div>
       )}
 
-      {/* Tab 2.3: Pair of EP Bow Waves */}
-      {tab === 2 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          <ChartCard title="Pair of EP Bow Waves — Rising Firm" subtitle="Company A: sustained EP improvement drives value re-rating" live={false}>
-            <ResponsiveContainer width="100%" height={230}>
-              <ComposedChart data={Array.from({ length: 21 }, (_, i) => ({
-                year: String(2010 + i),
-                old: bell(i - 5, 3, 5, 300),
-                new: i >= 5 ? bell(i - 5, 7, 6, 580) : null,
-              }))} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
-                <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={3} />
-                <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={36} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 9 }} />
-                <Area type="monotone" dataKey="old" name="Old EP Curve" stroke={SLATE} fill="hsl(215 15% 46% / 0.12)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
-                <Area type="monotone" dataKey="new" name="New EP Curve (upgraded)" stroke={GREEN} fill="hsl(152 60% 40% / 0.15)" strokeWidth={2.5} dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </ChartCard>
+      {/* Tab 2.3: Pair of EP Bow Waves — 1Y / 3Y / 5Y / 10Y */}
+      {tab === 2 && (() => {
+        // Build a paired bow-wave dataset for each interval
+        // Each chart shows: old (first half of series) vs new (full series) — the classic "pair" concept
+        function buildPair(agg: { year: number; value: number }[], fallbackPeak: number, fallbackShift: number) {
+          if (agg.length >= 6) {
+            const mid = Math.floor(agg.length / 2);
+            return agg.map((d, i) => ({
+              year: String(d.year),
+              old:  i <= mid ? +(d.value / 1e6).toFixed(2) : null,
+              live: +(d.value / 1e6).toFixed(2),
+            }));
+          }
+          // Illustrative fallback
+          return Array.from({ length: 21 }, (_, i) => ({
+            year: String(2004 + i),
+            old:  i <= 10 ? bell(i - 4, 2, 5, fallbackPeak) : null,
+            live: bell(i - 4, 2 + fallbackShift, 6, fallbackPeak * 1.6),
+          }));
+        }
 
-          <ChartCard title="Pair of EP Bow Waves — Declining Firm" subtitle="Company B: EP deterioration drives market value de-rating" live={false}>
-            <ResponsiveContainer width="100%" height={230}>
-              <ComposedChart data={Array.from({ length: 21 }, (_, i) => ({
-                year: String(2010 + i),
-                old: bell(i - 5, 3, 5, 300),
-                new: i >= 5 ? bell(i - 5, 2, 4, 180) : null,
-              }))} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
-                <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={3} />
-                <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={36} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 9 }} />
-                <Area type="monotone" dataKey="old" name="Old EP Curve" stroke={NAVY} fill="hsl(213 75% 22% / 0.12)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
-                <Area type="monotone" dataKey="new" name="New EP Curve (downgraded)" stroke="hsl(0 60% 50%)" fill="hsl(0 60% 50% / 0.12)" strokeWidth={2.5} dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </ChartCard>
+        const intervals: { label: string; color: string; agg: { year: number; value: number }[]; peak: number; shift: number }[] = [
+          { label: "1Y",  color: NAVY,                   agg: epAgg1Y,  peak: 300, shift: 2 },
+          { label: "3Y",  color: "hsl(38 60% 52%)",      agg: epAgg3Y,  peak: 280, shift: 3 },
+          { label: "5Y",  color: "hsl(152 60% 40%)",     agg: epAgg5Y,  peak: 260, shift: 4 },
+          { label: "10Y", color: "hsl(271 76% 53%)",     agg: epAgg10Y, peak: 220, shift: 5 },
+        ];
 
-          <ChartCard title="ASX 300 — EP vs Market Cap Correlation" subtitle={isLiveEP ? "Live EP vs MC relationship ($m)" : "Illustrative: EP is the primary driver of market value"} live={isLiveEP}>
-            <ResponsiveContainer width="100%" height={210}>
-              <ComposedChart data={isLiveEP ? bowWaveLive.slice(-12) : bowWaveStatic.slice(6, 20)} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
-                <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={36} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 9 }} />
-                {isLiveEP ? (
-                  <Area type="monotone" dataKey="ep1Y" name="EP 1Y (avg)" stroke={NAVY} fill="hsl(213 75% 22% / 0.12)" strokeWidth={2} dot={false} />
-                ) : (
-                  <>
-                    <Area type="monotone" dataKey="baseline" name="Baseline EP" stroke={GOLD} fill="hsl(38 60% 52% / 0.15)" strokeWidth={2} dot={false} />
-                    <Area type="monotone" dataKey="newExp" name="New Expectations" stroke={NAVY} fill="hsl(213 75% 22% / 0.12)" strokeWidth={2} dot={false} />
-                  </>
-                )}
-              </ComposedChart>
-            </ResponsiveContainer>
-          </ChartCard>
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            {/* Header note */}
+            <div style={{ gridColumn: "1/-1", padding: "0.625rem 0.875rem", borderRadius: 8, background: "hsl(213 75% 22% / 0.05)", border: "1px solid hsl(213 75% 22% / 0.12)", fontSize: "0.6875rem", color: SLATE }}>
+              <b style={{ color: NAVY }}>Pair of EP Bow Waves</b> — each chart overlays the EP curve at the start of the observation period ("old expectations") against the full historical series ("new expectations"). A rising new curve signals market re-rating; a falling curve signals de-rating. Intervals: <b>1Y · 3Y · 5Y · 10Y</b> annualised EP.
+            </div>
 
-          <ChartCard title="Long-Term TSR Composition by EP Quintile" subtitle="10yr annualised TSR ranked by EP performance — illustrative">
-            <ResponsiveContainer width="100%" height={210}>
-              <ComposedChart data={[
-                { quintile: "Q1 (Highest EP)", tsr: 18.4, ke: 10.0 },
-                { quintile: "Q2",              tsr: 13.2, ke: 10.0 },
-                { quintile: "Q3",              tsr: 10.1, ke: 10.0 },
-                { quintile: "Q4",              tsr: 6.8,  ke: 10.0 },
-                { quintile: "Q5 (Lowest EP)",  tsr: 2.1,  ke: 10.0 },
-              ]} margin={{ top: 4, right: 8, bottom: 16, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(210 16% 93%)" />
-                <XAxis dataKey="quintile" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} width={32} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
-                <Bar dataKey="tsr" name="10yr TSR (%)" fill={NAVY} radius={[4, 4, 0, 0]} maxBarSize={36} />
-                <Line type="monotone" dataKey="ke" name="Ke (benchmark)" stroke={GOLD} strokeWidth={2} strokeDasharray="5 3" dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </ChartCard>
-        </div>
-      )}
+            {intervals.map(({ label, color, agg, peak, shift }) => {
+              const data = buildPair(agg, peak, shift);
+              const isLive = agg.length >= 6;
+              return (
+                <ChartCard
+                  key={label}
+                  title={`${label} EP Bow Wave — Pair`}
+                  subtitle={isLive
+                    ? `Live ${label} EP ($m avg) — old expectations vs full curve re-rating`
+                    : `Illustrative ${label} annualised EP bow wave pair — run pipeline for live data`}
+                  live={isLive}
+                >
+                  <ResponsiveContainer width="100%" height={220}>
+                    <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                      <defs>
+                        <linearGradient id={`bowFillOld_${label}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={SLATE} stopOpacity={0.18} />
+                          <stop offset="95%" stopColor={SLATE} stopOpacity={0.02} />
+                        </linearGradient>
+                        <linearGradient id={`bowFillNew_${label}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={color} stopOpacity={0.22} />
+                          <stop offset="95%" stopColor={color} stopOpacity={0.03} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                      <XAxis dataKey="year" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval={Math.floor(data.length / 6)} />
+                      <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={40}
+                        tickFormatter={v => isLive ? `$${v}m` : String(v)} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 9, paddingTop: 4 }} />
+                      <ReferenceLine y={0} stroke="hsl(0 60% 50%)" strokeDasharray="3 2" strokeWidth={1} />
+                      {/* Old curve — dashed, slate */}
+                      <Area
+                        type="monotone" dataKey="old"
+                        name={`Old EP ${label} (prior expectation)`}
+                        stroke={SLATE} fill={`url(#bowFillOld_${label})`}
+                        strokeWidth={1.8} strokeDasharray="5 3" dot={false}
+                        connectNulls={false}
+                      />
+                      {/* New / full curve — solid, colored */}
+                      <Area
+                        type="monotone" dataKey="live"
+                        name={`New EP ${label} (re-rated curve)`}
+                        stroke={color} fill={`url(#bowFillNew_${label})`}
+                        strokeWidth={2.5} dot={false}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                  <div style={{ fontSize: "0.5625rem", color: SLATE, marginTop: 4, textAlign: "center" }}>
+                    Dashed = prior EP expectations · Solid = updated full-period curve · Zero line = EP=0 (value-destructive)
+                  </div>
+                </ChartCard>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Tabs 2.4 & 2.5 */}
       {(tab === 3 || tab === 4) && (
