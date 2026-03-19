@@ -286,11 +286,15 @@ class TERService:
         For 3Y, 5Y, 10Y (n>1): Cannot be algebraically simplified; full formula required
         
         Shared components (calculated once):
-        - Load TRTE = Calc {interval}Y FV ECF + (Calc MC - LAG(Calc MC, 1))
+        - Load TRTE = Calc {interval}Y FV ECF + (Calc MC(year) - Calc MC(year - interval))
         - Load TER = (Load TRTE / Open MC) - 1
-        - WC = Open MC × (1 + Load TER) - Open MC × (1 + Ke)
-        - WP = Open MC × (1 + Ke)
-        - Open MC = LAG(Calc MC, 1)
+        - WC = Open MC × (1 + Load TER)^interval - Open MC × (1 + Calc KE)^interval
+        - WP = Open MC × (1 + Calc KE)^interval
+        - Open MC = Calc MC(year - interval)
+        
+        KEY FIX: LAG uses the interval, not fixed 1-year lag
+        For 5Y TER: looks back 5 years to get Calc MC from 5 years ago
+        For 10Y TER: looks back 10 years to get Calc MC from 10 years ago
         """
         
         # Rename columns for clarity
@@ -305,14 +309,15 @@ class TERService:
         # Sort by ticker and fiscal_year to enable lag calculation
         df = df.sort_values(['ticker', 'fiscal_year']).reset_index(drop=True)
         
-        # Calculate LAG(Calc MC, 1) within each ticker
-        df['calc_mc_lag'] = df.groupby('ticker')['calc_mc'].shift(1)
+        # CRITICAL FIX: Calculate LAG(Calc MC, interval) instead of LAG(Calc MC, 1)
+        # This uses interval-based lookback: 5Y TER looks back 5 years, 10Y looks back 10, etc.
+        df['calc_mc_lag'] = df.groupby('ticker')['calc_mc'].shift(interval)
         
         # Calculate Open MC
         df['open_mc'] = df['calc_mc_lag']
         
         # Step 1: Calculate Load TRTE
-        # Load TRTE = Calc {interval}Y FV ECF + (Calc MC - LAG(Calc MC, 1))
+        # Load TRTE = Calc {interval}Y FV ECF + (Calc MC(year) - Calc MC(year - interval))
         df['load_trte'] = df['fv_ecf'] + (df['calc_mc'] - df['calc_mc_lag'])
         
         # Step 2: Calculate Load TER
