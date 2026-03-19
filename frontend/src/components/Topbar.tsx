@@ -3,8 +3,10 @@ import { useLocation } from "wouter";
 const pageTitles: Record<string, string> = {
   "/": "Platform Overview",
   "/principles/1": "Principle 1 — A Recognition that Economic Measures are Better",
+  "/principles/2": "Principle 2 — A Primary Focus on the Longer Term",
   "/outputs": "Outputs Menu — Wealth Creation Analysis",
   "/underlying-data": "Underlying Data Menu",
+  "/reports": "Reports & Research",
 };
 
 export default function Topbar({ onToggleSidebar, sidebarOpen }: {
