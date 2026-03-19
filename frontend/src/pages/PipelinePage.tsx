@@ -9,6 +9,7 @@ import {
 } from "chart.js";
 import { Link } from "wouter";
 import { apiFetch, isBackendAlive } from "../lib/queryClient";
+import { getStatistics, getActiveParameters, DatasetStatistics, ParameterSetResponse } from "../lib/api";
 import {
   roeKeByIndex, terKeByIndex, mbRatioByIndex,
   roeKeDistribution, terKeDistribution,
@@ -216,6 +217,344 @@ function SubstageRow({ s }: { s: { id: string; label: string; ep: string; record
       </div>
       <div style={{ background: "rgba(26,138,92,0.1)", color: "#1a8a5c", fontSize: "0.6rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 999, textTransform: "uppercase" as const, letterSpacing: "0.04em" }}>
         Success
+      </div>
+    </div>
+  );
+}
+
+// ── Pipeline Configuration Panel ──────────────────────────────────────────
+
+interface PipelineConfigPanelProps {
+  backendOnline: boolean | null;
+  selectedDatasetId: string;
+  onDatasetChange: (id: string) => void;
+  activeParams: ParameterSetResponse | null;
+  datasets: Record<string, DatasetStatistics>;
+  loadingConfig: boolean;
+}
+
+function PipelineConfigPanel({
+  backendOnline,
+  selectedDatasetId,
+  onDatasetChange,
+  activeParams,
+  datasets,
+  loadingConfig,
+}: PipelineConfigPanelProps) {
+  const datasetEntries = Object.entries(datasets);
+  const selectedDataset = selectedDatasetId ? datasets[selectedDatasetId] : null;
+
+  // Key parameter display helpers
+  const paramEntries = activeParams
+    ? Object.entries(activeParams.parameters).slice(0, 12)
+    : [];
+
+  return (
+    <div style={{
+      background: "linear-gradient(135deg, rgba(14,45,92,0.03) 0%, rgba(200,146,42,0.04) 100%)",
+      border: "1px solid rgba(14,45,92,0.12)",
+      borderTop: "3px solid #C8922A",
+      borderRadius: 12,
+      padding: "1.25rem 1.5rem",
+      marginBottom: "1.5rem",
+      boxShadow: "0 2px 12px rgba(14,45,92,0.06)",
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.125rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 8,
+            background: "linear-gradient(135deg, #C8922A, #a0661a)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 2px 8px rgba(200,146,42,0.35)",
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: "0.9375rem", color: "#0E2D5C", lineHeight: 1.1 }}>
+              Pipeline Configuration
+            </div>
+            <div style={{ fontSize: "0.6875rem", color: "#64748b", marginTop: "0.1rem" }}>
+              Select dataset and confirm parameters before running
+            </div>
+          </div>
+        </div>
+        {loadingConfig && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.6875rem", color: "#64748b" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              style={{ animation: "spin 1s linear infinite" }}>
+              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+            Loading configuration…
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
+
+        {/* ── Dataset Selection ── */}
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.625rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C8922A" strokeWidth="2.5">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+            Dataset Selection
+          </div>
+
+          {!backendOnline ? (
+            <div style={{
+              padding: "0.875rem 1rem",
+              background: "#fef9f0",
+              border: "1px solid rgba(200,146,42,0.3)",
+              borderRadius: 8,
+              fontSize: "0.75rem",
+              color: "#92400e",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              Backend offline — connect API to load live datasets
+            </div>
+          ) : datasetEntries.length === 0 && !loadingConfig ? (
+            <div style={{
+              padding: "0.875rem 1rem",
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: 8,
+              fontSize: "0.75rem",
+              color: "#64748b",
+            }}>
+              No datasets found. Ingest data first (Stage 1).
+            </div>
+          ) : (
+            <>
+              {/* Dataset dropdown */}
+              <div style={{ position: "relative", marginBottom: "0.75rem" }}>
+                <select
+                  value={selectedDatasetId}
+                  onChange={e => onDatasetChange(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.625rem 2rem 0.625rem 0.875rem",
+                    border: selectedDatasetId ? "1.5px solid #C8922A" : "1px solid #cbd5e1",
+                    borderRadius: 7,
+                    background: "#fff",
+                    color: "#1e293b",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    outline: "none",
+                    appearance: "none" as const,
+                    boxShadow: selectedDatasetId ? "0 0 0 3px rgba(200,146,42,0.12)" : undefined,
+                  }}
+                >
+                  <option value="">— Select a dataset —</option>
+                  {datasetEntries.map(([id, ds]) => (
+                    <option key={id} value={id}>
+                      {ds.country} · {ds.companies.count} companies · {ds.data_coverage.min_year}–{ds.data_coverage.max_year}
+                    </option>
+                  ))}
+                </select>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5"
+                  style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+                  <path d="m6 9 6 6 6-6"/>
+                </svg>
+              </div>
+
+              {/* Dataset detail card */}
+              {selectedDataset && (
+                <div style={{
+                  background: "#fff",
+                  border: "1px solid rgba(200,146,42,0.2)",
+                  borderLeft: "3px solid #C8922A",
+                  borderRadius: 8,
+                  padding: "0.75rem 0.875rem",
+                }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                    {[
+                      { label: "Dataset ID", value: selectedDataset.dataset_id.slice(0, 8) + "…", mono: true },
+                      { label: "Country", value: selectedDataset.country },
+                      { label: "Companies", value: String(selectedDataset.companies.count) },
+                      { label: "Sectors", value: String(selectedDataset.sectors.count) },
+                      { label: "Data Range", value: `${selectedDataset.data_coverage.min_year} – ${selectedDataset.data_coverage.max_year}` },
+                      { label: "Raw Metrics", value: selectedDataset.raw_metrics.count.toLocaleString() },
+                    ].map(row => (
+                      <div key={row.label}>
+                        <div style={{ fontSize: "0.5625rem", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em", color: "#94a3b8", marginBottom: "0.1rem" }}>
+                          {row.label}
+                        </div>
+                        <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1e293b", fontFamily: row.mono ? "monospace" : undefined }}>
+                          {row.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {selectedDataset.sectors.items.slice(0, 5).length > 0 && (
+                    <div style={{ marginTop: "0.625rem", paddingTop: "0.5rem", borderTop: "1px solid #f1f5f9" }}>
+                      <div style={{ fontSize: "0.5625rem", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em", color: "#94a3b8", marginBottom: "0.375rem" }}>
+                        Top Sectors
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "0.25rem" }}>
+                        {selectedDataset.sectors.items.slice(0, 5).map(s => (
+                          <span key={s.name} style={{
+                            fontSize: "0.625rem", fontWeight: 600,
+                            background: "rgba(200,146,42,0.08)", color: "#92400e",
+                            border: "1px solid rgba(200,146,42,0.2)",
+                            padding: "0.15rem 0.5rem", borderRadius: 999,
+                          }}>
+                            {s.name} ({s.company_count})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* ── Parameter Configuration ── */}
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.625rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0E2D5C" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/>
+              <path d="M12 2v2m0 16v2M2 12h2m16 0h2"/>
+            </svg>
+            Active Parameter Set
+          </div>
+
+          {!backendOnline ? (
+            <div style={{
+              padding: "0.875rem 1rem",
+              background: "#f0f9ff",
+              border: "1px solid rgba(14,45,92,0.15)",
+              borderRadius: 8,
+              fontSize: "0.75rem",
+              color: "#0E2D5C",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              Backend offline — connect API to load parameter sets
+            </div>
+          ) : activeParams ? (
+            <div style={{
+              background: "#fff",
+              border: "1px solid rgba(14,45,92,0.15)",
+              borderLeft: "3px solid #0E2D5C",
+              borderRadius: 8,
+              padding: "0.75rem 0.875rem",
+            }}>
+              {/* Param set header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.625rem", paddingBottom: "0.5rem", borderBottom: "1px solid #f1f5f9" }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#0E2D5C" }}>{activeParams.param_set_name}</div>
+                  <div style={{ fontSize: "0.625rem", color: "#64748b", fontFamily: "monospace", marginTop: "0.1rem" }}>
+                    ID: {activeParams.param_set_id.slice(0, 12)}…
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "0.3rem" }}>
+                  {activeParams.is_active && (
+                    <span style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontSize: "0.5625rem", fontWeight: 700, padding: "0.15rem 0.5rem", borderRadius: 999, textTransform: "uppercase" as const }}>
+                      Active
+                    </span>
+                  )}
+                  {activeParams.is_default && (
+                    <span style={{ background: "rgba(200,146,42,0.1)", border: "1px solid rgba(200,146,42,0.3)", color: "#92400e", fontSize: "0.5625rem", fontWeight: 700, padding: "0.15rem 0.5rem", borderRadius: 999, textTransform: "uppercase" as const }}>
+                      Default
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Parameters grid */}
+              {paramEntries.length > 0 ? (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.375rem" }}>
+                  {paramEntries.map(([key, val]) => (
+                    <div key={key} style={{
+                      padding: "0.375rem 0.5rem",
+                      background: "rgba(14,45,92,0.03)",
+                      border: "1px solid rgba(14,45,92,0.07)",
+                      borderRadius: 6,
+                    }}>
+                      <div style={{ fontSize: "0.5rem", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#94a3b8", marginBottom: "0.1rem" }}>
+                        {key.replace(/_/g, " ")}
+                      </div>
+                      <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#0E2D5C", fontFamily: "monospace" }}>
+                        {typeof val === "object" ? JSON.stringify(val).slice(0, 18) : String(val)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: "0.6875rem", color: "#64748b" }}>No parameters configured.</div>
+              )}
+
+              {Object.keys(activeParams.parameters).length > 12 && (
+                <div style={{ marginTop: "0.5rem", fontSize: "0.625rem", color: "#94a3b8", textAlign: "center" as const }}>
+                  +{Object.keys(activeParams.parameters).length - 12} more parameters
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{
+              padding: "1rem",
+              background: "#f8fafc",
+              border: "1px dashed #cbd5e1",
+              borderRadius: 8,
+              fontSize: "0.75rem",
+              color: "#64748b",
+              textAlign: "center" as const,
+            }}>
+              {loadingConfig ? "Loading active parameters…" : "No active parameter set found"}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Selection summary bar */}
+      <div style={{
+        marginTop: "1rem",
+        padding: "0.75rem 1rem",
+        background: selectedDatasetId && activeParams
+          ? "linear-gradient(90deg, rgba(26,138,92,0.06) 0%, rgba(14,45,92,0.04) 100%)"
+          : "rgba(0,0,0,0.02)",
+        border: `1px solid ${selectedDatasetId && activeParams ? "rgba(26,138,92,0.2)" : "#e2e8f0"}`,
+        borderRadius: 8,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "1rem",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: selectedDatasetId ? "#1a8a5c" : "#e2e8f0" }} />
+            <span style={{ fontSize: "0.6875rem", color: "#64748b" }}>Dataset:</span>
+            <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: selectedDatasetId ? "#1e293b" : "#94a3b8", fontFamily: "monospace" }}>
+              {selectedDatasetId ? selectedDatasetId.slice(0, 12) + "…" : "not selected"}
+            </span>
+          </div>
+          <div style={{ width: 1, height: 16, background: "#e2e8f0" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: activeParams ? "#1a8a5c" : "#e2e8f0" }} />
+            <span style={{ fontSize: "0.6875rem", color: "#64748b" }}>Params:</span>
+            <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: activeParams ? "#1e293b" : "#94a3b8", fontFamily: "monospace" }}>
+              {activeParams ? activeParams.param_set_id.slice(0, 12) + "…" : "not loaded"}
+            </span>
+          </div>
+        </div>
+        <div style={{ fontSize: "0.6875rem", color: selectedDatasetId && activeParams ? "#1a8a5c" : "#94a3b8", fontWeight: 600 }}>
+          {selectedDatasetId && activeParams ? "✓ Ready to run pipeline" : "Select a dataset to continue"}
+        </div>
       </div>
     </div>
   );
@@ -457,6 +796,12 @@ export default function PipelinePage() {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Pipeline config state
+  const [datasets, setDatasets] = useState<Record<string, DatasetStatistics>>({});
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
+  const [activeParams, setActiveParams] = useState<ParameterSetResponse | null>(null);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+
   const checkHealth = useCallback(async () => {
     setLoading(true);
     const alive = await isBackendAlive();
@@ -467,16 +812,54 @@ export default function PipelinePage() {
     }
     setLoading(false);
   }, []);
+
+  // Load datasets + active params when backend comes online
+  const loadConfig = useCallback(async () => {
+    setLoadingConfig(true);
+    try {
+      const [statsResult, paramsResult] = await Promise.allSettled([
+        getStatistics(),
+        getActiveParameters(),
+      ]);
+
+      if (statsResult.status === "fulfilled") {
+        const raw = statsResult.value;
+        // Response is Record<string, DatasetStatistics> when no dataset_id param
+        if (raw && typeof raw === "object" && !("dataset_id" in raw)) {
+          const statsMap = raw as Record<string, DatasetStatistics>;
+          setDatasets(statsMap);
+          // Auto-select first dataset
+          const firstKey = Object.keys(statsMap)[0];
+          if (firstKey) setSelectedDatasetId(firstKey);
+        }
+      }
+
+      if (paramsResult.status === "fulfilled") {
+        setActiveParams(paramsResult.value as ParameterSetResponse);
+      }
+    } catch {
+      // silently fail — backend may be offline
+    }
+    setLoadingConfig(false);
+  }, []);
+
   useEffect(() => { checkHealth(); }, [checkHealth]);
+  useEffect(() => {
+    if (backendOnline) loadConfig();
+  }, [backendOnline, loadConfig]);
 
   const activeIdx = STAGES.findIndex(s => s.id === active);
   const activeStage = STAGES[activeIdx];
+
+  // Effective IDs for pipeline run
+  const effectiveDatasetId = selectedDatasetId;
+  const effectiveParamSetId = activeParams?.param_set_id ?? "";
 
   return (
     <div style={{ padding: "1.5rem 1.75rem", maxWidth: 1400, fontFamily: "inherit" }}>
 
       {/* ── Page header ── */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.75rem" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.5rem" }}>
         <div>
           <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.07em", color: "#94a3b8", marginBottom: "0.3rem" }}>
             RoZetta Technology — ETL &amp; Metrics Pipeline
@@ -502,7 +885,7 @@ export default function PipelinePage() {
           </div>
           <button
             data-testid="button-refresh-pipeline"
-            onClick={checkHealth} disabled={loading}
+            onClick={() => { checkHealth(); if (backendOnline) loadConfig(); }} disabled={loading}
             style={{ display: "flex", alignItems: "center", gap: "0.375rem", padding: "0.4rem 0.875rem", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", color: "#0E2D5C", cursor: loading ? "wait" : "pointer", fontSize: "0.75rem", fontWeight: 600, opacity: loading ? 0.6 : 1, boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: loading ? "spin 1s linear infinite" : undefined }}>
@@ -512,6 +895,16 @@ export default function PipelinePage() {
           </button>
         </div>
       </div>
+
+      {/* ── Pipeline Configuration Panel ── */}
+      <PipelineConfigPanel
+        backendOnline={backendOnline}
+        selectedDatasetId={selectedDatasetId}
+        onDatasetChange={setSelectedDatasetId}
+        activeParams={activeParams}
+        datasets={datasets}
+        loadingConfig={loadingConfig}
+      />
 
       {/* ── HORIZONTAL STAGE TRACK ── */}
       <div style={{ marginBottom: "1.75rem" }}>
@@ -671,28 +1064,67 @@ export default function PipelinePage() {
       </div>
 
       {/* ── Footer trigger ── */}
-      <div style={{ padding: "1.125rem 1.5rem", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+      <div style={{
+        padding: "1.125rem 1.5rem",
+        background: effectiveDatasetId && effectiveParamSetId
+          ? "linear-gradient(90deg, rgba(14,45,92,0.03) 0%, rgba(200,146,42,0.04) 100%)"
+          : "#fff",
+        border: effectiveDatasetId && effectiveParamSetId
+          ? "1px solid rgba(14,45,92,0.14)"
+          : "1px solid #e2e8f0",
+        borderRadius: 10,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "1rem",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+      }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: "0.875rem", color: "#1e293b", marginBottom: "0.25rem" }}>Run Full Pipeline</div>
-          <div style={{ fontSize: "0.6875rem", color: "#64748b" }}>
-            Step 1 — <code style={{ fontFamily: "monospace", background: "#f8fafc", padding: "0.1rem 0.3rem", borderRadius: 3 }}>POST /api/v1/metrics/calculate-l1</code> (~52s)
-            &nbsp;·&nbsp;
-            Step 2 — <code style={{ fontFamily: "monospace", background: "#f8fafc", padding: "0.1rem 0.3rem", borderRadius: 3 }}>POST /api/v1/metrics/runtime-metrics?dataset_id=&amp;param_set_id=</code> (~101s, ~296k records)
+          <div style={{ fontSize: "0.6875rem", color: "#64748b", display: "flex", flexDirection: "column" as const, gap: "0.1rem" }}>
+            <div>
+              Step 1 — <code style={{ fontFamily: "monospace", background: "#f8fafc", padding: "0.1rem 0.3rem", borderRadius: 3 }}>POST /api/v1/metrics/calculate-l1</code> (~52s)
+            </div>
+            <div>
+              Step 2 — <code style={{ fontFamily: "monospace", background: "#f8fafc", padding: "0.1rem 0.3rem", borderRadius: 3 }}>
+                POST /api/v1/metrics/runtime-metrics?dataset_id={effectiveDatasetId ? effectiveDatasetId.slice(0,8)+"…" : "<select dataset>"}&amp;param_set_id={effectiveParamSetId ? effectiveParamSetId.slice(0,8)+"…" : "<loading>"}
+              </code> (~101s, ~296k records)
+            </div>
           </div>
+          {!effectiveDatasetId && (
+            <div style={{ marginTop: "0.375rem", fontSize: "0.625rem", color: "#C8922A", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.3rem" }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Select a dataset in Pipeline Configuration above before running
+            </div>
+          )}
         </div>
         <button
           data-testid="button-trigger-orchestration"
-          disabled={!backendOnline}
-          style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.625rem 1.5rem", borderRadius: 7, border: "none", background: backendOnline ? "#0E2D5C" : "#e2e8f0", color: backendOnline ? "white" : "#94a3b8", fontSize: "0.8125rem", fontWeight: 700, cursor: backendOnline ? "pointer" : "not-allowed", whiteSpace: "nowrap" as const, flexShrink: 0, boxShadow: backendOnline ? "0 4px 12px rgba(14,45,92,0.3)" : undefined }}
+          disabled={!backendOnline || !effectiveDatasetId || !effectiveParamSetId}
+          style={{
+            display: "flex", alignItems: "center", gap: "0.5rem",
+            padding: "0.625rem 1.5rem", borderRadius: 7, border: "none",
+            background: backendOnline && effectiveDatasetId && effectiveParamSetId ? "#0E2D5C" : "#e2e8f0",
+            color: backendOnline && effectiveDatasetId && effectiveParamSetId ? "white" : "#94a3b8",
+            fontSize: "0.8125rem", fontWeight: 700,
+            cursor: backendOnline && effectiveDatasetId && effectiveParamSetId ? "pointer" : "not-allowed",
+            whiteSpace: "nowrap" as const, flexShrink: 0,
+            boxShadow: backendOnline && effectiveDatasetId && effectiveParamSetId ? "0 4px 12px rgba(14,45,92,0.3)" : undefined,
+          }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <polygon points="5 3 19 12 5 21 5 3" />
           </svg>
-          {backendOnline ? "Run Orchestration" : "Backend Offline"}
+          {!backendOnline ? "Backend Offline" : !effectiveDatasetId ? "Select Dataset" : "Run Orchestration"}
         </button>
       </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.4); } }
+      `}</style>
     </div>
   );
 }

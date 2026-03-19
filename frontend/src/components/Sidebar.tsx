@@ -63,7 +63,7 @@ const navData = [
   {
     section: "Platform",
     items: [
-      { label: "ETL Pipeline", path: "/pipeline", subItems: [], badge: "NEW" },
+      { label: "ETL Pipeline", path: "/pipeline", subItems: [], badge: "NEW", etlHighlight: true },
     ],
   },
 ];
@@ -150,11 +150,50 @@ export default function Sidebar() {
                     href={item.path}
                     className={`sidebar-nav-item ${location === item.path && !hasChildren ? "active" : ""}`}
                     data-testid={`nav-${item.label.replace(/\s+/g, "-").toLowerCase()}`}
+                    style={(item as any).etlHighlight ? {
+                      background: location === item.path
+                        ? "linear-gradient(90deg, #C8922A 0%, #a0661a 100%)"
+                        : "linear-gradient(90deg, rgba(200,146,42,0.12) 0%, rgba(200,146,42,0.06) 100%)",
+                      border: "1px solid rgba(200,146,42,0.35)",
+                      borderLeft: "3px solid #C8922A",
+                      borderRadius: 7,
+                      marginLeft: "0.25rem",
+                      marginRight: "0.25rem",
+                      color: location === item.path ? "#fff" : "#92400e",
+                      fontWeight: 700,
+                      boxShadow: "0 2px 8px rgba(200,146,42,0.18)",
+                    } : undefined}
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
-                    </svg>
-                    <span style={{ fontStyle: (item as any).italic ? "italic" : undefined }}>{item.label}</span>
+                    {(item as any).etlHighlight ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={location === item.path ? "#fff" : "#C8922A"} strokeWidth="2">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                      </svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+                      </svg>
+                    )}
+                    <span style={{ fontStyle: (item as any).italic ? "italic" : undefined, flex: 1 }}>{item.label}</span>
+                    {(item as any).etlHighlight && (
+                      <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                        <span style={{
+                          width: 7, height: 7, borderRadius: "50%",
+                          background: "#22c55e",
+                          boxShadow: "0 0 6px rgba(34,197,94,0.8)",
+                          animation: "pipeline-pulse 1.8s ease-in-out infinite",
+                          display: "inline-block",
+                        }} />
+                        <span style={{
+                          fontSize: "0.5rem", fontWeight: 800,
+                          textTransform: "uppercase" as const, letterSpacing: "0.06em",
+                          background: location === item.path ? "rgba(255,255,255,0.25)" : "rgba(200,146,42,0.18)",
+                          color: location === item.path ? "#fff" : "#92400e",
+                          padding: "0.1rem 0.4rem", borderRadius: 999,
+                          border: location === item.path ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(200,146,42,0.3)",
+                        }}>NEW</span>
+                      </span>
+                    )}
+                    {!(item as any).etlHighlight && (item as any).badge && <span className="nav-badge">{(item as any).badge}</span>}
                   </Link>
                 )}
 
