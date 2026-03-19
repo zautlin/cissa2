@@ -302,9 +302,12 @@ class TERService:
         calc_ke = calc_ke.rename(columns={'value': 'calc_ke'}).copy()
         fv_ecf = fv_ecf.rename(columns={'value': 'fv_ecf'}).copy()
         
-        # Merge all data by ticker and fiscal_year
-        df = calc_mc.merge(calc_ke, on=['ticker', 'fiscal_year'], how='inner')
-        df = df.merge(fv_ecf, on=['ticker', 'fiscal_year'], how='inner')
+        # CRITICAL: Start with calc_mc (all available years for this ticker)
+        # Then merge with calc_ke and fv_ecf (they might not have all years)
+        # We use LEFT merge to preserve calc_mc rows where KE or FV ECF are missing
+        # Then we'll filter at the end to require the actual dependencies exist
+        df = calc_mc.merge(calc_ke, on=['ticker', 'fiscal_year'], how='left')
+        df = df.merge(fv_ecf, on=['ticker', 'fiscal_year'], how='left')
         
         # Sort by ticker and fiscal_year to enable lag calculation
         df = df.sort_values(['ticker', 'fiscal_year']).reset_index(drop=True)
@@ -354,6 +357,10 @@ class TERService:
             np.power(ratio_wc_wp, exponent) - np.power(ratio_wp, exponent),
             np.nan
         )
+        
+        # IMPORTANT: Filter to only include rows where we have BOTH calc_ke AND fv_ecf
+        # These are the required dependencies for calculating TER
+        df = df[df['calc_ke'].notna() & df['fv_ecf'].notna()].copy()
         
         # Build result dataframe with BOTH TER and TER-KE
         ter_results = pd.DataFrame({
