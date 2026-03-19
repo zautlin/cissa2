@@ -60,6 +60,12 @@ const navData = [
       { label: "Reports & Research", path: "/reports", subItems: [] },
     ],
   },
+  {
+    section: "Platform",
+    items: [
+      { label: "ETL Pipeline", path: "/pipeline", subItems: [], badge: "NEW" },
+    ],
+  },
 ];
 
 export default function Sidebar() {

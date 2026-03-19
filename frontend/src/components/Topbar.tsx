@@ -7,6 +7,7 @@ const pageTitles: Record<string, string> = {
   "/outputs": "Outputs Menu — Wealth Creation Analysis",
   "/underlying-data": "Underlying Data Menu",
   "/reports": "Reports & Research",
+  "/pipeline": "ETL Pipeline — Data Processing Workflow",
 };
 
 export default function Topbar({ onToggleSidebar, sidebarOpen }: {
