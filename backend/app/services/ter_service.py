@@ -325,10 +325,10 @@ class TERService:
         )
         
         # Step 3: Calculate WC and WP
-        # WC = Open MC × (1 + Load TER) - Open MC × (1 + Ke)
-        # WP = Open MC × (1 + Ke)
-        df['wc'] = df['open_mc'] * (1 + df['load_ter']) - df['open_mc'] * (1 + df['calc_ke'])
-        df['wp'] = df['open_mc'] * (1 + df['calc_ke'])
+        # WC = Open MC × (1 + Load TER)^interval - Open MC × (1 + Ke)^interval
+        # WP = Open MC × (1 + Ke)^interval
+        df['wc'] = df['open_mc'] * np.power(1 + df['load_ter'], interval) - df['open_mc'] * np.power(1 + df['calc_ke'], interval)
+        df['wp'] = df['open_mc'] * np.power(1 + df['calc_ke'], interval)
         
         # Step 4: Calculate TER (final)
         # TER = ((WC + WP) / Open MC)^(1/interval) - 1
