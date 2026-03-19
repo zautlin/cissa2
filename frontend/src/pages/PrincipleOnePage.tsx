@@ -3,7 +3,9 @@ import { Bar, Line, Scatter } from "react-chartjs-2";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Title, Tooltip, Legend, Filler, ScatterController,
+  RadialLinearScale,
 } from "chart.js";
+import { Radar } from "react-chartjs-2";
 import {
   roeKeByIndex, terKeByIndex, roeKeDistribution, terKeDistribution,
   epVsEpsCohorts, mbRatioByIndex,
@@ -11,11 +13,17 @@ import {
   epDominantScatter,
   mbRatioSectorDist, mbRatioCompanyDist,
   terIntlUSA, terIntlUK, terIntlAUS,
+  epPerShareGrowth, epPerShareBySector,
+  epHeatmapData,
+  tsrKeVsRoeKeScatter,
+  cissaIndex2DScatter,
+  esgMetricsData, esgKpis,
 } from "../data/chartData";
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, Title, Tooltip, Legend, Filler, ScatterController
+  PointElement, Title, Tooltip, Legend, Filler, ScatterController,
+  RadialLinearScale
 );
 
 const subSections = [
@@ -63,6 +71,89 @@ const helpTexts: Record<string, string> = {
   "1.4": `Using economic metrics to measure product and service market performance provides a better predictor of likely capital market performance. EP Dominant companies — whose EP per Share Growth materially exceeds EPS Growth — deliver much higher TSR outcomes than EPS Dominant companies.`,
   "1.5": `Economic metrics like TSR-Ke and TSR Alpha are more meaningful than non-economic metrics like TSR and Relative TSR when assessing standalone capital market performance. TER Alpha strips out the risk-adjusted impact of underlying market movements, providing a more reliable measure of company-attributable wealth creation.`,
 };
+
+// ─── EP Heatmap component (CSS grid, no extra library) ─────────────────────
+function EpHeatmapGrid() {
+  const { sectors, years, values } = epHeatmapData;
+
+  function heatColor(v: number): string {
+    // v in [-3, +3] → red (negative) through white (zero) to green (positive)
+    const norm = Math.max(-1, Math.min(1, v / 3));
+    if (norm >= 0) {
+      const g = Math.round(140 + 55 * norm);
+      const r = Math.round(255 - 100 * norm);
+      const b = Math.round(255 - 120 * norm);
+      return `rgb(${r},${g},${b})`;
+    } else {
+      const r = Math.round(255);
+      const g = Math.round(220 + 50 * norm);
+      const b = Math.round(220 + 50 * norm);
+      return `rgb(${r},${g},${b})`;
+    }
+  }
+
+  function textColor(v: number): string {
+    return Math.abs(v) > 1.5 ? "#fff" : "hsl(220 15% 20%)";
+  }
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ borderCollapse: "collapse", fontSize: "0.72rem", width: "100%" }}>
+        <thead>
+          <tr>
+            <th style={{ padding: "0.375rem 0.625rem", textAlign: "left", fontWeight: 700, color: "hsl(var(--foreground))", background: "hsl(var(--muted))", borderRadius: "4px 0 0 0" }}>
+              Sector
+            </th>
+            {years.map(y => (
+              <th key={y} style={{ padding: "0.375rem 0.5rem", textAlign: "center", fontWeight: 600, color: "hsl(var(--muted-foreground))", background: "hsl(var(--muted))", minWidth: "52px" }}>
+                {y}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sectors.map((sector, si) => (
+            <tr key={sector}>
+              <td style={{ padding: "0.3rem 0.625rem", fontWeight: 600, color: "hsl(var(--foreground))", borderBottom: "1px solid hsl(var(--border))", whiteSpace: "nowrap" }}>
+                {sector}
+              </td>
+              {values[si].map((val, yi) => (
+                <td key={yi} style={{
+                  padding: "0.3rem 0.25rem",
+                  textAlign: "center",
+                  background: heatColor(val),
+                  color: textColor(val),
+                  fontWeight: 600,
+                  borderBottom: "1px solid rgba(255,255,255,0.3)",
+                  borderRight: "1px solid rgba(255,255,255,0.3)",
+                  transition: "opacity 150ms",
+                }}>
+                  {val > 0 ? `+${val.toFixed(1)}` : val.toFixed(1)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {/* Legend */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "0.6875rem", color: "hsl(var(--muted-foreground))", fontWeight: 500 }}>EP Score:</span>
+        {[
+          { color: "rgb(255,120,120)", label: "−3 (Severe destruction)" },
+          { color: "rgb(255,200,200)", label: "−1" },
+          { color: "rgb(245,245,245)", label: "0 (Neutral)" },
+          { color: "rgb(180,220,180)", label: "+1" },
+          { color: "rgb(100,180,100)", label: "+3 (Strong creation)" },
+        ].map(l => (
+          <div key={l.label} style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+            <div style={{ width: "16px", height: "12px", background: l.color, borderRadius: "2px", border: "1px solid rgba(0,0,0,0.1)" }} />
+            <span style={{ fontSize: "0.625rem", color: "hsl(var(--muted-foreground))" }}>{l.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function PrincipleOnePage() {
   const [activeSection, setActiveSection] = useState("1.1");
@@ -360,6 +451,190 @@ export default function PrincipleOnePage() {
         </div>
       )}
 
+      {/* Section 1.3 — Products & Services — FULLY IMPLEMENTED */}
+      {activeSection === "1.3" && (
+        <div>
+          <div className="help-panel" style={{ marginBottom: "1rem", borderLeft: "3px solid hsl(188 78% 35%)" }}>
+            <strong style={{ color: "hsl(var(--primary))" }}>Section 1.3 — Products &amp; Services Market</strong>
+            <p style={{ margin: "0.375rem 0 0" }}>{helpTexts["1.3"]}</p>
+          </div>
+
+          {/* Row 1: EP per Share Growth + Sector Time Series */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+            <div className="chart-card" style={{ borderTop: "3px solid hsl(152 60% 40%)" }}>
+              <div className="chart-card-title">EP per Share Growth — Cohort Comparison</div>
+              <div className="chart-card-subtitle">{indexFilter} · {periodFilter} · EP Dominant vs EPS Dominant</div>
+              <div style={{ height: "240px" }}>
+                <Line data={epPerShareGrowth} options={{
+                  ...lineOpts("%"),
+                  plugins: {
+                    legend: { position: "bottom" as const, labels: { boxWidth: 20, font: { size: 9 }, padding: 6 } },
+                    tooltip: { mode: "index" as const, intersect: false },
+                  },
+                }} />
+              </div>
+              <div style={{ marginTop: "0.625rem", padding: "0.625rem 0.875rem", background: "hsl(152 60% 96%)", borderRadius: "0.375rem", borderLeft: "3px solid hsl(152 60% 40%)" }}>
+                <p style={{ margin: 0, fontSize: "0.6875rem", color: "hsl(152 60% 28%)", lineHeight: 1.5 }}>
+                  <strong>Key insight:</strong> EP Dominant companies show EP/Share Growth of ~55% vs. EPS Growth of ~38% — demonstrating that economic measures reflect true value creation missed by EPS alone.
+                </p>
+              </div>
+            </div>
+
+            <div className="chart-card" style={{ borderTop: "3px solid hsl(213 75% 40%)" }}>
+              <div className="chart-card-title">EP per Share by Sector — Time Series</div>
+              <div className="chart-card-subtitle">{indexFilter} · Healthcare / Technology / Consumer Staples / Materials</div>
+              <div style={{ height: "240px" }}>
+                <Line data={epPerShareBySector} options={{
+                  ...lineOpts("%"),
+                  plugins: {
+                    legend: { position: "bottom" as const, labels: { boxWidth: 20, font: { size: 9 }, padding: 6 } },
+                    tooltip: { mode: "index" as const, intersect: false },
+                  },
+                }} />
+              </div>
+              <div style={{ marginTop: "0.625rem", padding: "0.625rem 0.875rem", background: "hsl(213 75% 22% / 0.05)", borderRadius: "0.375rem", border: "1px solid hsl(213 75% 22% / 0.15)" }}>
+                <p style={{ margin: 0, fontSize: "0.6875rem", color: "hsl(var(--muted-foreground))", lineHeight: 1.5 }}>
+                  Technology sector EP/Share outpaces all others from 2013 onwards; Materials show persistent EP destruction consistent with commodity cycle headwinds.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: EP Heatmap */}
+          <div className="chart-card" style={{ marginBottom: "1rem", borderTop: "3px solid hsl(213 75% 22%)" }}>
+            <div className="chart-card-title" style={{ fontSize: "0.9375rem" }}>EP Score Heatmap — Sector × Year</div>
+            <div className="chart-card-subtitle">Economic Profit score by sector · 2010–2019 · Normalised to [−3, +3] scale · {indexFilter}</div>
+            <div style={{ marginTop: "0.75rem" }}>
+              <EpHeatmapGrid />
+            </div>
+            <p style={{ fontSize: "0.6875rem", color: "hsl(var(--muted-foreground))", marginTop: "0.75rem", fontStyle: "italic" }}>
+              EP Score = (ROE−Ke) × Book Equity normalised by sector peer median. Green = EP creation above Ke; Red = EP destruction below Ke.
+            </p>
+          </div>
+
+          {/* Row 3: TSR-Ke vs ROE-Ke scatter + EPS/EP per Share scatter */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+            <div className="chart-card" style={{ borderTop: "3px solid hsl(152 60% 40%)" }}>
+              <div className="chart-card-title">TSR-Ke vs ROE-Ke — Capital Market Linkage</div>
+              <div className="chart-card-subtitle">{indexFilter} · Annualised 10Y · Economic Profitability drives Wealth Creation</div>
+              <div style={{ height: "280px" }}>
+                <Scatter data={tsrKeVsRoeKeScatter} options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: "bottom" as const, labels: { boxWidth: 14, font: { size: 9 }, padding: 6 } },
+                    tooltip: {
+                      callbacks: {
+                        label: (ctx: any) => `${ctx.dataset.label}: ROE-Ke ${ctx.parsed.x > 0 ? "+" : ""}${ctx.parsed.x.toFixed(1)}% | TSR-Ke ${ctx.parsed.y > 0 ? "+" : ""}${ctx.parsed.y.toFixed(1)}%`,
+                      },
+                    },
+                  },
+                  scales: {
+                    x: {
+                      title: { display: true, text: "ROE-Ke % (Economic Profitability)", font: { size: 10, weight: "bold" } },
+                      ticks: { font: { size: 9 }, callback: (v: number | string) => `${v}%` },
+                      grid: { color: "rgba(0,0,0,0.05)" },
+                    },
+                    y: {
+                      title: { display: true, text: "TSR-Ke % (Capital Market Wealth Creation)", font: { size: 10, weight: "bold" } },
+                      ticks: { font: { size: 9 }, callback: (v: number | string) => `${v}%` },
+                      grid: { color: "rgba(0,0,0,0.05)" },
+                    },
+                  },
+                }} />
+              </div>
+            </div>
+
+            <div className="chart-card" style={{ borderTop: "3px solid hsl(38 60% 52%)" }}>
+              <div className="chart-card-title">CISSA Index — Alignment vs EP Growth</div>
+              <div className="chart-card-subtitle">{indexFilter} companies · CISSA Principle Alignment (0–10) vs EP Growth (%)</div>
+              <div style={{ height: "280px" }}>
+                <Scatter data={cissaIndex2DScatter} options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: "bottom" as const, labels: { boxWidth: 14, font: { size: 9 }, padding: 6 } },
+                    tooltip: {
+                      callbacks: {
+                        label: (ctx: any) => {
+                          const pt = ctx.raw as { x: number; y: number; label?: string };
+                          return `${pt.label || ctx.dataset.label}: Alignment ${pt.x}/10 | EP Growth ${pt.y > 0 ? "+" : ""}${pt.y}%`;
+                        },
+                      },
+                    },
+                  },
+                  scales: {
+                    x: {
+                      title: { display: true, text: "CISSA Principle Alignment Score (0–10)", font: { size: 10, weight: "bold" } },
+                      ticks: { font: { size: 9 } },
+                      grid: { color: "rgba(0,0,0,0.05)" },
+                      min: 0, max: 11,
+                    },
+                    y: {
+                      title: { display: true, text: "EP per Share Growth (%)", font: { size: 10, weight: "bold" } },
+                      ticks: { font: { size: 9 }, callback: (v: number | string) => `${v}%` },
+                      grid: { color: "rgba(0,0,0,0.05)" },
+                    },
+                  },
+                }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Row 4: ESG / Sustainability Panel */}
+          <div className="chart-card" style={{ borderTop: "3px solid hsl(152 60% 40%)" }}>
+            <div className="chart-card-title" style={{ fontSize: "0.9375rem" }}>ESG &amp; Sustainability Metrics by EP Cohort</div>
+            <div className="chart-card-subtitle">6 ESG Dimensions · EP Dominant vs Middle vs EPS Dominant · {indexFilter}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", marginTop: "0.75rem" }}>
+              {/* Radar chart */}
+              <div style={{ height: "280px" }}>
+                <Radar data={esgMetricsData} options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: "bottom" as const, labels: { boxWidth: 16, font: { size: 9 }, padding: 8 } },
+                  },
+                  scales: {
+                    r: {
+                      min: 0, max: 100,
+                      ticks: { font: { size: 8 }, stepSize: 20 },
+                      pointLabels: { font: { size: 9 } },
+                      grid: { color: "rgba(0,0,0,0.06)" },
+                    },
+                  },
+                }} />
+              </div>
+              {/* ESG KPI table */}
+              <div style={{ overflowX: "auto" }}>
+                <table className="data-table" style={{ fontSize: "0.7rem" }}>
+                  <thead>
+                    <tr>
+                      <th>ESG Metric</th>
+                      <th style={{ color: "hsl(152 60% 35%)" }}>EP Dominant</th>
+                      <th style={{ color: "hsl(38 60% 45%)" }}>Middle</th>
+                      <th style={{ color: "hsl(0 72% 40%)" }}>EPS Dominant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {esgKpis.map((row, i) => (
+                      <tr key={i}>
+                        <td style={{ fontWeight: 500, color: "hsl(var(--foreground))", maxWidth: "160px" }}>{row.metric}</td>
+                        <td style={{ fontWeight: 700, color: "hsl(152 60% 35%)", textAlign: "center" }}>{row.epDominant}</td>
+                        <td style={{ color: "hsl(38 60% 45%)", textAlign: "center" }}>{row.middle}</td>
+                        <td style={{ color: "hsl(0 72% 40%)", textAlign: "center" }}>{row.epsDominant}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p style={{ fontSize: "0.6125rem", color: "hsl(var(--muted-foreground))", marginTop: "0.5rem", fontStyle: "italic" }}>
+                  Companies with strong EP alignment consistently outperform on ESG dimensions — confirming that economic and stakeholder value creation are complementary, not competing.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Section 1.4 — Capital Market Predictor */}
       {activeSection === "1.4" && (
         <div>
@@ -526,39 +801,6 @@ export default function PrincipleOnePage() {
             <p style={{ fontSize: "0.6875rem", color: "hsl(var(--muted-foreground))", marginTop: "0.375rem", fontStyle: "italic" }}>
               Companies in EEA Index counted annually — includes all ASX 300 companies with sufficient data to calculate EP scores.
             </p>
-          </div>
-        </div>
-      )}
-
-      {/* Section 1.3 — Products & Services */}
-      {activeSection === "1.3" && (
-        <div>
-          <div className="help-panel" style={{ marginBottom: "1rem", borderLeft: "3px solid hsl(188 78% 35%)" }}>
-            <p style={{ fontWeight: 600, marginBottom: "0.5rem", color: "hsl(var(--primary))" }}>Section 1.3 — Products &amp; Services Market</p>
-            <p>{helpTexts["1.3"]}</p>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }}>
-            {[
-              `Distribution by Industry Sector (${indexFilter})`,
-              `Distribution by Company within Sector`,
-              `EPS vs EP per Share Growth Scatter`,
-              `Time Series 1,3,5,10yr by Index`,
-              `Time Series by Sector within Index`,
-              `Time Series by Company within Sector`,
-            ].map((label, i) => (
-              <div key={i} className="chart-card" style={{
-                cursor: "pointer", display: "flex", flexDirection: "column",
-                gap: "0.5rem", minHeight: "100px", justifyContent: "center", alignItems: "center",
-                background: "hsl(var(--muted) / 0.4)", border: "1.5px dashed hsl(var(--border))",
-                transition: "border-color 150ms, background 150ms",
-              }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "hsl(var(--primary))"; (e.currentTarget as HTMLElement).style.background = "hsl(var(--primary) / 0.05)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = ""; (e.currentTarget as HTMLElement).style.background = ""; }}
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-                <span style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))", textAlign: "center" }}>{label}</span>
-              </div>
-            ))}
           </div>
         </div>
       )}

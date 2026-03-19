@@ -440,3 +440,398 @@ export const wealthCreationDecomp = {
     borderRadius: 4,
   }],
 };
+
+// ─── EP per Share Growth time series (Section 1.3) ─────────────────────────
+export const epPerShareGrowth = {
+  labels: ["2001","2002","2003","2004","2005","2006","2007","2008","2009","2010","2011","2012","2013","2014","2015","2016","2017","2018","2019"],
+  datasets: [
+    {
+      label: "EP per Share Growth (EP Dominant)",
+      data: [12.1, 8.5, 18.3, 24.6, 38.2, 45.1, 52.8, 38.9, 22.4, 40.7, 48.3, 55.2, 58.1, 62.4, 55.8, 49.2, 52.7, 55.2, 57.8],
+      borderColor: "hsl(152 60% 40%)",
+      backgroundColor: "hsl(152 60% 40% / 0.08)",
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: 0.3,
+      fill: true,
+    },
+    {
+      label: "EPS Growth (EP Dominant)",
+      data: [10.2, 6.1, 14.8, 19.3, 29.4, 34.8, 39.2, 28.1, 16.5, 30.2, 36.4, 37.8, 41.2, 44.8, 38.5, 34.2, 37.1, 37.8, 39.2],
+      borderColor: "hsl(38 60% 52%)",
+      backgroundColor: "transparent",
+      borderWidth: 2,
+      borderDash: [5, 4],
+      pointRadius: 3,
+      tension: 0.3,
+      fill: false,
+    },
+    {
+      label: "EP per Share Growth (EPS Dominant)",
+      data: [-5.2, -8.1, -2.4, -3.8, -12.4, -18.6, -22.1, -28.4, -32.1, -34.8, -36.2, -34.0, -33.8, -35.2, -36.8, -34.5, -33.2, -34.0, -35.5],
+      borderColor: "hsl(0 72% 51%)",
+      backgroundColor: "hsl(0 72% 51% / 0.06)",
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: 0.3,
+      fill: false,
+    },
+  ],
+};
+
+// ─── EP per Share by Sector time series (Section 1.3 drill-down) ────────────
+export const epPerShareBySector = {
+  labels: ["2005","2006","2007","2008","2009","2010","2011","2012","2013","2014","2015","2016","2017","2018","2019"],
+  datasets: [
+    {
+      label: "Healthcare",
+      data: [18.2, 22.4, 28.1, 20.5, 15.8, 24.6, 30.2, 38.5, 42.8, 48.2, 44.5, 40.8, 46.2, 52.4, 56.8],
+      borderColor: "hsl(152 60% 40%)",
+      backgroundColor: "transparent",
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: 0.35,
+    },
+    {
+      label: "Technology",
+      data: [8.4, 12.8, 18.5, 5.2, 8.4, 22.8, 28.4, 34.2, 40.8, 48.6, 52.4, 58.8, 64.2, 70.5, 76.8],
+      borderColor: "hsl(213 75% 40%)",
+      backgroundColor: "transparent",
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: 0.35,
+    },
+    {
+      label: "Consumer Staples",
+      data: [5.8, 8.2, 10.4, 6.8, 4.2, 8.8, 12.4, 15.8, 18.2, 20.4, 18.8, 16.2, 18.4, 20.8, 22.4],
+      borderColor: "hsl(38 60% 52%)",
+      backgroundColor: "transparent",
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: 0.35,
+    },
+    {
+      label: "Materials",
+      data: [22.8, 28.4, 32.1, -8.4, -12.8, 8.4, 5.2, -2.4, -4.8, -8.2, -10.4, -12.8, -8.4, -5.2, -4.8],
+      borderColor: "hsl(0 72% 51%)",
+      backgroundColor: "transparent",
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: 0.35,
+    },
+  ],
+};
+
+// ─── EP Heatmap data (companies × sectors × EP magnitude) ──────────────────
+// Represented as a grid: rows = sectors, cols = years, values = EP score
+export const epHeatmapData = {
+  sectors: ["Healthcare", "Technology", "Consumer Staples", "Financials", "Energy", "Materials", "Utilities", "Industrials"],
+  years: ["2010","2011","2012","2013","2014","2015","2016","2017","2018","2019"],
+  // Value: EP score normalised -3 to +3 (negative = EP destruction, positive = EP creation)
+  values: [
+    [1.8, 2.1, 2.4, 2.6, 2.8, 2.5, 2.2, 2.6, 2.9, 3.0],   // Healthcare
+    [0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.0, 2.8, 2.6, 2.5],   // Technology
+    [1.2, 1.4, 1.5, 1.6, 1.7, 1.5, 1.4, 1.5, 1.6, 1.7],   // Consumer Staples
+    [0.6, 0.8, 1.0, 1.2, 1.0, 0.8, 0.9, 1.1, 1.3, 1.4],   // Financials
+    [1.5, 0.8, 0.4, -0.2, -0.8, -1.5, -0.8, 0.2, 0.5, 0.4], // Energy
+    [2.2, 1.8, 0.8, -0.4, -1.2, -1.8, -1.5, -0.8, -0.4, -0.6], // Materials
+    [-0.4, -0.2, 0.1, 0.2, 0.3, 0.1, -0.1, 0.1, 0.2, 0.3], // Utilities
+    [0.4, 0.6, 0.8, 1.0, 1.2, 1.0, 0.8, 1.0, 1.2, 1.4],   // Industrials
+  ],
+};
+
+// ─── TSR-Ke vs ROE-Ke scatter (Principle 1 capital market predictor) ─────────
+export const tsrKeVsRoeKeScatter = {
+  datasets: [
+    {
+      label: "EP Dominant (High ROE-Ke → High TSR-Ke)",
+      data: [
+        { x: 8.2, y: 12.4 }, { x: 12.5, y: 18.6 }, { x: 15.8, y: 22.4 },
+        { x: 9.4, y: 14.8 }, { x: 18.2, y: 25.6 }, { x: 22.4, y: 28.4 },
+        { x: 11.8, y: 16.8 }, { x: 25.2, y: 32.4 }, { x: 6.8, y: 10.2 },
+        { x: 19.6, y: 24.8 }, { x: 28.4, y: 35.2 }, { x: 14.2, y: 19.4 },
+      ],
+      backgroundColor: "hsl(152 60% 40% / 0.75)",
+      borderColor: "hsl(152 60% 30%)",
+      pointRadius: 7,
+      pointHoverRadius: 9,
+    },
+    {
+      label: "EPS Dominant (Low ROE-Ke → Low TSR-Ke)",
+      data: [
+        { x: 2.8, y: 1.2 }, { x: 5.4, y: 2.8 }, { x: -1.2, y: -3.4 },
+        { x: 3.8, y: 0.8 }, { x: 8.4, y: 3.2 }, { x: -3.4, y: -5.8 },
+        { x: 1.2, y: -1.4 }, { x: 6.8, y: 4.2 }, { x: -2.4, y: -4.8 },
+        { x: 4.2, y: 1.8 }, { x: -4.8, y: -8.2 }, { x: 0.8, y: -2.1 },
+      ],
+      backgroundColor: "hsl(0 72% 51% / 0.7)",
+      borderColor: "hsl(0 72% 40%)",
+      pointRadius: 7,
+      pointHoverRadius: 9,
+    },
+    {
+      label: "Middle Group",
+      data: [
+        { x: 4.2, y: 5.8 }, { x: 6.8, y: 7.4 }, { x: 2.4, y: 4.2 },
+        { x: 7.8, y: 9.2 }, { x: 3.6, y: 5.0 }, { x: 5.8, y: 6.8 },
+        { x: 1.8, y: 3.4 }, { x: 8.4, y: 10.2 }, { x: 4.8, y: 6.2 },
+      ],
+      backgroundColor: "hsl(38 60% 52% / 0.65)",
+      borderColor: "hsl(38 60% 40%)",
+      pointRadius: 6,
+      pointHoverRadius: 8,
+    },
+  ],
+};
+
+// ─── Wealth Creation Waterfall (decomposition: proper cascade) ────────────────
+// Labels + values for a cascade waterfall: each step shows component
+export const wealthWaterfallData = {
+  labels: [
+    "Starting\\nMarket Cap",
+    "EP Delivered",
+    "ΔPVEP\\n(Revised Fwd)",
+    "Risk Premium\\nChange",
+    "Ke Change\\nEffect",
+    "Total\\nWealth Created",
+  ],
+  values: [100, 8.2, 5.4, 1.8, -0.8, 114.6],          // abs values (base=100)
+  types:  ["base", "pos",  "pos",  "pos", "neg",  "total"],// base|pos|neg|total
+  colors: [
+    "hsl(213 75% 22% / 0.8)",     // base
+    "hsl(152 60% 40% / 0.85)",    // pos
+    "hsl(152 60% 40% / 0.85)",    // pos
+    "hsl(38 60% 52% / 0.85)",     // pos smaller
+    "hsl(0 72% 51% / 0.8)",       // neg
+    "hsl(213 75% 40% / 0.9)",     // total
+  ],
+};
+
+// ─── CISSA Index 2D Scatter (Alignment vs EP Growth) ─────────────────────────
+// X = Alignment with CISSA Principles (0-10), Y = EP Growth (%)
+export const cissaIndex2DScatter = {
+  datasets: [
+    {
+      label: "ASX 300 — High Alignment",
+      data: [
+        { x: 8.2, y: 42, label: "COH" }, { x: 9.1, y: 55, label: "CSL" },
+        { x: 7.8, y: 38, label: "REA" }, { x: 8.8, y: 48, label: "WTC" },
+        { x: 9.4, y: 62, label: "ALU" }, { x: 7.5, y: 35, label: "XRO" },
+        { x: 8.5, y: 52, label: "TNE" }, { x: 9.0, y: 58, label: "PME" },
+      ],
+      backgroundColor: "hsl(152 60% 40% / 0.8)",
+      borderColor: "hsl(152 60% 28%)",
+      pointRadius: 10,
+      pointHoverRadius: 12,
+    },
+    {
+      label: "ASX 300 — Moderate Alignment",
+      data: [
+        { x: 5.2, y: 18, label: "WBC" }, { x: 6.4, y: 22, label: "CBA" },
+        { x: 4.8, y: 12, label: "ANZ" }, { x: 5.8, y: 20, label: "NAB" },
+        { x: 6.2, y: 15, label: "WES" }, { x: 5.0, y: 10, label: "WOW" },
+        { x: 6.8, y: 28, label: "TLS" }, { x: 4.5, y: 8, label: "AGL" },
+      ],
+      backgroundColor: "hsl(38 60% 52% / 0.75)",
+      borderColor: "hsl(38 60% 38%)",
+      pointRadius: 8,
+      pointHoverRadius: 10,
+    },
+    {
+      label: "ASX 300 — Low Alignment",
+      data: [
+        { x: 2.4, y: -18, label: "BHP" }, { x: 3.2, y: -8, label: "RIO" },
+        { x: 1.8, y: -24, label: "FMG" }, { x: 2.8, y: -12, label: "NCM" },
+        { x: 3.5, y: -5, label: "ORG" }, { x: 2.1, y: -20, label: "WPL" },
+      ],
+      backgroundColor: "hsl(0 72% 51% / 0.7)",
+      borderColor: "hsl(0 72% 38%)",
+      pointRadius: 8,
+      pointHoverRadius: 10,
+    },
+  ],
+};
+
+// ─── ESG / Sustainability Metrics Panel ────────────────────────────────────
+export const esgMetricsData = {
+  // Radar chart data: 6 ESG dimensions for 3 cohorts
+  labels: ["Carbon Intensity", "Board Diversity", "Exec Pay Alignment", "Supply Chain Governance", "Customer Outcomes", "Long-Term Focus (EP)"],
+  datasets: [
+    {
+      label: "EP Dominant (Top Quartile)",
+      data: [72, 78, 82, 74, 86, 90],
+      borderColor: "hsl(152 60% 40%)",
+      backgroundColor: "hsl(152 60% 40% / 0.12)",
+      borderWidth: 2,
+      pointRadius: 4,
+      pointBackgroundColor: "hsl(152 60% 40%)",
+    },
+    {
+      label: "Middle Quartiles",
+      data: [55, 58, 52, 50, 62, 55],
+      borderColor: "hsl(38 60% 52%)",
+      backgroundColor: "hsl(38 60% 52% / 0.08)",
+      borderWidth: 2,
+      pointRadius: 4,
+      pointBackgroundColor: "hsl(38 60% 52%)",
+    },
+    {
+      label: "EPS Dominant (Bottom Quartile)",
+      data: [38, 42, 35, 32, 44, 28],
+      borderColor: "hsl(0 72% 51%)",
+      backgroundColor: "hsl(0 72% 51% / 0.08)",
+      borderWidth: 2,
+      pointRadius: 4,
+      pointBackgroundColor: "hsl(0 72% 51%)",
+    },
+  ],
+};
+
+// ESG KPIs summary table data
+export const esgKpis = [
+  { metric: "Carbon Intensity (tCO₂/$M revenue)", epDominant: "42.8", middle: "68.4", epsDominant: "112.6", unit: "tCO₂/$M" },
+  { metric: "Board Gender Diversity", epDominant: "38%", middle: "28%", epsDominant: "18%", unit: "%" },
+  { metric: "Exec Pay Linked to EP Outcomes", epDominant: "74%", middle: "45%", epsDominant: "22%", unit: "%" },
+  { metric: "Supply Chain Sustainability Score", epDominant: "7.4/10", middle: "5.0/10", epsDominant: "3.2/10", unit: "/10" },
+  { metric: "Customer Satisfaction Score (NPS)", epDominant: "62", middle: "44", epsDominant: "32", unit: "" },
+  { metric: "10yr Ann. TSR-Ke", epDominant: "14.8%", middle: "7.4%", epsDominant: "5.7%", unit: "%" },
+];
+
+// ─── All exportable metrics catalogue (for Download page) ────────────────────
+export const exportableMetrics = [
+  {
+    id: "roe_ke_by_index",
+    name: "ROE-Ke by Index (Time Series)",
+    description: "Economic Profitability — annual, 3Y, 5Y, 10Y rolling averages",
+    principle: "Principle 1",
+    section: "1.1",
+    rows: 19,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "ter_ke_by_index",
+    name: "TER-Ke Wealth Creation by Index",
+    description: "Annualised wealth creation measure, all rolling windows",
+    principle: "Principle 1",
+    section: "1.1",
+    rows: 19,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "mb_ratio_by_index",
+    name: "M:B Ratio by Index (Time Series)",
+    description: "Market-to-Book ratio across ASX 300 by rolling period",
+    principle: "Principle 1",
+    section: "1.2",
+    rows: 19,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "roe_ke_distribution",
+    name: "ROE-Ke Distribution by Sector",
+    description: "Histogram distribution of economic profitability across sectors",
+    principle: "Principle 1",
+    section: "1.1",
+    rows: 21,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "ep_vs_eps_cohorts",
+    name: "EP Dominant vs EPS Dominant Cohort Performance",
+    description: "Comparative metrics: EPS Growth, EP/Share Growth, Ann. TSR",
+    principle: "Principle 1",
+    section: "1.4",
+    rows: 3,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "ep_per_share_growth",
+    name: "EP per Share Growth by Cohort",
+    description: "EP Dominant vs EPS Dominant EP/Share growth time series",
+    principle: "Principle 1",
+    section: "1.3",
+    rows: 19,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "ep_per_share_by_sector",
+    name: "EP per Share by Sector",
+    description: "Sector-level EP per share growth time series (Healthcare, Tech, etc.)",
+    principle: "Principle 1",
+    section: "1.3",
+    rows: 15,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "ep_heatmap",
+    name: "EP Heatmap by Sector × Year",
+    description: "EP score grid: 8 sectors × 10 years, normalised to [-3, +3]",
+    principle: "Principle 1",
+    section: "1.3",
+    rows: 80,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "eeai_required",
+    name: "EEA Index — Required ROE-Ke vs Historical",
+    description: "Comparison of required EP to justify share price vs rolling historical average",
+    principle: "Principle 1",
+    section: "1.4",
+    rows: 18,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "ter_intl_comparison",
+    name: "TER-Ke International Comparison",
+    description: "TER-Ke and TER Alpha for USA, UK, Australia (2005–2018)",
+    principle: "Principle 1",
+    section: "1.5",
+    rows: 42,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "bow_wave_companies",
+    name: "Bow Wave Analysis — Company Data",
+    description: "Baseline vs new EP expectations, wealth creation delta per company",
+    principle: "Principle 2",
+    section: "2.3",
+    rows: 6,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "wealth_waterfall",
+    name: "Wealth Creation Decomposition Waterfall",
+    description: "EP Delivered + ΔPVEP + Risk Premium Change components",
+    principle: "Principle 2",
+    section: "2.5",
+    rows: 6,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "cissa_index_2d",
+    name: "CISSA Index 2D — Alignment vs EP Growth",
+    description: "Company scatter: CISSA Principle Alignment score vs EP Growth %",
+    principle: "All Principles",
+    section: "Outputs",
+    rows: 22,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "esg_metrics",
+    name: "ESG / Sustainability Metrics by Cohort",
+    description: "6 ESG dimensions × 3 EP cohorts — Carbon, Diversity, Governance, etc.",
+    principle: "Principle 4",
+    section: "ESG",
+    rows: 6,
+    format: ["CSV", "JSON"],
+  },
+  {
+    id: "mb_ratio_distribution",
+    name: "M:B Ratio Distribution by Sector",
+    description: "Company distribution across M:B bands by sector (Materials, Financials, Healthcare)",
+    principle: "Principle 1",
+    section: "1.2",
+    rows: 30,
+    format: ["CSV", "JSON"],
+  },
+];

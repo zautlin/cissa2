@@ -9,6 +9,7 @@ import PrincipleTwoPage from "./pages/PrincipleTwoPage";
 import OutputsPage from "./pages/OutputsPage";
 import UnderlyingDataPage from "./pages/UnderlyingDataPage";
 import ReportsPage from "./pages/ReportsPage";
+import MetricsDownloadPage from "./pages/MetricsDownloadPage";
 import PipelinePage from "./pages/PipelinePage";
 import NotFound from "./pages/not-found";
 
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/outputs" component={OutputsPage} />
             <Route path="/underlying-data" component={UnderlyingDataPage} />
             <Route path="/reports" component={ReportsPage} />
+            <Route path="/download" component={MetricsDownloadPage} />
             <Route path="/pipeline" component={PipelinePage} />
             <Route component={NotFound} />
           </Switch>

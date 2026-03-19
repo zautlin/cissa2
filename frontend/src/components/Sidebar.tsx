@@ -58,6 +58,7 @@ const navData = [
     section: "Reports",
     items: [
       { label: "Reports & Research", path: "/reports", subItems: [] },
+      { label: "Metrics Download", path: "/download", subItems: [], badge: "CSV", downloadHighlight: true },
     ],
   },
   {
@@ -150,7 +151,18 @@ export default function Sidebar() {
                     href={item.path}
                     className={`sidebar-nav-item ${location === item.path && !hasChildren ? "active" : ""}`}
                     data-testid={`nav-${item.label.replace(/\s+/g, "-").toLowerCase()}`}
-                    style={(item as any).etlHighlight ? {
+                    style={(item as any).downloadHighlight ? {
+                      background: location === item.path
+                        ? "linear-gradient(90deg, hsl(152 60% 35%) 0%, hsl(152 60% 28%) 100%)"
+                        : "linear-gradient(90deg, hsl(152 60% 40% / 0.1) 0%, hsl(152 60% 40% / 0.05) 100%)",
+                      border: "1px solid hsl(152 60% 40% / 0.3)",
+                      borderLeft: "3px solid hsl(152 60% 40%)",
+                      borderRadius: 7,
+                      marginLeft: "0.25rem",
+                      marginRight: "0.25rem",
+                      color: location === item.path ? "#fff" : "hsl(152 60% 28%)",
+                      fontWeight: 700,
+                    } : (item as any).etlHighlight ? {
                       background: location === item.path
                         ? "linear-gradient(90deg, #C8922A 0%, #a0661a 100%)"
                         : "linear-gradient(90deg, rgba(200,146,42,0.12) 0%, rgba(200,146,42,0.06) 100%)",
@@ -164,7 +176,11 @@ export default function Sidebar() {
                       boxShadow: "0 2px 8px rgba(200,146,42,0.18)",
                     } : undefined}
                   >
-                    {(item as any).etlHighlight ? (
+                    {(item as any).downloadHighlight ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={location === item.path ? "#fff" : "hsl(152 60% 35%)"} strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                      </svg>
+                    ) : (item as any).etlHighlight ? (
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={location === item.path ? "#fff" : "#C8922A"} strokeWidth="2">
                         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                       </svg>
@@ -174,6 +190,16 @@ export default function Sidebar() {
                       </svg>
                     )}
                     <span style={{ fontStyle: (item as any).italic ? "italic" : undefined, flex: 1 }}>{item.label}</span>
+                    {(item as any).downloadHighlight && (
+                      <span style={{
+                        fontSize: "0.5rem", fontWeight: 800,
+                        textTransform: "uppercase" as const, letterSpacing: "0.06em",
+                        background: location === item.path ? "rgba(255,255,255,0.3)" : "hsl(152 60% 40% / 0.15)",
+                        color: location === item.path ? "#fff" : "hsl(152 60% 28%)",
+                        padding: "0.1rem 0.4rem", borderRadius: 999,
+                        border: location === item.path ? "1px solid rgba(255,255,255,0.3)" : "1px solid hsl(152 60% 40% / 0.3)",
+                      }}>CSV</span>
+                    )}
                     {(item as any).etlHighlight && (
                       <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                         <span style={{
@@ -193,7 +219,7 @@ export default function Sidebar() {
                         }}>NEW</span>
                       </span>
                     )}
-                    {!(item as any).etlHighlight && (item as any).badge && <span className="nav-badge">{(item as any).badge}</span>}
+                    {!(item as any).etlHighlight && !(item as any).downloadHighlight && (item as any).badge && <span className="nav-badge">{(item as any).badge}</span>}
                   </Link>
                 )}
 
