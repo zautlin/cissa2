@@ -1,7 +1,7 @@
 /**
  * PipelinePage — CISSA ETL Pipeline
  * Full live API wiring:
- *   Stage 1: Data Ingestion (Bloomberg upload + statistics)
+ *   Stage 1: Data Selection (pick existing dataset from backend)
  *   Stage 2: Parameter Configuration
  *   Stage 3: L1 Metrics Computation (orchestrate-l1)
  *   Stage 4: Runtime Metrics (beta → rf → ke → fv-ecf → ter → ter-alpha)
@@ -132,9 +132,7 @@ export default function PipelinePage() {
   const [dataset, setDataset] = useState<DatasetStatistics | null>(null);
   const [params, setParams]   = useState<ParameterSetResponse | null>(null);
   const [paramEdits, setParamEdits] = useState<Record<string, unknown>>({});
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [allDatasets, setAllDatasets] = useState<Record<string, DatasetStatistics>>({});
   const logEndRef    = useRef<HTMLDivElement>(null);
 
   const addLog = useCallback((text: string, type: "info" | "success" | "error" | "warn" = "info") => {
@@ -150,33 +148,35 @@ export default function PipelinePage() {
     });
   }, []);
 
-  // ── Stage 1: Data Ingestion ─────────────────────────────────────────────
+  // ── Stage 1: Data Selection ──────────────────────────────────────────────
   const runIngestion = useCallback(async () => {
     setActiveStage(0);
-    setStage(0, { status: "running", message: "Connecting to API…" });
-    addLog("Stage 1: Data Ingestion — connecting to backend…");
+    setStage(0, { status: "running", message: "Loading available datasets…" });
+    addLog("Stage 1: Data Selection — fetching datasets from backend…");
     const t0 = Date.now();
     try {
       const statsAll = await getStatistics() as Record<string, DatasetStatistics>;
       const keys = Object.keys(statsAll);
       if (keys.length === 0) {
         setStage(0, { status: "error", message: "No datasets found in database" });
-        addLog("No datasets found. Please ensure Bloomberg data has been ingested into the backend.", "error");
+        addLog("No datasets found in backend. Please ingest Bloomberg data first.", "error");
         return;
       }
+      setAllDatasets(statsAll);
+      // Auto-select the first (most recent) dataset
       const ds = statsAll[keys[0]];
       setDataset(ds);
       const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
       setStage(0, {
         status: "done",
-        message: `${ds.companies.count} companies · ${ds.sectors.count} sectors`,
+        message: `${keys.length} dataset${keys.length > 1 ? "s" : ""} available · ${ds.companies.count} companies selected`,
         detail: `FY ${ds.data_coverage.min_year}–${ds.data_coverage.max_year} · ${ds.raw_metrics.count.toLocaleString()} raw records`,
         records: ds.raw_metrics.count,
         seconds: Number(elapsed),
       });
-      addLog(`Dataset loaded: ${ds.companies.count} companies, ${ds.sectors.count} sectors`, "success");
-      addLog(`Coverage: FY ${ds.data_coverage.min_year} → FY ${ds.data_coverage.max_year}`, "success");
-      addLog(`Raw metrics: ${ds.raw_metrics.count.toLocaleString()} records · Country: ${ds.country || "AU"}`, "info");
+      addLog(`Found ${keys.length} dataset(s) in backend`, "success");
+      addLog(`Auto-selected: ${ds.dataset_id} — ${ds.companies.count} companies, ${ds.sectors.count} sectors`, "success");
+      addLog(`Coverage: FY ${ds.data_coverage.min_year} → FY ${ds.data_coverage.max_year} · Country: ${ds.country || "AU"}`, "info");
       addLog(`Elapsed: ${elapsed}s`, "info");
       setActiveStage(1);
     } catch (err: any) {
@@ -353,7 +353,7 @@ export default function PipelinePage() {
 
   const stageActions = [runIngestion, loadParams, runL1, runRuntime, checkResults];
   const stageConfigs = [
-    { label: "Data Ingestion",    sublabel: "Phase 0",   status: stageResults[0].status },
+    { label: "Data Selection",    sublabel: "Select DB",  status: stageResults[0].status },
     { label: "Parameters",        sublabel: "Configure", status: stageResults[1].status },
     { label: "L1 Metrics",        sublabel: "Phase 1–2", status: stageResults[2].status },
     { label: "Runtime Metrics",   sublabel: "Phase 3–5", status: stageResults[3].status },
@@ -495,58 +495,67 @@ export default function PipelinePage() {
         {/* Left: Stage detail panels */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
 
-          {/* Stage 1: Data Ingestion */}
+          {/* Stage 1: Data Selection */}
           <StagePanel
-            num={1} title="Data Ingestion" status={stageResults[0].status}
+            num={1} title="Data Selection" status={stageResults[0].status}
             onRun={runIngestion} active={activeStage === 0}
           >
-            {/* Bloomberg upload zone */}
-            <div
-              onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={e => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files[0]; if (f) setUploadFile(f); }}
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                border: `2px dashed ${isDragging ? NAVY : "hsl(210 16% 85%)"}`,
-                borderRadius: 10,
-                padding: "1.5rem",
-                textAlign: "center",
-                cursor: "pointer",
-                background: isDragging ? "hsl(213 75% 22% / 0.04)" : "hsl(210 20% 99%)",
-                transition: "all 0.2s",
-                marginBottom: "0.75rem",
-              }}
-            >
-              <input ref={fileInputRef} type="file" accept=".xlsx,.csv,.xls" style={{ display: "none" }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) setUploadFile(f); }} />
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={SLATE} strokeWidth="1.5" style={{ margin: "0 auto 0.5rem" }}>
-                <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-              </svg>
-              {uploadFile ? (
-                <div>
-                  <div style={{ fontSize: "0.8125rem", fontWeight: 700, color: NAVY }}>{uploadFile.name}</div>
-                  <div style={{ fontSize: "0.6875rem", color: SLATE }}>{(uploadFile.size / 1024).toFixed(0)} KB</div>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "hsl(220 30% 25%)" }}>Drop Bloomberg XLSX here</div>
-                  <div style={{ fontSize: "0.6875rem", color: SLATE, marginTop: "0.25rem" }}>or click to browse · .xlsx .xls .csv</div>
-                </div>
-              )}
-            </div>
-            {dataset && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                {[
-                  { label: "Companies", value: dataset.companies.count },
-                  { label: "Sectors",   value: dataset.sectors.count },
-                  { label: "Min Year",  value: dataset.data_coverage.min_year },
-                  { label: "Max Year",  value: dataset.data_coverage.max_year },
-                ].map(kv => (
-                  <div key={kv.label} style={{ padding: "0.5rem 0.625rem", background: "hsl(213 40% 97%)", borderRadius: 7, border: "1px solid hsl(213 30% 90%)" }}>
-                    <div style={{ fontSize: "0.5625rem", color: SLATE, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.04em" }}>{kv.label}</div>
-                    <div style={{ fontSize: "1rem", fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>{kv.value}</div>
-                  </div>
-                ))}
+            {Object.keys(allDatasets).length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <div style={{ fontSize: "0.6875rem", color: SLATE, marginBottom: "0.25rem" }}>Select a dataset to use for this pipeline run:</div>
+                {Object.entries(allDatasets).map(([key, ds]) => {
+                  const isSelected = dataset?.dataset_id === ds.dataset_id;
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => {
+                        setDataset(ds);
+                        addLog(`Dataset selected: ${ds.dataset_id}`, "info");
+                      }}
+                      style={{
+                        padding: "0.625rem 0.75rem",
+                        borderRadius: 8,
+                        border: `2px solid ${isSelected ? NAVY : "hsl(210 16% 88%)"}`,
+                        background: isSelected ? "hsl(213 75% 22% / 0.06)" : "#fff",
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.375rem" }}>
+                        <div style={{ fontSize: "0.75rem", fontWeight: 700, color: NAVY, fontFamily: "monospace" }}>{ds.dataset_id}</div>
+                        {isSelected && (
+                          <span style={{ fontSize: "0.5625rem", fontWeight: 800, background: NAVY, color: "#fff", padding: "0.15rem 0.5rem", borderRadius: 999 }}>SELECTED</span>
+                        )}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.375rem" }}>
+                        {[
+                          { label: "Companies", value: ds.companies.count },
+                          { label: "Sectors",   value: ds.sectors.count },
+                          { label: "Min Year",  value: ds.data_coverage.min_year },
+                          { label: "Max Year",  value: ds.data_coverage.max_year },
+                        ].map(kv => (
+                          <div key={kv.label} style={{ padding: "0.3rem 0.4rem", background: "hsl(213 40% 97%)", borderRadius: 5 }}>
+                            <div style={{ fontSize: "0.5rem", color: SLATE, textTransform: "uppercase", fontWeight: 700 }}>{kv.label}</div>
+                            <div style={{ fontSize: "0.875rem", fontWeight: 800, color: NAVY }}>{kv.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: "0.5625rem", color: SLATE, marginTop: "0.3rem" }}>
+                        {ds.raw_metrics.count.toLocaleString()} raw records · Country: {ds.country || "AU"} · Created: {new Date(ds.dataset_created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ textAlign: "center", padding: "1.25rem 1rem" }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={SLATE} strokeWidth="1.5" style={{ margin: "0 auto 0.625rem", display: "block" }}>
+                  <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                </svg>
+                <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "hsl(220 30% 35%)", marginBottom: "0.25rem" }}>No datasets loaded yet</div>
+                <div style={{ fontSize: "0.6875rem", color: SLATE }}>Click <b>Run</b> to connect and fetch available datasets from the backend database.</div>
               </div>
             )}
           </StagePanel>
@@ -601,8 +610,13 @@ export default function PipelinePage() {
                 </button>
               </div>
             ) : (
-              <div style={{ color: SLATE, fontSize: "0.75rem", textAlign: "center", padding: "1rem" }}>
-                Run Stage 1 first, then click "Load Parameters"
+              <div style={{ textAlign: "center", padding: "1.25rem 1rem" }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={SLATE} strokeWidth="1.5" style={{ margin: "0 auto 0.5rem", display: "block" }}>
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+                </svg>
+                <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "hsl(220 30% 35%)", marginBottom: "0.25rem" }}>Parameters not loaded</div>
+                <div style={{ fontSize: "0.6875rem", color: SLATE }}>Click <b>Run</b> to fetch the active parameter set from the backend.</div>
               </div>
             )}
           </StagePanel>
