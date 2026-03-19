@@ -92,10 +92,10 @@ export default function Sidebar() {
             <circle cx="16" cy="16" r="2.5" fill="white"/>
           </svg>
           <div>
-            <div style={{ fontWeight: 700, fontSize: "1rem", color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.1 }}>
+            <div style={{ fontWeight: 700, fontSize: "1rem", color: "hsl(213 75% 22%)", letterSpacing: "-0.01em", lineHeight: 1.1 }}>
               CISSA<sup style={{ fontSize: "0.5rem", verticalAlign: "super" }}>™</sup>
             </div>
-            <div style={{ fontSize: "0.625rem", color: "hsl(210 20% 65%)", letterSpacing: "0.04em", textTransform: "uppercase", lineHeight: 1 }}>
+            <div style={{ fontSize: "0.625rem", color: "hsl(215 20% 50%)", letterSpacing: "0.04em", textTransform: "uppercase", lineHeight: 1 }}>
               Digital Platform
             </div>
           </div>
@@ -105,7 +105,7 @@ export default function Sidebar() {
             width: "6px", height: "6px", borderRadius: "50%", background: "hsl(152 60% 55%)",
             boxShadow: "0 0 6px hsl(152 60% 55% / 0.8)"
           }} />
-          <span style={{ fontSize: "0.6875rem", color: "hsl(210 20% 55%)" }}>Live data — ASX 300</span>
+          <span style={{ fontSize: "0.6875rem", color: "hsl(215 20% 50%)" }}>Live data — ASX 300</span>
         </div>
       </div>
 

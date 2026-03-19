@@ -35,12 +35,12 @@
     --chart-5: 30 80% 45%;
 
     /* Custom tokens */
-    --sidebar-bg: 220 35% 12%;
-    --sidebar-fg: 210 25% 90%;
-    --sidebar-muted: 220 20% 55%;
+    --sidebar-bg: 0 0% 100%;
+    --sidebar-fg: 213 75% 22%;
+    --sidebar-muted: 215 20% 50%;
     --sidebar-accent: 38 60% 52%;
-    --sidebar-border: 220 25% 22%;
-    --sidebar-active: 213 60% 28%;
+    --sidebar-border: 210 16% 88%;
+    --sidebar-active: 213 75% 22%;
     --topbar-bg: 0 0% 100%;
     --topbar-border: 210 16% 88%;
     --kpi-positive: 152 60% 40%;
@@ -162,12 +162,12 @@
 }
 
 .sidebar-nav-item:hover {
-  background: hsl(var(--sidebar-active));
-  color: #fff;
+  background: hsl(213 75% 22% / 0.08);
+  color: hsl(213 75% 22%);
 }
 
 .sidebar-nav-item.active {
-  background: hsl(213 60% 28%);
+  background: hsl(213 75% 22%);
   color: #fff;
   border-left: 3px solid hsl(var(--sidebar-accent));
 }
@@ -180,8 +180,12 @@
 }
 
 .sidebar-nav-item.sub:hover, .sidebar-nav-item.sub.active {
+  color: hsl(213 75% 22%);
+  background: hsl(213 75% 22% / 0.08);
+}
+.sidebar-nav-item.sub.active {
+  background: hsl(213 75% 22%);
   color: #fff;
-  background: hsl(var(--sidebar-active));
 }
 
 .sidebar-nav-item .nav-badge {

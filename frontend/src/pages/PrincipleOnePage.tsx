@@ -1,17 +1,21 @@
 import { useState } from "react";
-import { Bar, Line } from "react-chartjs-2";
+import { Bar, Line, Scatter } from "react-chartjs-2";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, Title, Tooltip, Legend,
+  PointElement, Title, Tooltip, Legend, Filler, ScatterController,
 } from "chart.js";
 import {
   roeKeByIndex, terKeByIndex, roeKeDistribution, terKeDistribution,
   epVsEpsCohorts, mbRatioByIndex,
+  eeaiRequired, eeaiIndexCount,
+  epDominantScatter,
+  mbRatioSectorDist, mbRatioCompanyDist,
+  terIntlUSA, terIntlUK, terIntlAUS,
 } from "../data/chartData";
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, Title, Tooltip, Legend
+  PointElement, Title, Tooltip, Legend, Filler, ScatterController
 );
 
 const subSections = [
@@ -278,7 +282,7 @@ export default function PrincipleOnePage() {
             <div className="chart-card">
               <div className="chart-card-title">Time Series of Historical M:B Ratio by Index</div>
               <div className="chart-card-subtitle">{indexFilter} · {periodFilter}</div>
-              <div style={{ height: "240px" }}>
+              <div style={{ height: "220px" }}>
                 <Line data={mbRatioByIndex} options={lineOpts("×")} />
               </div>
             </div>
@@ -323,6 +327,36 @@ export default function PrincipleOnePage() {
               </p>
             </div>
           </div>
+
+          {/* M:B Distribution Histograms */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <div className="chart-card">
+              <div className="chart-card-title">Distribution of M:B Ratio by Sector</div>
+              <div className="chart-card-subtitle">{indexFilter} — number of sectors by M:B range</div>
+              <div style={{ height: "210px" }}>
+                <Bar data={mbRatioSectorDist} options={barOpts("×")} />
+              </div>
+            </div>
+            <div className="chart-card">
+              <div className="chart-card-title">Distribution of M:B Ratio by Company within Sector</div>
+              <div className="chart-card-subtitle">{indexFilter} — Materials / Financials / Healthcare</div>
+              <div style={{ height: "210px" }}>
+                <Bar data={mbRatioCompanyDist} options={{
+                  ...barOpts("×"),
+                  plugins: {
+                    ...barOpts("×").plugins,
+                  },
+                  scales: {
+                    x: { ticks: { font: { size: 8 }, maxRotation: 0 }, grid: { display: false }, stacked: false },
+                    y: { ticks: { font: { size: 9 }, callback: (v: number | string) => `${v}×` }, grid: { color: "rgba(0,0,0,0.04)" } },
+                  },
+                }} />
+              </div>
+              <p style={{ fontSize: "0.6875rem", marginTop: "0.5rem", color: "hsl(var(--muted-foreground))" }}>
+                Select a sector bar to drill down to company-level distribution.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -335,11 +369,11 @@ export default function PrincipleOnePage() {
             This demonstrates that economic metrics are superior indicators of likely capital market performance.
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
             <div className="chart-card">
               <div className="chart-card-title">EP Dominant vs EPS Dominant — Capital Market Outcomes</div>
               <div className="chart-card-subtitle">ASX 500 · 10 Years to 30 June 2018</div>
-              <div style={{ height: "280px" }}>
+              <div style={{ height: "260px" }}>
                 <Bar data={epVsEpsCohorts} options={{
                   ...barOpts("%"),
                   scales: {
@@ -388,7 +422,7 @@ export default function PrincipleOnePage() {
                   </tbody>
                 </table>
               </div>
-              <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+              <div style={{ marginTop: "0.875rem", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
                 {[
                   { label: "Cost of Equity (Ke)", value: "9.1%", color: "hsl(var(--primary))" },
                   { label: "Benchmark TSR", value: "9.8%", color: "hsl(38 60% 52%)" },
@@ -408,50 +442,196 @@ export default function PrincipleOnePage() {
               </div>
             </div>
           </div>
+
+          {/* EPS Growth vs EP per Share Growth 4-Quadrant Scatter */}
+          <div className="chart-card" style={{ marginBottom: "1rem", borderTop: "3px solid hsl(152 60% 40%)" }}>
+            <div className="chart-card-title" style={{ fontSize: "0.9375rem" }}>EPS Growth vs EP per Share Growth — 4-Quadrant Analysis</div>
+            <div className="chart-card-subtitle">ASX 200* · Companies categorised by growth cohort</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: "1rem", marginTop: "0.5rem" }}>
+              <div style={{ height: "320px", position: "relative" }}>
+                {/* Quadrant labels */}
+                <div style={{ position: "absolute", top: "8px", right: "8px", fontSize: "0.6875rem", fontWeight: 700, color: "hsl(152 60% 35%)", background: "hsl(152 60% 95%)", padding: "0.2rem 0.5rem", borderRadius: "4px", zIndex: 1 }}>EP Dominant</div>
+                <div style={{ position: "absolute", bottom: "8px", right: "8px", fontSize: "0.6875rem", fontWeight: 700, color: "hsl(0 72% 40%)", background: "hsl(0 72% 96%)", padding: "0.2rem 0.5rem", borderRadius: "4px", zIndex: 1 }}>EPS Dominant</div>
+                <div style={{ position: "absolute", top: "8px", left: "8px", fontSize: "0.6875rem", fontWeight: 600, color: "hsl(var(--muted-foreground))", background: "hsl(var(--muted))", padding: "0.2rem 0.5rem", borderRadius: "4px", zIndex: 1 }}>Mixed</div>
+                <div style={{ position: "absolute", bottom: "8px", left: "8px", fontSize: "0.6875rem", fontWeight: 600, color: "hsl(220 15% 45%)", background: "hsl(220 15% 92%)", padding: "0.2rem 0.5rem", borderRadius: "4px", zIndex: 1 }}>Poor Performers</div>
+                <Scatter data={epDominantScatter} options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: "bottom" as const, labels: { boxWidth: 14, font: { size: 10 }, padding: 8 } },
+                    tooltip: {
+                      callbacks: {
+                        label: (ctx: any) => `${ctx.dataset.label}: EPS ${ctx.parsed.x > 0 ? "+" : ""}${ctx.parsed.x}% / EP ${ctx.parsed.y > 0 ? "+" : ""}${ctx.parsed.y}%`,
+                      },
+                    },
+                  },
+                  scales: {
+                    x: {
+                      title: { display: true, text: "EPS Growth per Share (%)", font: { size: 10, weight: "bold" } },
+                      ticks: { font: { size: 9 }, callback: (v: number | string) => `${v}%` },
+                      grid: { color: "rgba(0,0,0,0.06)" },
+                    },
+                    y: {
+                      title: { display: true, text: "EP per Share Growth (%)", font: { size: 10, weight: "bold" } },
+                      ticks: { font: { size: 9 }, callback: (v: number | string) => `${v}%` },
+                      grid: { color: "rgba(0,0,0,0.06)" },
+                    },
+                  },
+                }} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                {[
+                  { label: "EP Dominant", cos: 39, tsr: "14.8%", color: "hsl(152 60% 40%)", bg: "hsl(152 60% 95%)" },
+                  { label: "Mixed / Middle", cos: 89, tsr: "7.4%", color: "hsl(38 60% 45%)", bg: "hsl(38 60% 96%)" },
+                  { label: "EPS Dominant", cos: 152, tsr: "5.7%", color: "hsl(0 72% 45%)", bg: "hsl(0 72% 96%)" },
+                  { label: "Poor Performers", cos: 27, tsr: "2.1%", color: "hsl(220 15% 45%)", bg: "hsl(220 15% 94%)" },
+                ].map(c => (
+                  <div key={c.label} style={{ padding: "0.625rem 0.875rem", background: c.bg, borderRadius: "0.5rem", borderLeft: `3px solid ${c.color}` }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: c.color, marginBottom: "0.125rem" }}>{c.label}</div>
+                    <div style={{ fontSize: "0.6875rem", color: "hsl(var(--muted-foreground))" }}>{c.cos} companies</div>
+                    <div style={{ fontSize: "0.875rem", fontWeight: 700, color: c.color, marginTop: "0.125rem" }}>Ann. TSR {c.tsr}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* EEAI / EEA Index chart */}
+          <div className="chart-card" style={{ borderTop: "3px solid hsl(213 75% 22%)" }}>
+            <div className="chart-card-title" style={{ fontSize: "0.9375rem" }}>EEA Index — Economic Profitability Analysis</div>
+            <div className="chart-card-subtitle">Screen 1.4.11 · Required to Justify Share Price vs Historical Average (Rolling 3Y) · {indexFilter}</div>
+            <div style={{ height: "220px", marginTop: "0.5rem" }}>
+              <Line data={eeaiRequired} options={{
+                ...lineOpts("%"),
+                plugins: {
+                  ...lineOpts("%").plugins,
+                  tooltip: { mode: "index" as const, intersect: false },
+                },
+              }} />
+            </div>
+            <div style={{ height: "80px", marginTop: "0.5rem" }}>
+              <Bar data={eeaiIndexCount} options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { position: "top" as const, labels: { boxWidth: 14, font: { size: 9 }, padding: 4 } },
+                  tooltip: { callbacks: { label: (ctx: any) => `${ctx.parsed.y} companies in EEA Index` } },
+                },
+                scales: {
+                  x: { ticks: { font: { size: 8 }, maxRotation: 45 }, grid: { display: false } },
+                  y: { ticks: { font: { size: 8 }, stepSize: 20 }, grid: { color: "rgba(0,0,0,0.04)" }, min: 0, max: 130 },
+                },
+              }} />
+            </div>
+            <p style={{ fontSize: "0.6875rem", color: "hsl(var(--muted-foreground))", marginTop: "0.375rem", fontStyle: "italic" }}>
+              Companies in EEA Index counted annually — includes all ASX 300 companies with sufficient data to calculate EP scores.
+            </p>
+          </div>
         </div>
       )}
 
-      {/* Default for 1.3 and 1.5 */}
-      {(activeSection === "1.3" || activeSection === "1.5") && (
+      {/* Section 1.3 — Products & Services */}
+      {activeSection === "1.3" && (
         <div>
-          <div className="help-panel" style={{ marginBottom: "1rem" }}>
-            <p style={{ fontWeight: 600, marginBottom: "0.5rem", color: "hsl(var(--primary))" }}>
-              Section {activeSection} — Analytical Screens
-            </p>
-            <p>{helpTexts[activeSection]}</p>
+          <div className="help-panel" style={{ marginBottom: "1rem", borderLeft: "3px solid hsl(188 78% 35%)" }}>
+            <p style={{ fontWeight: 600, marginBottom: "0.5rem", color: "hsl(var(--primary))" }}>Section 1.3 — Products &amp; Services Market</p>
+            <p>{helpTexts["1.3"]}</p>
           </div>
-
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }}>
             {[
               `Distribution by Industry Sector (${indexFilter})`,
               `Distribution by Company within Sector`,
+              `EPS vs EP per Share Growth Scatter`,
               `Time Series 1,3,5,10yr by Index`,
               `Time Series by Sector within Index`,
               `Time Series by Company within Sector`,
-              `TER Alpha Analysis`,
             ].map((label, i) => (
               <div key={i} className="chart-card" style={{
-                cursor: "pointer",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                minHeight: "100px",
-                justifyContent: "center",
-                alignItems: "center",
-                background: "hsl(var(--muted) / 0.4)",
-                border: "1.5px dashed hsl(var(--border))",
+                cursor: "pointer", display: "flex", flexDirection: "column",
+                gap: "0.5rem", minHeight: "100px", justifyContent: "center", alignItems: "center",
+                background: "hsl(var(--muted) / 0.4)", border: "1.5px dashed hsl(var(--border))",
                 transition: "border-color 150ms, background 150ms",
               }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "hsl(var(--primary))"; (e.currentTarget as HTMLElement).style.background = "hsl(var(--primary) / 0.05)"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = ""; (e.currentTarget as HTMLElement).style.background = ""; }}
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <path d="M3 9h18M9 21V9"/>
-                </svg>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                 <span style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))", textAlign: "center" }}>{label}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Section 1.5 — Capital Market Assessment (TER Alpha International) */}
+      {activeSection === "1.5" && (
+        <div>
+          <div className="help-panel" style={{ marginBottom: "1rem", borderLeft: "3px solid hsl(213 75% 22%)" }}>
+            <p style={{ fontWeight: 600, marginBottom: "0.5rem", color: "hsl(var(--primary))" }}>Section 1.5 — Capital Market Assessment</p>
+            <p>{helpTexts["1.5"]}</p>
+          </div>
+
+          {/* TER Alpha International Comparison — 3 panels */}
+          <div style={{ marginBottom: "1rem" }}>
+            <div style={{ fontSize: "0.8125rem", fontWeight: 700, color: "hsl(var(--foreground))", marginBottom: "0.625rem" }}>
+              TER-Ke &amp; TER Alpha — International Comparison · Annualised Wealth Creation by Market
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem" }}>
+              {[
+                { label: "United States (S&P 500)", data: terIntlUSA, color: "hsl(213 75% 22%)" },
+                { label: "United Kingdom (FTSE 100)", data: terIntlUK, color: "hsl(188 78% 35%)" },
+                { label: "Australia (ASX 300)", data: terIntlAUS, color: "hsl(38 60% 52%)" },
+              ].map(market => (
+                <div key={market.label} className="chart-card" style={{ borderTop: `3px solid ${market.color}` }}>
+                  <div className="chart-card-title" style={{ color: market.color }}>{market.label}</div>
+                  <div className="chart-card-subtitle">TER-Ke (solid) vs TER Alpha (dashed) · 2005–2018</div>
+                  <div style={{ height: "200px" }}>
+                    <Line data={market.data} options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: "bottom" as const, labels: { boxWidth: 20, font: { size: 9 }, padding: 6 } },
+                        tooltip: { mode: "index" as const, intersect: false },
+                      },
+                      scales: {
+                        x: { ticks: { font: { size: 8 }, maxRotation: 45 }, grid: { color: "rgba(0,0,0,0.04)" } },
+                        y: {
+                          ticks: { font: { size: 8 }, callback: (v: number | string) => `${v}%` },
+                          grid: { color: "rgba(0,0,0,0.04)" },
+                        },
+                      },
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Summary KPIs */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
+            {[
+              { market: "USA", terKe: "5.9%", terAlpha: "3.4%", period: "2005–2018" },
+              { market: "UK", terKe: "3.2%", terAlpha: "1.2%", period: "2005–2018" },
+              { market: "Australia", terKe: "6.0%", terAlpha: "3.8%", period: "2005–2018" },
+            ].map(m => (
+              <div key={m.market} className="kpi-card">
+                <div style={{ fontWeight: 700, color: "hsl(var(--primary))", fontSize: "0.875rem", marginBottom: "0.5rem" }}>{m.market} · {m.period}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+                  <span style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))" }}>Avg TER-Ke</span>
+                  <span style={{ fontWeight: 700, color: "hsl(213 75% 35%)" }}>{m.terKe}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))" }}>Avg TER Alpha</span>
+                  <span style={{ fontWeight: 700, color: "hsl(38 60% 45%)" }}>{m.terAlpha}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="help-panel">
+            <strong>Note on TER Alpha:</strong> TER Alpha strips out the risk-adjusted impact of underlying market movements,
+            isolating the company-attributable component of wealth creation. It provides a more reliable cross-market comparison
+            than raw TER-Ke since it controls for differing market betas and macro conditions.
           </div>
         </div>
       )}
