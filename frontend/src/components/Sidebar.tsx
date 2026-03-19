@@ -30,11 +30,54 @@ const navData = [
           { label: "2.5  Reconciling Wealth Creation", path: "/principles/2" },
         ],
       },
-      { label: "Principle 3: Creativity & Innovation", path: "/principles/1", subItems: [] },
-      { label: "A New Way to Think About Economics", path: "/principles/1", subItems: [], italic: true },
-      { label: "Principle 4: All Stakeholders", path: "/principles/1", subItems: [] },
-      { label: "Principle 5: Noble Intent", path: "/principles/1", subItems: [] },
-      { label: "Principle 6: More is Not Always Better", path: "/principles/1", subItems: [] },
+      {
+        label: "Principle 3: Capital Market Returns",
+        path: "/principles/3",
+        badge: "5",
+        subItems: [
+          { label: "3.1  TER & TSR Overview", path: "/principles/3" },
+          { label: "3.2  TER Alpha", path: "/principles/3" },
+          { label: "3.3  ECF Decomposition", path: "/principles/3" },
+          { label: "3.4  International TER", path: "/principles/3" },
+          { label: "3.5  Wealth Creation ($B)", path: "/principles/3" },
+        ],
+      },
+      {
+        label: "Principle 4: EEAI & Sector Aggregations",
+        path: "/principles/4",
+        badge: "5",
+        subItems: [
+          { label: "4.1  EEAI Overview", path: "/principles/4" },
+          { label: "4.2  EEAI Heatmap (Companies)", path: "/principles/4" },
+          { label: "4.3  EP Delivered vs Required", path: "/principles/4" },
+          { label: "4.4  Sector Aggregations", path: "/principles/4" },
+          { label: "4.5  Sector EP Score Heatmap", path: "/principles/4" },
+        ],
+      },
+      {
+        label: "Principle 5: Ratio Metrics & Sustainability",
+        path: "/principles/5",
+        badge: "5",
+        subItems: [
+          { label: "5.1  Cost Structure by Sector", path: "/principles/5" },
+          { label: "5.2  Revenue & EE Growth", path: "/principles/5" },
+          { label: "5.3  ROA & Profit Margin", path: "/principles/5" },
+          { label: "5.4  Asset Intensity", path: "/principles/5" },
+          { label: "5.5  ESG & Sustainability", path: "/principles/5" },
+        ],
+      },
+      {
+        label: "Principle 6: Valuation & Beta",
+        path: "/principles/6",
+        badge: "5",
+        subItems: [
+          { label: "6.1  Beta Distribution & Analysis", path: "/principles/6" },
+          { label: "6.2  Ke Decomposition", path: "/principles/6" },
+          { label: "6.3  Risk Free Rate History", path: "/principles/6" },
+          { label: "6.4  FV-ECF & Valuation", path: "/principles/6" },
+          { label: "6.5  TER Decomposition", path: "/principles/6" },
+        ],
+      },
     ],
   },
   {
@@ -74,6 +117,10 @@ export default function Sidebar() {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     "Principle 1: Economic Measures": true,
     "Principle 2: Long-Term Focus": false,
+    "Principle 3: Capital Market Returns": false,
+    "Principle 4: EEAI & Sector Aggregations": false,
+    "Principle 5: Ratio Metrics & Sustainability": false,
+    "Principle 6: Valuation & Beta": false,
   });
 
   const toggleSection = (label: string) => {

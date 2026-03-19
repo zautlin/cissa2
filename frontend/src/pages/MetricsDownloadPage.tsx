@@ -7,6 +7,7 @@ import {
   tsrKeVsRoeKeScatter, cissaIndex2DScatter, esgKpis,
   mbRatioSectorDist, mbRatioCompanyDist,
   exportableMetrics,
+  additionalExportableMetrics,
 } from "../data/chartData";
 
 // ─── Helper: convert chartData to CSV string ───────────────────────────────
@@ -112,6 +113,8 @@ const PRINCIPLE_COLORS: Record<string, string> = {
   "All Principles": "hsl(188 78% 35%)",
 };
 
+const allExportableMetrics = [...exportableMetrics, ...additionalExportableMetrics];
+
 export default function MetricsDownloadPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [principleFilter, setPrincipleFilter] = useState<PrincipleFilter>("all");
@@ -119,7 +122,7 @@ export default function MetricsDownloadPage() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [bulkDownloading, setBulkDownloading] = useState(false);
 
-  const filtered = exportableMetrics.filter(m => {
+  const filtered = allExportableMetrics.filter(m => {
     if (principleFilter !== "all" && m.principle !== principleFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -142,7 +145,7 @@ export default function MetricsDownloadPage() {
 
   const handleDownloadSingle = (metricId: string, format: "CSV" | "JSON") => {
     setDownloading(metricId);
-    const metric = exportableMetrics.find(m => m.id === metricId)!;
+    const metric = allExportableMetrics.find(m => m.id === metricId)!;
     setTimeout(() => {
       if (format === "CSV") {
         const csv = generateCsv(metricId);
@@ -183,7 +186,7 @@ export default function MetricsDownloadPage() {
     setTimeout(() => {
       setBulkDownloading(true);
       let i = 0;
-      const metrics = exportableMetrics;
+      const metrics = allExportableMetrics;
       const next = () => {
         if (i >= metrics.length) { setBulkDownloading(false); return; }
         const m = metrics[i++];
@@ -195,7 +198,7 @@ export default function MetricsDownloadPage() {
     }, 100);
   };
 
-  const totalRows = exportableMetrics.reduce((s, m) => s + m.rows, 0);
+  const totalRows = allExportableMetrics.reduce((s, m) => s + m.rows, 0);
 
   return (
     <div style={{ padding: "1.5rem", maxWidth: "1400px" }}>
@@ -229,7 +232,7 @@ export default function MetricsDownloadPage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
             </svg>
-            {bulkDownloading ? "Downloading..." : `Download All (${exportableMetrics.length} CSVs)`}
+            {bulkDownloading ? "Downloading..." : `Download All (${allExportableMetrics.length} CSVs)`}
           </button>
         </div>
       </div>
@@ -237,7 +240,7 @@ export default function MetricsDownloadPage() {
       {/* Stats row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.5rem" }}>
         {[
-          { label: "Total Datasets", value: exportableMetrics.length, note: "Exportable metrics", color: "hsl(213 75% 22%)" },
+          { label: "Total Datasets", value: allExportableMetrics.length, note: "Exportable metrics", color: "hsl(213 75% 22%)" },
           { label: "Total Data Rows", value: totalRows.toLocaleString(), note: "Across all datasets", color: "hsl(38 60% 52%)" },
           { label: "Formats", value: "CSV + JSON", note: "Both available", color: "hsl(152 60% 40%)" },
           { label: "Selected", value: selected.size, note: "Ready for bulk export", color: "hsl(188 78% 35%)" },

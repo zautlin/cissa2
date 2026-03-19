@@ -6,6 +6,10 @@ import Topbar from "./components/Topbar";
 import DashboardHome from "./pages/DashboardHome";
 import PrincipleOnePage from "./pages/PrincipleOnePage";
 import PrincipleTwoPage from "./pages/PrincipleTwoPage";
+import PrincipleThreePage from "./pages/PrincipleThreePage";
+import PrincipleFourPage from "./pages/PrincipleFourPage";
+import PrincipleFivePage from "./pages/PrincipleFivePage";
+import PrincipleSixPage from "./pages/PrincipleSixPage";
 import OutputsPage from "./pages/OutputsPage";
 import UnderlyingDataPage from "./pages/UnderlyingDataPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -30,6 +34,10 @@ export default function App() {
             <Route path="/" component={DashboardHome} />
             <Route path="/principles/1" component={PrincipleOnePage} />
             <Route path="/principles/2" component={PrincipleTwoPage} />
+            <Route path="/principles/3" component={PrincipleThreePage} />
+            <Route path="/principles/4" component={PrincipleFourPage} />
+            <Route path="/principles/5" component={PrincipleFivePage} />
+            <Route path="/principles/6" component={PrincipleSixPage} />
             <Route path="/outputs" component={OutputsPage} />
             <Route path="/underlying-data" component={UnderlyingDataPage} />
             <Route path="/reports" component={ReportsPage} />
