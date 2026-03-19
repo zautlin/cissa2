@@ -852,45 +852,60 @@ RETURNS TABLE (
       WHERE dataset_id = p_dataset_id
     ) fy
   ),
+  -- Pre-aggregate all metrics and fundamentals for efficient joins
+  metrics_agg AS (
+    SELECT 
+      mo.ticker,
+      mo.fiscal_year,
+      MAX(CASE WHEN mo.output_metric_name = 'Non Div ECF' THEN mo.output_metric_value END) AS non_div_ecf,
+      MAX(CASE WHEN mo.output_metric_name = 'Calc KE' THEN mo.output_metric_value END) AS calc_ke
+    FROM cissa.metrics_outputs mo
+    WHERE mo.dataset_id = p_dataset_id
+    GROUP BY mo.ticker, mo.fiscal_year
+  ),
+  fundamentals_agg AS (
+    SELECT 
+      f.ticker,
+      f.fiscal_year,
+      MAX(CASE WHEN f.metric_name = 'DIVIDENDS' THEN f.numeric_value END) AS dividends,
+      MAX(CASE WHEN f.metric_name = 'FRANKING' THEN f.numeric_value END) AS franking
+    FROM cissa.fundamentals f
+    WHERE f.dataset_id = p_dataset_id
+    GROUP BY f.ticker, f.fiscal_year
+  ),
   year_data AS (
     SELECT
       cy.ticker,
       cy.begin_year,
       cy.fiscal_year,
-      MAX(CASE WHEN mo1.fiscal_year = cy.fiscal_year - 4 THEN mo1.output_metric_value END) AS non_div_ecf_y_minus_4,
-      MAX(CASE WHEN mo2.fiscal_year = cy.fiscal_year - 3 THEN mo2.output_metric_value END) AS non_div_ecf_y_minus_3,
-      MAX(CASE WHEN mo3.fiscal_year = cy.fiscal_year - 2 THEN mo3.output_metric_value END) AS non_div_ecf_y_minus_2,
-      MAX(CASE WHEN mo4.fiscal_year = cy.fiscal_year - 1 THEN mo4.output_metric_value END) AS non_div_ecf_y_minus_1,
-      MAX(CASE WHEN mo5.fiscal_year = cy.fiscal_year THEN mo5.output_metric_value END) AS non_div_ecf_y,
-      MAX(CASE WHEN f1.fiscal_year = cy.fiscal_year - 4 THEN f1.numeric_value END) AS div_y_minus_4,
-      MAX(CASE WHEN f2.fiscal_year = cy.fiscal_year - 3 THEN f2.numeric_value END) AS div_y_minus_3,
-      MAX(CASE WHEN f3.fiscal_year = cy.fiscal_year - 2 THEN f3.numeric_value END) AS div_y_minus_2,
-      MAX(CASE WHEN f4.fiscal_year = cy.fiscal_year - 1 THEN f4.numeric_value END) AS div_y_minus_1,
-      MAX(CASE WHEN f5.fiscal_year = cy.fiscal_year THEN f5.numeric_value END) AS div_y,
-      MAX(CASE WHEN fk1.fiscal_year = cy.fiscal_year - 4 THEN fk1.numeric_value END) AS franking_y_minus_4,
-      MAX(CASE WHEN fk2.fiscal_year = cy.fiscal_year - 3 THEN fk2.numeric_value END) AS franking_y_minus_3,
-      MAX(CASE WHEN fk3.fiscal_year = cy.fiscal_year - 2 THEN fk3.numeric_value END) AS franking_y_minus_2,
-      MAX(CASE WHEN fk4.fiscal_year = cy.fiscal_year - 1 THEN fk4.numeric_value END) AS franking_y_minus_1,
-      MAX(CASE WHEN fk5.fiscal_year = cy.fiscal_year THEN fk5.numeric_value END) AS franking_y,
-      MAX(CASE WHEN mo_ke.fiscal_year = cy.fiscal_year - 5 THEN mo_ke.output_metric_value END) AS calc_ke_y_minus_5
+      mo4.non_div_ecf AS non_div_ecf_y_minus_4,
+      mo3.non_div_ecf AS non_div_ecf_y_minus_3,
+      mo2.non_div_ecf AS non_div_ecf_y_minus_2,
+      mo1.non_div_ecf AS non_div_ecf_y_minus_1,
+      mo0.non_div_ecf AS non_div_ecf_y,
+      f4.dividends AS div_y_minus_4,
+      f3.dividends AS div_y_minus_3,
+      f2.dividends AS div_y_minus_2,
+      f1.dividends AS div_y_minus_1,
+      f0.dividends AS div_y,
+      f4.franking AS franking_y_minus_4,
+      f3.franking AS franking_y_minus_3,
+      f2.franking AS franking_y_minus_2,
+      f1.franking AS franking_y_minus_1,
+      f0.franking AS franking_y,
+      moke.calc_ke AS calc_ke_y_minus_5
     FROM company_years cy
-    LEFT JOIN cissa.metrics_outputs mo1 ON cy.ticker = mo1.ticker AND mo1.dataset_id = p_dataset_id AND mo1.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo2 ON cy.ticker = mo2.ticker AND mo2.dataset_id = p_dataset_id AND mo2.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo3 ON cy.ticker = mo3.ticker AND mo3.dataset_id = p_dataset_id AND mo3.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo4 ON cy.ticker = mo4.ticker AND mo4.dataset_id = p_dataset_id AND mo4.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo5 ON cy.ticker = mo5.ticker AND mo5.dataset_id = p_dataset_id AND mo5.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.fundamentals f1 ON cy.ticker = f1.ticker AND f1.dataset_id = p_dataset_id AND f1.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f2 ON cy.ticker = f2.ticker AND f2.dataset_id = p_dataset_id AND f2.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f3 ON cy.ticker = f3.ticker AND f3.dataset_id = p_dataset_id AND f3.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f4 ON cy.ticker = f4.ticker AND f4.dataset_id = p_dataset_id AND f4.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f5 ON cy.ticker = f5.ticker AND f5.dataset_id = p_dataset_id AND f5.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals fk1 ON cy.ticker = fk1.ticker AND fk1.dataset_id = p_dataset_id AND fk1.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk2 ON cy.ticker = fk2.ticker AND fk2.dataset_id = p_dataset_id AND fk2.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk3 ON cy.ticker = fk3.ticker AND fk3.dataset_id = p_dataset_id AND fk3.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk4 ON cy.ticker = fk4.ticker AND fk4.dataset_id = p_dataset_id AND fk4.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk5 ON cy.ticker = fk5.ticker AND fk5.dataset_id = p_dataset_id AND fk5.metric_name = 'FRANKING'
-    LEFT JOIN cissa.metrics_outputs mo_ke ON cy.ticker = mo_ke.ticker AND mo_ke.dataset_id = p_dataset_id AND mo_ke.output_metric_name = 'Calc KE'
-    GROUP BY cy.ticker, cy.begin_year, cy.fiscal_year
+    LEFT JOIN metrics_agg mo4 ON cy.ticker = mo4.ticker AND cy.fiscal_year - 4 = mo4.fiscal_year
+    LEFT JOIN metrics_agg mo3 ON cy.ticker = mo3.ticker AND cy.fiscal_year - 3 = mo3.fiscal_year
+    LEFT JOIN metrics_agg mo2 ON cy.ticker = mo2.ticker AND cy.fiscal_year - 2 = mo2.fiscal_year
+    LEFT JOIN metrics_agg mo1 ON cy.ticker = mo1.ticker AND cy.fiscal_year - 1 = mo1.fiscal_year
+    LEFT JOIN metrics_agg mo0 ON cy.ticker = mo0.ticker AND cy.fiscal_year = mo0.fiscal_year
+    LEFT JOIN fundamentals_agg f4 ON cy.ticker = f4.ticker AND cy.fiscal_year - 4 = f4.fiscal_year
+    LEFT JOIN fundamentals_agg f3 ON cy.ticker = f3.ticker AND cy.fiscal_year - 3 = f3.fiscal_year
+    LEFT JOIN fundamentals_agg f2 ON cy.ticker = f2.ticker AND cy.fiscal_year - 2 = f2.fiscal_year
+    LEFT JOIN fundamentals_agg f1 ON cy.ticker = f1.ticker AND cy.fiscal_year - 1 = f1.fiscal_year
+    LEFT JOIN fundamentals_agg f0 ON cy.ticker = f0.ticker AND cy.fiscal_year = f0.fiscal_year
+    LEFT JOIN metrics_agg moke ON cy.ticker = moke.ticker AND cy.fiscal_year - 5 = moke.fiscal_year
   )
   SELECT
     yd.ticker,
@@ -973,75 +988,85 @@ RETURNS TABLE (
       WHERE dataset_id = p_dataset_id
     ) fy
   ),
+  -- Pre-aggregate all metrics and fundamentals for efficient joins
+  metrics_agg AS (
+    SELECT 
+      mo.ticker,
+      mo.fiscal_year,
+      MAX(CASE WHEN mo.output_metric_name = 'Non Div ECF' THEN mo.output_metric_value END) AS non_div_ecf,
+      MAX(CASE WHEN mo.output_metric_name = 'Calc KE' THEN mo.output_metric_value END) AS calc_ke
+    FROM cissa.metrics_outputs mo
+    WHERE mo.dataset_id = p_dataset_id
+    GROUP BY mo.ticker, mo.fiscal_year
+  ),
+  fundamentals_agg AS (
+    SELECT 
+      f.ticker,
+      f.fiscal_year,
+      MAX(CASE WHEN f.metric_name = 'DIVIDENDS' THEN f.numeric_value END) AS dividends,
+      MAX(CASE WHEN f.metric_name = 'FRANKING' THEN f.numeric_value END) AS franking
+    FROM cissa.fundamentals f
+    WHERE f.dataset_id = p_dataset_id
+    GROUP BY f.ticker, f.fiscal_year
+  ),
   year_data AS (
     SELECT
       cy.ticker,
       cy.begin_year,
       cy.fiscal_year,
-      MAX(CASE WHEN mo1.fiscal_year = cy.fiscal_year - 9 THEN mo1.output_metric_value END) AS non_div_ecf_y_minus_9,
-      MAX(CASE WHEN mo2.fiscal_year = cy.fiscal_year - 8 THEN mo2.output_metric_value END) AS non_div_ecf_y_minus_8,
-      MAX(CASE WHEN mo3.fiscal_year = cy.fiscal_year - 7 THEN mo3.output_metric_value END) AS non_div_ecf_y_minus_7,
-      MAX(CASE WHEN mo4.fiscal_year = cy.fiscal_year - 6 THEN mo4.output_metric_value END) AS non_div_ecf_y_minus_6,
-      MAX(CASE WHEN mo5.fiscal_year = cy.fiscal_year - 5 THEN mo5.output_metric_value END) AS non_div_ecf_y_minus_5,
-      MAX(CASE WHEN mo6.fiscal_year = cy.fiscal_year - 4 THEN mo6.output_metric_value END) AS non_div_ecf_y_minus_4,
-      MAX(CASE WHEN mo7.fiscal_year = cy.fiscal_year - 3 THEN mo7.output_metric_value END) AS non_div_ecf_y_minus_3,
-      MAX(CASE WHEN mo8.fiscal_year = cy.fiscal_year - 2 THEN mo8.output_metric_value END) AS non_div_ecf_y_minus_2,
-      MAX(CASE WHEN mo9.fiscal_year = cy.fiscal_year - 1 THEN mo9.output_metric_value END) AS non_div_ecf_y_minus_1,
-      MAX(CASE WHEN mo10.fiscal_year = cy.fiscal_year THEN mo10.output_metric_value END) AS non_div_ecf_y,
-      MAX(CASE WHEN f1.fiscal_year = cy.fiscal_year - 9 THEN f1.numeric_value END) AS div_y_minus_9,
-      MAX(CASE WHEN f2.fiscal_year = cy.fiscal_year - 8 THEN f2.numeric_value END) AS div_y_minus_8,
-      MAX(CASE WHEN f3.fiscal_year = cy.fiscal_year - 7 THEN f3.numeric_value END) AS div_y_minus_7,
-      MAX(CASE WHEN f4.fiscal_year = cy.fiscal_year - 6 THEN f4.numeric_value END) AS div_y_minus_6,
-      MAX(CASE WHEN f5.fiscal_year = cy.fiscal_year - 5 THEN f5.numeric_value END) AS div_y_minus_5,
-      MAX(CASE WHEN f6.fiscal_year = cy.fiscal_year - 4 THEN f6.numeric_value END) AS div_y_minus_4,
-      MAX(CASE WHEN f7.fiscal_year = cy.fiscal_year - 3 THEN f7.numeric_value END) AS div_y_minus_3,
-      MAX(CASE WHEN f8.fiscal_year = cy.fiscal_year - 2 THEN f8.numeric_value END) AS div_y_minus_2,
-      MAX(CASE WHEN f9.fiscal_year = cy.fiscal_year - 1 THEN f9.numeric_value END) AS div_y_minus_1,
-      MAX(CASE WHEN f10.fiscal_year = cy.fiscal_year THEN f10.numeric_value END) AS div_y,
-      MAX(CASE WHEN fk1.fiscal_year = cy.fiscal_year - 9 THEN fk1.numeric_value END) AS franking_y_minus_9,
-      MAX(CASE WHEN fk2.fiscal_year = cy.fiscal_year - 8 THEN fk2.numeric_value END) AS franking_y_minus_8,
-      MAX(CASE WHEN fk3.fiscal_year = cy.fiscal_year - 7 THEN fk3.numeric_value END) AS franking_y_minus_7,
-      MAX(CASE WHEN fk4.fiscal_year = cy.fiscal_year - 6 THEN fk4.numeric_value END) AS franking_y_minus_6,
-      MAX(CASE WHEN fk5.fiscal_year = cy.fiscal_year - 5 THEN fk5.numeric_value END) AS franking_y_minus_5,
-      MAX(CASE WHEN fk6.fiscal_year = cy.fiscal_year - 4 THEN fk6.numeric_value END) AS franking_y_minus_4,
-      MAX(CASE WHEN fk7.fiscal_year = cy.fiscal_year - 3 THEN fk7.numeric_value END) AS franking_y_minus_3,
-      MAX(CASE WHEN fk8.fiscal_year = cy.fiscal_year - 2 THEN fk8.numeric_value END) AS franking_y_minus_2,
-      MAX(CASE WHEN fk9.fiscal_year = cy.fiscal_year - 1 THEN fk9.numeric_value END) AS franking_y_minus_1,
-      MAX(CASE WHEN fk10.fiscal_year = cy.fiscal_year THEN fk10.numeric_value END) AS franking_y,
-      MAX(CASE WHEN mo_ke.fiscal_year = cy.fiscal_year - 10 THEN mo_ke.output_metric_value END) AS calc_ke_y_minus_10
+      mo9.non_div_ecf AS non_div_ecf_y_minus_9,
+      mo8.non_div_ecf AS non_div_ecf_y_minus_8,
+      mo7.non_div_ecf AS non_div_ecf_y_minus_7,
+      mo6.non_div_ecf AS non_div_ecf_y_minus_6,
+      mo5.non_div_ecf AS non_div_ecf_y_minus_5,
+      mo4.non_div_ecf AS non_div_ecf_y_minus_4,
+      mo3.non_div_ecf AS non_div_ecf_y_minus_3,
+      mo2.non_div_ecf AS non_div_ecf_y_minus_2,
+      mo1.non_div_ecf AS non_div_ecf_y_minus_1,
+      mo0.non_div_ecf AS non_div_ecf_y,
+      f9.dividends AS div_y_minus_9,
+      f8.dividends AS div_y_minus_8,
+      f7.dividends AS div_y_minus_7,
+      f6.dividends AS div_y_minus_6,
+      f5.dividends AS div_y_minus_5,
+      f4.dividends AS div_y_minus_4,
+      f3.dividends AS div_y_minus_3,
+      f2.dividends AS div_y_minus_2,
+      f1.dividends AS div_y_minus_1,
+      f0.dividends AS div_y,
+      f9.franking AS franking_y_minus_9,
+      f8.franking AS franking_y_minus_8,
+      f7.franking AS franking_y_minus_7,
+      f6.franking AS franking_y_minus_6,
+      f5.franking AS franking_y_minus_5,
+      f4.franking AS franking_y_minus_4,
+      f3.franking AS franking_y_minus_3,
+      f2.franking AS franking_y_minus_2,
+      f1.franking AS franking_y_minus_1,
+      f0.franking AS franking_y,
+      moke.calc_ke AS calc_ke_y_minus_10
     FROM company_years cy
-    LEFT JOIN cissa.metrics_outputs mo1 ON cy.ticker = mo1.ticker AND mo1.dataset_id = p_dataset_id AND mo1.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo2 ON cy.ticker = mo2.ticker AND mo2.dataset_id = p_dataset_id AND mo2.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo3 ON cy.ticker = mo3.ticker AND mo3.dataset_id = p_dataset_id AND mo3.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo4 ON cy.ticker = mo4.ticker AND mo4.dataset_id = p_dataset_id AND mo4.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo5 ON cy.ticker = mo5.ticker AND mo5.dataset_id = p_dataset_id AND mo5.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo6 ON cy.ticker = mo6.ticker AND mo6.dataset_id = p_dataset_id AND mo6.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo7 ON cy.ticker = mo7.ticker AND mo7.dataset_id = p_dataset_id AND mo7.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo8 ON cy.ticker = mo8.ticker AND mo8.dataset_id = p_dataset_id AND mo8.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo9 ON cy.ticker = mo9.ticker AND mo9.dataset_id = p_dataset_id AND mo9.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo10 ON cy.ticker = mo10.ticker AND mo10.dataset_id = p_dataset_id AND mo10.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.fundamentals f1 ON cy.ticker = f1.ticker AND f1.dataset_id = p_dataset_id AND f1.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f2 ON cy.ticker = f2.ticker AND f2.dataset_id = p_dataset_id AND f2.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f3 ON cy.ticker = f3.ticker AND f3.dataset_id = p_dataset_id AND f3.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f4 ON cy.ticker = f4.ticker AND f4.dataset_id = p_dataset_id AND f4.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f5 ON cy.ticker = f5.ticker AND f5.dataset_id = p_dataset_id AND f5.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f6 ON cy.ticker = f6.ticker AND f6.dataset_id = p_dataset_id AND f6.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f7 ON cy.ticker = f7.ticker AND f7.dataset_id = p_dataset_id AND f7.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f8 ON cy.ticker = f8.ticker AND f8.dataset_id = p_dataset_id AND f8.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f9 ON cy.ticker = f9.ticker AND f9.dataset_id = p_dataset_id AND f9.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f10 ON cy.ticker = f10.ticker AND f10.dataset_id = p_dataset_id AND f10.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals fk1 ON cy.ticker = fk1.ticker AND fk1.dataset_id = p_dataset_id AND fk1.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk2 ON cy.ticker = fk2.ticker AND fk2.dataset_id = p_dataset_id AND fk2.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk3 ON cy.ticker = fk3.ticker AND fk3.dataset_id = p_dataset_id AND fk3.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk4 ON cy.ticker = fk4.ticker AND fk4.dataset_id = p_dataset_id AND fk4.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk5 ON cy.ticker = fk5.ticker AND fk5.dataset_id = p_dataset_id AND fk5.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk6 ON cy.ticker = fk6.ticker AND fk6.dataset_id = p_dataset_id AND fk6.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk7 ON cy.ticker = fk7.ticker AND fk7.dataset_id = p_dataset_id AND fk7.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk8 ON cy.ticker = fk8.ticker AND fk8.dataset_id = p_dataset_id AND fk8.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk9 ON cy.ticker = fk9.ticker AND fk9.dataset_id = p_dataset_id AND fk9.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk10 ON cy.ticker = fk10.ticker AND fk10.dataset_id = p_dataset_id AND fk10.metric_name = 'FRANKING'
-    LEFT JOIN cissa.metrics_outputs mo_ke ON cy.ticker = mo_ke.ticker AND mo_ke.dataset_id = p_dataset_id AND mo_ke.output_metric_name = 'Calc KE'
-    GROUP BY cy.ticker, cy.begin_year, cy.fiscal_year
+    LEFT JOIN metrics_agg mo9 ON cy.ticker = mo9.ticker AND cy.fiscal_year - 9 = mo9.fiscal_year
+    LEFT JOIN metrics_agg mo8 ON cy.ticker = mo8.ticker AND cy.fiscal_year - 8 = mo8.fiscal_year
+    LEFT JOIN metrics_agg mo7 ON cy.ticker = mo7.ticker AND cy.fiscal_year - 7 = mo7.fiscal_year
+    LEFT JOIN metrics_agg mo6 ON cy.ticker = mo6.ticker AND cy.fiscal_year - 6 = mo6.fiscal_year
+    LEFT JOIN metrics_agg mo5 ON cy.ticker = mo5.ticker AND cy.fiscal_year - 5 = mo5.fiscal_year
+    LEFT JOIN metrics_agg mo4 ON cy.ticker = mo4.ticker AND cy.fiscal_year - 4 = mo4.fiscal_year
+    LEFT JOIN metrics_agg mo3 ON cy.ticker = mo3.ticker AND cy.fiscal_year - 3 = mo3.fiscal_year
+    LEFT JOIN metrics_agg mo2 ON cy.ticker = mo2.ticker AND cy.fiscal_year - 2 = mo2.fiscal_year
+    LEFT JOIN metrics_agg mo1 ON cy.ticker = mo1.ticker AND cy.fiscal_year - 1 = mo1.fiscal_year
+    LEFT JOIN metrics_agg mo0 ON cy.ticker = mo0.ticker AND cy.fiscal_year = mo0.fiscal_year
+    LEFT JOIN fundamentals_agg f9 ON cy.ticker = f9.ticker AND cy.fiscal_year - 9 = f9.fiscal_year
+    LEFT JOIN fundamentals_agg f8 ON cy.ticker = f8.ticker AND cy.fiscal_year - 8 = f8.fiscal_year
+    LEFT JOIN fundamentals_agg f7 ON cy.ticker = f7.ticker AND cy.fiscal_year - 7 = f7.fiscal_year
+    LEFT JOIN fundamentals_agg f6 ON cy.ticker = f6.ticker AND cy.fiscal_year - 6 = f6.fiscal_year
+    LEFT JOIN fundamentals_agg f5 ON cy.ticker = f5.ticker AND cy.fiscal_year - 5 = f5.fiscal_year
+    LEFT JOIN fundamentals_agg f4 ON cy.ticker = f4.ticker AND cy.fiscal_year - 4 = f4.fiscal_year
+    LEFT JOIN fundamentals_agg f3 ON cy.ticker = f3.ticker AND cy.fiscal_year - 3 = f3.fiscal_year
+    LEFT JOIN fundamentals_agg f2 ON cy.ticker = f2.ticker AND cy.fiscal_year - 2 = f2.fiscal_year
+    LEFT JOIN fundamentals_agg f1 ON cy.ticker = f1.ticker AND cy.fiscal_year - 1 = f1.fiscal_year
+    LEFT JOIN fundamentals_agg f0 ON cy.ticker = f0.ticker AND cy.fiscal_year = f0.fiscal_year
+    LEFT JOIN metrics_agg moke ON cy.ticker = moke.ticker AND cy.fiscal_year - 10 = moke.fiscal_year
   )
   SELECT
     yd.ticker,
@@ -1079,6 +1104,13 @@ RETURNS TABLE (
   FROM year_data yd
   ORDER BY yd.ticker, yd.fiscal_year;
 $$ LANGUAGE SQL IMMUTABLE;
+
+COMMENT ON FUNCTION cissa.fn_calc_10y_fv_ecf(UUID, UUID) IS
+'Calculate 10-Year Forward Value ECF with discounting and franking adjustment.
+For fiscal_year <= begin_year+9: Returns NULL
+For fiscal_year > begin_year+9: Applies 10-year discounting formula with KE[Y-10] and exponents 9,8,7,6,5,4,3,2,1,0
+Uses negative dividends: -DIV[Y-N] + NonDivECF[Y-N]
+Handles franking credit adjustments based on parameters.';
 
 COMMENT ON FUNCTION cissa.fn_calc_10y_fv_ecf(UUID, UUID) IS
 'Calculate 10-Year Forward Value ECF with discounting and franking adjustment.
