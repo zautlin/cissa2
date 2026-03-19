@@ -688,20 +688,15 @@ COMMENT ON FUNCTION cissa.fn_calc_fy_tsr_prel(UUID, UUID) IS
 'Calculate FY_TSR + 1 (growth factor form). REQ-A6.';
 
 -- ============================================================================
--- GROUP 7: 3Y_FV_ECF (3-Year Forward Value ECF) - Parameter-Sensitive Temporal Metric
+-- GROUP 6: 1Y_FV_ECF (1-Year Forward Value ECF) - Parameter-Sensitive Temporal Metric
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION cissa.fn_calc_3y_fv_ecf(p_dataset_id UUID, p_param_set_id UUID)
+CREATE OR REPLACE FUNCTION cissa.fn_calc_1y_fv_ecf(p_dataset_id UUID, p_param_set_id UUID)
 RETURNS TABLE (
   ticker TEXT,
   fiscal_year INTEGER,
-  fv_ecf_3y NUMERIC
+  fv_ecf_1y NUMERIC
 ) AS $$
-DECLARE
-  v_dataset_id UUID := p_dataset_id;
-  v_param_set_id UUID := p_param_set_id;
-BEGIN
-  RETURN QUERY
   WITH param_config AS (
     SELECT
       CASE 
@@ -726,7 +721,7 @@ BEGIN
     LEFT JOIN cissa.parameters p1 ON p1.parameter_name = 'include_franking_credits_tsr'
     LEFT JOIN cissa.parameters p2 ON p2.parameter_name = 'tax_rate_franking_credits'
     LEFT JOIN cissa.parameters p3 ON p3.parameter_name = 'value_of_franking_credits'
-    WHERE ps.param_set_id = v_param_set_id
+    WHERE ps.param_set_id = p_param_set_id
   ),
   company_years AS (
     SELECT DISTINCT
@@ -736,73 +731,189 @@ BEGIN
     FROM cissa.companies c
     CROSS JOIN (
       SELECT DISTINCT fiscal_year FROM cissa.metrics_outputs 
-      WHERE dataset_id = v_dataset_id
+      WHERE dataset_id = p_dataset_id
     ) fy
+  ),
+  -- Pre-aggregate all metrics and fundamentals for efficient joins
+  metrics_agg AS (
+    SELECT 
+      mo.ticker,
+      mo.fiscal_year,
+      MAX(CASE WHEN mo.output_metric_name = 'Non Div ECF' THEN mo.output_metric_value END) AS non_div_ecf,
+      MAX(CASE WHEN mo.output_metric_name = 'Calc KE' THEN mo.output_metric_value END) AS calc_ke
+    FROM cissa.metrics_outputs mo
+    WHERE mo.dataset_id = p_dataset_id
+    GROUP BY mo.ticker, mo.fiscal_year
+  ),
+  fundamentals_agg AS (
+    SELECT 
+      f.ticker,
+      f.fiscal_year,
+      MAX(CASE WHEN f.metric_name = 'DIVIDENDS' THEN f.numeric_value END) AS dividends,
+      MAX(CASE WHEN f.metric_name = 'FRANKING' THEN f.numeric_value END) AS franking
+    FROM cissa.fundamentals f
+    WHERE f.dataset_id = p_dataset_id
+    GROUP BY f.ticker, f.fiscal_year
   ),
   year_data AS (
     SELECT
       cy.ticker,
       cy.begin_year,
       cy.fiscal_year,
-      -- Get Non Div ECF for years Y-2, Y-1, Y
-      MAX(CASE WHEN mo1.fiscal_year = cy.fiscal_year - 2 THEN mo1.output_metric_value END) AS non_div_ecf_y_minus_2,
-      MAX(CASE WHEN mo2.fiscal_year = cy.fiscal_year - 1 THEN mo2.output_metric_value END) AS non_div_ecf_y_minus_1,
-      MAX(CASE WHEN mo3.fiscal_year = cy.fiscal_year THEN mo3.output_metric_value END) AS non_div_ecf_y,
-      -- Get DIVIDENDS for years Y-2, Y-1, Y
-      MAX(CASE WHEN f1.fiscal_year = cy.fiscal_year - 2 THEN f1.numeric_value END) AS div_y_minus_2,
-      MAX(CASE WHEN f2.fiscal_year = cy.fiscal_year - 1 THEN f2.numeric_value END) AS div_y_minus_1,
-      MAX(CASE WHEN f3.fiscal_year = cy.fiscal_year THEN f3.numeric_value END) AS div_y,
-      -- Get FRANKING for years Y-2, Y-1, Y
-      MAX(CASE WHEN fk1.fiscal_year = cy.fiscal_year - 2 THEN fk1.numeric_value END) AS franking_y_minus_2,
-      MAX(CASE WHEN fk2.fiscal_year = cy.fiscal_year - 1 THEN fk2.numeric_value END) AS franking_y_minus_1,
-      MAX(CASE WHEN fk3.fiscal_year = cy.fiscal_year THEN fk3.numeric_value END) AS franking_y,
-      -- Get Calc KE for year Y-1 (Calc Open KE for year Y)
-      MAX(CASE WHEN mo_ke.fiscal_year = cy.fiscal_year - 1 THEN mo_ke.output_metric_value END) AS calc_ke_y_minus_1
+      mo0.non_div_ecf AS non_div_ecf_y,
+      f0.dividends AS div_y,
+      f0.franking AS franking_y,
+      moke.calc_ke AS calc_ke_y_minus_1
     FROM company_years cy
-    LEFT JOIN cissa.metrics_outputs mo1 ON cy.ticker = mo1.ticker AND mo1.dataset_id = v_dataset_id AND mo1.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo2 ON cy.ticker = mo2.ticker AND mo2.dataset_id = v_dataset_id AND mo2.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.metrics_outputs mo3 ON cy.ticker = mo3.ticker AND mo3.dataset_id = v_dataset_id AND mo3.output_metric_name = 'Non Div ECF'
-    LEFT JOIN cissa.fundamentals f1 ON cy.ticker = f1.ticker AND f1.dataset_id = v_dataset_id AND f1.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f2 ON cy.ticker = f2.ticker AND f2.dataset_id = v_dataset_id AND f2.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals f3 ON cy.ticker = f3.ticker AND f3.dataset_id = v_dataset_id AND f3.metric_name = 'DIVIDENDS'
-    LEFT JOIN cissa.fundamentals fk1 ON cy.ticker = fk1.ticker AND fk1.dataset_id = v_dataset_id AND fk1.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk2 ON cy.ticker = fk2.ticker AND fk2.dataset_id = v_dataset_id AND fk2.metric_name = 'FRANKING'
-    LEFT JOIN cissa.fundamentals fk3 ON cy.ticker = fk3.ticker AND fk3.dataset_id = v_dataset_id AND fk3.metric_name = 'FRANKING'
-    LEFT JOIN cissa.metrics_outputs mo_ke ON cy.ticker = mo_ke.ticker AND mo_ke.dataset_id = v_dataset_id AND mo_ke.output_metric_name = 'Calc KE'
-    GROUP BY cy.ticker, cy.begin_year, cy.fiscal_year
+    LEFT JOIN metrics_agg mo0 ON cy.ticker = mo0.ticker AND cy.fiscal_year = mo0.fiscal_year
+    LEFT JOIN fundamentals_agg f0 ON cy.ticker = f0.ticker AND cy.fiscal_year = f0.fiscal_year
+    LEFT JOIN metrics_agg moke ON cy.ticker = moke.ticker AND cy.fiscal_year - 1 = moke.fiscal_year
   )
   SELECT
     yd.ticker,
     yd.fiscal_year,
     CASE
-      -- Years before begin_year: NULL
+      WHEN yd.fiscal_year <= yd.begin_year THEN NULL
+      WHEN yd.fiscal_year > yd.begin_year AND yd.calc_ke_y_minus_1 IS NOT NULL THEN
+        CASE
+          WHEN (SELECT pc.incl_franking FROM param_config pc LIMIT 1) = TRUE THEN
+            (-COALESCE(yd.div_y, 0) - COALESCE(yd.div_y, 0) / (1 - (SELECT frank_tax_rate FROM param_config LIMIT 1)) * (SELECT frank_tax_rate FROM param_config LIMIT 1) * (SELECT value_franking_cr FROM param_config LIMIT 1) * COALESCE(yd.franking_y, 0) + COALESCE(yd.non_div_ecf_y, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 0)
+          ELSE
+            (-COALESCE(yd.div_y, 0) + COALESCE(yd.non_div_ecf_y, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 0)
+        END
+      ELSE NULL
+    END AS fv_ecf_1y
+  FROM year_data yd
+  ORDER BY yd.ticker, yd.fiscal_year;
+$$ LANGUAGE SQL IMMUTABLE;
+
+COMMENT ON FUNCTION cissa.fn_calc_1y_fv_ecf(UUID, UUID) IS
+'Calculate 1-Year Forward Value ECF with franking adjustment.
+For fiscal_year <= begin_year: Returns NULL
+For fiscal_year > begin_year: Applies 1-year forward value formula with KE[Y-1]
+Uses negative dividends: -DIV[Y] + NonDivECF[Y]
+Handles franking credit adjustments based on parameters.';
+
+-- ============================================================================
+-- GROUP 7: 3Y_FV_ECF (3-Year Forward Value ECF) - Parameter-Sensitive Temporal Metric
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION cissa.fn_calc_3y_fv_ecf(p_dataset_id UUID, p_param_set_id UUID)
+RETURNS TABLE (
+  ticker TEXT,
+  fiscal_year INTEGER,
+  fv_ecf_3y NUMERIC
+) AS $$
+  WITH param_config AS (
+    SELECT
+      CASE 
+        WHEN ps.param_overrides ? 'include_franking_credits_tsr' THEN
+          (ps.param_overrides ->> 'include_franking_credits_tsr')::BOOLEAN
+        ELSE
+          (p1.default_value::BOOLEAN) 
+      END AS incl_franking,
+      CASE 
+        WHEN ps.param_overrides ? 'tax_rate_franking_credits' THEN
+          (ps.param_overrides ->> 'tax_rate_franking_credits')::NUMERIC / 100.0
+        ELSE
+          (p2.default_value::NUMERIC / 100.0)
+      END AS frank_tax_rate,
+      CASE 
+        WHEN ps.param_overrides ? 'value_of_franking_credits' THEN
+          (ps.param_overrides ->> 'value_of_franking_credits')::NUMERIC / 100.0
+        ELSE
+          (p3.default_value::NUMERIC / 100.0)
+      END AS value_franking_cr
+    FROM cissa.parameter_sets ps
+    LEFT JOIN cissa.parameters p1 ON p1.parameter_name = 'include_franking_credits_tsr'
+    LEFT JOIN cissa.parameters p2 ON p2.parameter_name = 'tax_rate_franking_credits'
+    LEFT JOIN cissa.parameters p3 ON p3.parameter_name = 'value_of_franking_credits'
+    WHERE ps.param_set_id = p_param_set_id
+  ),
+  company_years AS (
+    SELECT DISTINCT
+      c.ticker,
+      c.begin_year,
+      fy.fiscal_year
+    FROM cissa.companies c
+    CROSS JOIN (
+      SELECT DISTINCT fiscal_year FROM cissa.metrics_outputs 
+      WHERE dataset_id = p_dataset_id
+    ) fy
+  ),
+  -- Pre-aggregate all metrics and fundamentals for efficient joins
+  metrics_agg AS (
+    SELECT 
+      mo.ticker,
+      mo.fiscal_year,
+      MAX(CASE WHEN mo.output_metric_name = 'Non Div ECF' THEN mo.output_metric_value END) AS non_div_ecf,
+      MAX(CASE WHEN mo.output_metric_name = 'Calc KE' THEN mo.output_metric_value END) AS calc_ke
+    FROM cissa.metrics_outputs mo
+    WHERE mo.dataset_id = p_dataset_id
+    GROUP BY mo.ticker, mo.fiscal_year
+  ),
+  fundamentals_agg AS (
+    SELECT 
+      f.ticker,
+      f.fiscal_year,
+      MAX(CASE WHEN f.metric_name = 'DIVIDENDS' THEN f.numeric_value END) AS dividends,
+      MAX(CASE WHEN f.metric_name = 'FRANKING' THEN f.numeric_value END) AS franking
+    FROM cissa.fundamentals f
+    WHERE f.dataset_id = p_dataset_id
+    GROUP BY f.ticker, f.fiscal_year
+  ),
+  year_data AS (
+    SELECT
+      cy.ticker,
+      cy.begin_year,
+      cy.fiscal_year,
+      mo2.non_div_ecf AS non_div_ecf_y_minus_2,
+      mo1.non_div_ecf AS non_div_ecf_y_minus_1,
+      mo0.non_div_ecf AS non_div_ecf_y,
+      f2.dividends AS div_y_minus_2,
+      f1.dividends AS div_y_minus_1,
+      f0.dividends AS div_y,
+      f2.franking AS franking_y_minus_2,
+      f1.franking AS franking_y_minus_1,
+      f0.franking AS franking_y,
+      moke.calc_ke AS calc_ke_y_minus_1
+    FROM company_years cy
+    LEFT JOIN metrics_agg mo2 ON cy.ticker = mo2.ticker AND cy.fiscal_year - 2 = mo2.fiscal_year
+    LEFT JOIN metrics_agg mo1 ON cy.ticker = mo1.ticker AND cy.fiscal_year - 1 = mo1.fiscal_year
+    LEFT JOIN metrics_agg mo0 ON cy.ticker = mo0.ticker AND cy.fiscal_year = mo0.fiscal_year
+    LEFT JOIN fundamentals_agg f2 ON cy.ticker = f2.ticker AND cy.fiscal_year - 2 = f2.fiscal_year
+    LEFT JOIN fundamentals_agg f1 ON cy.ticker = f1.ticker AND cy.fiscal_year - 1 = f1.fiscal_year
+    LEFT JOIN fundamentals_agg f0 ON cy.ticker = f0.ticker AND cy.fiscal_year = f0.fiscal_year
+    LEFT JOIN metrics_agg moke ON cy.ticker = moke.ticker AND cy.fiscal_year - 1 = moke.fiscal_year
+  )
+  SELECT
+    yd.ticker,
+    yd.fiscal_year,
+    CASE
       WHEN yd.fiscal_year < yd.begin_year THEN NULL
-      -- Years begin_year through begin_year+2: NULL
       WHEN yd.fiscal_year <= yd.begin_year + 2 THEN NULL
-      -- Years begin_year+3 onwards: Apply discounting formula
       WHEN yd.fiscal_year > yd.begin_year + 2 AND yd.calc_ke_y_minus_1 IS NOT NULL THEN
         CASE
           WHEN (SELECT pc.incl_franking FROM param_config pc LIMIT 1) = TRUE THEN
-            (COALESCE(yd.div_y_minus_2, 0) + COALESCE(yd.div_y_minus_2, 0) / (1 - (SELECT frank_tax_rate FROM param_config LIMIT 1)) * (SELECT frank_tax_rate FROM param_config LIMIT 1) * (SELECT value_franking_cr FROM param_config LIMIT 1) * COALESCE(yd.franking_y_minus_2, 0) + COALESCE(yd.non_div_ecf_y_minus_2, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 2) +
-            (COALESCE(yd.div_y_minus_1, 0) + COALESCE(yd.div_y_minus_1, 0) / (1 - (SELECT frank_tax_rate FROM param_config LIMIT 1)) * (SELECT frank_tax_rate FROM param_config LIMIT 1) * (SELECT value_franking_cr FROM param_config LIMIT 1) * COALESCE(yd.franking_y_minus_1, 0) + COALESCE(yd.non_div_ecf_y_minus_1, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 1) +
-            (COALESCE(yd.div_y, 0) + COALESCE(yd.div_y, 0) / (1 - (SELECT frank_tax_rate FROM param_config LIMIT 1)) * (SELECT frank_tax_rate FROM param_config LIMIT 1) * (SELECT value_franking_cr FROM param_config LIMIT 1) * COALESCE(yd.franking_y, 0) + COALESCE(yd.non_div_ecf_y, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 0)
+            (-COALESCE(yd.div_y_minus_2, 0) - COALESCE(yd.div_y_minus_2, 0) / (1 - (SELECT frank_tax_rate FROM param_config LIMIT 1)) * (SELECT frank_tax_rate FROM param_config LIMIT 1) * (SELECT value_franking_cr FROM param_config LIMIT 1) * COALESCE(yd.franking_y_minus_2, 0) + COALESCE(yd.non_div_ecf_y_minus_2, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 2) +
+            (-COALESCE(yd.div_y_minus_1, 0) - COALESCE(yd.div_y_minus_1, 0) / (1 - (SELECT frank_tax_rate FROM param_config LIMIT 1)) * (SELECT frank_tax_rate FROM param_config LIMIT 1) * (SELECT value_franking_cr FROM param_config LIMIT 1) * COALESCE(yd.franking_y_minus_1, 0) + COALESCE(yd.non_div_ecf_y_minus_1, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 1) +
+            (-COALESCE(yd.div_y, 0) - COALESCE(yd.div_y, 0) / (1 - (SELECT frank_tax_rate FROM param_config LIMIT 1)) * (SELECT frank_tax_rate FROM param_config LIMIT 1) * (SELECT value_franking_cr FROM param_config LIMIT 1) * COALESCE(yd.franking_y, 0) + COALESCE(yd.non_div_ecf_y, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 0)
           ELSE
-            (COALESCE(yd.div_y_minus_2, 0) + COALESCE(yd.non_div_ecf_y_minus_2, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 2) +
-            (COALESCE(yd.div_y_minus_1, 0) + COALESCE(yd.non_div_ecf_y_minus_1, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 1) +
-            (COALESCE(yd.div_y, 0) + COALESCE(yd.non_div_ecf_y, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 0)
+            (-COALESCE(yd.div_y_minus_2, 0) + COALESCE(yd.non_div_ecf_y_minus_2, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 2) +
+            (-COALESCE(yd.div_y_minus_1, 0) + COALESCE(yd.non_div_ecf_y_minus_1, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 1) +
+            (-COALESCE(yd.div_y, 0) + COALESCE(yd.non_div_ecf_y, 0)) * POWER(1 + yd.calc_ke_y_minus_1, 0)
         END
       ELSE NULL
     END AS fv_ecf_3y
   FROM year_data yd
   ORDER BY yd.ticker, yd.fiscal_year;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+$$ LANGUAGE SQL IMMUTABLE;
 
 COMMENT ON FUNCTION cissa.fn_calc_3y_fv_ecf(UUID, UUID) IS
 'Calculate 3-Year Forward Value ECF with discounting and franking adjustment.
-For fiscal_year < begin_year+3: Returns NULL
-For fiscal_year >= begin_year+3: Applies 3-year discounting formula with exponential decay
-Uses Calc KE from prior year as discount rate (Calc Open KE)
+For fiscal_year <= begin_year+2: Returns NULL
+For fiscal_year > begin_year+2: Applies 3-year discounting formula with KE[Y-1] and exponents 2,1,0
+Uses negative dividends: -DIV[Y-N] + NonDivECF[Y-N]
 Handles franking credit adjustments based on parameters. REQ-A7.';
 
 -- ============================================================================
