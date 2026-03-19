@@ -1,342 +1,100 @@
-# CISSA - Financial Data Pipeline
+# CISSA™ Digital Platform
 
-**Status**: ✅ Production Ready  
-**Last Updated**: 2026-03-13  
-**Phases Complete**: 04-05 (Auto-trigger L1 metrics, Rename L2 metrics)
+Corporate Governance & Sustainable Wealth Creation Platform.
 
-## Overview
-
-CISSA is a comprehensive financial data pipeline that ingests, validates, and processes Australian Securities Exchange (ASX) company financial data using the CISSA valuation methodology. It handles:
-
-- **Data Ingestion**: Bloomberg Excel data → CSV extraction → numeric validation
-- **Data Processing**: Fiscal year alignment → 7-step imputation cascade → cleaned fundamentals table
-- **Data Quality**: Automatic duplicate detection, validation logging, and audit trails
-- **Metrics Calculation**: L1 basic metrics, L2 derived metrics (auto-triggered on ingestion)
-
-The legacy repository for this work is located in: `https://github.com/rozettatechnology/basos-ds`
-
----
-
-## Architecture
-
-### Metrics Pipeline
+## Repository Structure
 
 ```
-DATA INGESTION
-      ↓
-Phase 04: AUTO-TRIGGER L1 METRICS ✅
-  ├─ 15 SQL functions (auto-calculated)
-  ├─ Core metrics: MC, Op Assets, Costs, Ratios
-  ├─ Stored in: metrics_outputs table
-  └─ Metadata: metric_level = "L1"
-      ↓
-Phase 05: L2 METRICS ✅
-  ├─ 6 derived metrics from L1
-  ├─ Python service (async calculation)
-  ├─ Stored in: metrics_outputs table
-  ├─ Metadata: metric_level = "L2"
-  └─ Names: Asset Efficiency, Operating Leverage, etc. (no L2_ prefix)
-      ↓
-Phase 06+: TO BE PLANNED
-  ├─ Temporal L1 metrics (ECF, EE, FY_TSR, FY_TSR_PREL)
-  ├─ Aggregated ratios (14 metrics × 4 intervals)
-  ├─ Beta calculation (OLS regression)
-  ├─ Risk-free rate & market returns
-  └─ Sector aggregations
+cissa2/
+├── backend/                  # FastAPI backend (Python) — unchanged
+│   ├── app/
+│   │   ├── api/v1/endpoints/ # REST endpoints (metrics, parameters, statistics, orchestration)
+│   │   ├── services/         # Business logic (EP, beta, cost of equity, L1/L2 metrics)
+│   │   ├── repositories/     # Data access layer (SQLAlchemy async)
+│   │   ├── models/           # Pydantic schemas + SQLAlchemy ORM models
+│   │   └── core/             # Config, database connection pooling
+│   ├── database/
+│   │   ├── etl/              # ETL pipeline: ingest → validate → impute → load
+│   │   └── schema/           # PostgreSQL schema SQL + migration scripts
+│   └── tests/                # Unit, integration, validation tests
+├── frontend/                 # React dashboard (TypeScript + Vite)
+│   ├── src/
+│   │   ├── pages/            # Dashboard, Principles 1 & 2, Outputs, Reports, Underlying Data
+│   │   ├── components/       # Sidebar, Topbar, UI components
+│   │   ├── data/             # Chart.js datasets (mock data, replace with API calls)
+│   │   └── lib/api.ts        # Typed API client → FastAPI backend
+│   └── README.md             # Frontend setup & build instructions
+├── input-data/               # Raw Bloomberg data + ETL extraction scripts
+├── example-calculations/     # Reference calculation scripts & backtesting
+└── requirements.txt          # Python dependencies
 ```
-
-### Three-Stage Data Pipeline
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ STAGE 1: DATA EXTRACTION & VALIDATION                   │
-├─────────────────────────────────────────────────────────┤
-│ • Excel → CSV extraction (24 worksheets)                │
-│ • CSV denormalization (metrics pivot)                   │
-│ • Numeric validation (reject unparseable values)        │
-│ • Duplicate detection & audit logging                   │
-│ Output: raw_data table (~275k rows)                     │
-└─────────────────────────────────────────────────────────┘
-                         ↓
-┌─────────────────────────────────────────────────────────┐
-│ STAGE 2: DATA CLEANING & ALIGNMENT                      │
-├─────────────────────────────────────────────────────────┤
-│ • FY alignment (extract fiscal years)                   │
-│ • 7-step imputation cascade:                            │
-│   - RAW values                                          │
-│   - FORWARD_FILL / BACKWARD_FILL                        │
-│   - INTERPOLATE / SECTOR_MEDIAN / MARKET_MEDIAN         │
-│   - MISSING (unresolvable gaps)                         │
-│ Output: fundamentals table (~187k rows, 100% filled)    │
-└─────────────────────────────────────────────────────────┘
-                         ↓
-┌─────────────────────────────────────────────────────────┐
-│ STAGE 3: METRICS & DOWNSTREAM CONSUMPTION               │
-├─────────────────────────────────────────────────────────┤
-│ • Phase 04: L1 metrics auto-triggered                   │
-│ • Phase 05: L2 metrics calculated                       │
-│ • Output: metrics_outputs table                         │
-│ • Future: Portfolio optimization, sector analysis       │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Database Schema
-
-**10 Tables in `cissa` schema:**
-
-| Layer | Tables | Purpose |
-|-------|--------|---------|
-| **Reference** | companies, fiscal_year_mapping | Immutable lookup data |
-| **Versioning** | dataset_versions | Data lineage & audit trail |
-| **Raw** | raw_data | Staging area with validation |
-| **Cleaned** | fundamentals, imputation_audit_trail | Final fact table & quality logs |
-| **Config** | parameters, parameter_sets | CISSA methodology parameters |
-| **Output** | metrics_outputs, optimization_outputs | Downstream analysis results |
-
----
 
 ## Quick Start
 
-### Prerequisites
-
-- Python 3.14+ and [Anaconda/Miniconda](https://docs.conda.io/projects/miniconda/en/latest/)
-- PostgreSQL 16+ (running and accessible)
-- Bloomberg ASX data Excel file
-
-### Installation
-
-1. **Install Miniconda** (if not already installed):
-   ```bash
-   cd /tmp
-   wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-   bash Miniconda3-latest-Linux-x86_64.sh -b -p ~/miniconda3
-   source ~/miniconda3/bin/activate
-   ```
-
-2. **Clone the repository**:
-   ```bash
-   git clone https://github.com/rozettatechnology/cissa
-   cd cissa
-   ```
-
-3. **Create and activate the virtual environment**:
-   ```bash
-   source ~/miniconda3/bin/activate
-   conda create -n cissa_env python=3.12 -y
-   conda activate cissa_env
-   ```
-
-4. **Install required packages**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-5. **Activate environment for future sessions**:
-   ```bash
-   source ~/miniconda3/bin/activate
-   conda activate cissa_env
-   ```
-
-### Three Essential Commands
-
-#### 1️⃣ Delete Schema and All Data
-
-Completely removes the `cissa` schema and all its data from the database:
+### 1. Backend
 
 ```bash
-cd /home/ubuntu/cissa/backend/database/schema
-python schema_manager.py destroy --confirm
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Set up environment
+cp .env.example .env
+# Edit .env: set DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/cissa
+
+# Run database schema
+psql $DATABASE_URL -f backend/database/schema/schema.sql
+psql $DATABASE_URL -f backend/database/schema/functions.sql
+
+# Start API server
+cd backend
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# API docs → http://localhost:8000/docs
 ```
 
-**When to use**: Before re-ingesting fresh data or resetting the database.
-
----
-
-#### 2️⃣ Re-initialize Schema
-
-Creates a fresh schema with all tables, indexes, triggers, and baseline parameters:
+### 2. Frontend
 
 ```bash
-cd /home/ubuntu/cissa/backend/database/schema
-python schema_manager.py init
+cd frontend
+npm install
+npm run dev
+# Dashboard → http://localhost:3000
+# Proxies /api/* → FastAPI on port 8000
 ```
 
-**When to use**: After deletion, or when setting up a new environment.
-
----
-
-#### 3️⃣ Ingest and Process Data
-
-Runs the complete 3-stage pipeline from Excel extraction through data processing:
+### 3. Production (serve frontend from FastAPI)
 
 ```bash
-cd /home/ubuntu/cissa/backend/database/etl
-python pipeline.py \
-  --input "input-data/ASX/raw-data/Bloomberg Download data.xlsx" \
-  --mode full
+# Build frontend
+cd frontend && npm run build
+
+# Add to backend/app/main.py:
+# from fastapi.staticfiles import StaticFiles
+# app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
 ```
 
-**When to use**: Load new data into the system.
+## API Reference
 
-**Output:**
-- Stage 1B: ~275k raw rows ingested, ~1k duplicates detected & logged
-- Stage 2: ~187k cleaned rows, 100% data fill rate
-- Pipeline completion with statistics
+The FastAPI backend exposes:
 
----
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/metrics/health` | Health check |
+| GET | `/api/v1/metrics/statistics` | Companies, sectors, data coverage |
+| GET | `/api/v1/metrics/get_metrics/` | Retrieve computed metrics |
+| POST | `/api/v1/metrics/calculate` | Calculate L1 metric |
+| POST | `/api/v1/metrics/calculate-l2` | Calculate L2 metrics |
+| POST | `/api/v1/metrics/beta/calculate-from-precomputed` | Beta (fast path) |
+| POST | `/api/v1/metrics/cost-of-equity/calculate` | Cost of Equity (Ke) |
+| POST | `/api/v1/metrics/rates/calculate` | Risk-free rate |
+| GET | `/api/v1/parameters/active` | Active parameter set |
+| GET | `/api/v1/metrics/statistics` | Dataset statistics |
 
-## Recent Enhancements
+Full interactive docs at `http://localhost:8000/docs` (Swagger UI).
 
-### Data Quality System (v2.1)
+## Tech Stack
 
-✅ **Duplicate Detection & Audit Trail**
-- Automatically detects duplicate `(ticker, metric_name, period)` combinations during ingestion
-- Logs all duplicates to `imputation_audit_trail` table for review
-- Uses `ON CONFLICT DO NOTHING` to keep first occurrence, skip duplicates
-- Stores period and occurrence metadata in JSONB format
-- User sees clear notice: "⚠ Data Quality Notice: X duplicate records detected and logged"
+**Backend:** Python 3.10+, FastAPI, SQLAlchemy 2 (async), PostgreSQL 16, Pandas, AsyncPG
 
-**Example duplicate audit trail query:**
-```sql
-SELECT ticker, metric_name, period, num_occurrences
-FROM (
-  SELECT ticker, metric_name, 
-    (metadata->>'period') as period,
-    (metadata->>'num_occurrences')::int as num_occurrences
-  FROM imputation_audit_trail
-  WHERE imputation_step = 'DATA_QUALITY_DUPLICATE'
-) sub
-ORDER BY ticker, period
-LIMIT 20;
-```
+**Frontend:** React 18, TypeScript, Vite 5, Tailwind CSS 3, Chart.js 4, Wouter
 
-### Metrics Validation (v2.2)
-
-✅ **FA Intensity & GW Intensity Calculations Verified**
-
-Cross-ticker validation confirms that Fixed Asset Intensity and Goodwill Intensity metrics are mathematically correct with proper year-shift logic (`FIXED_ASSETS[Year N-1] / REVENUE[Year N]`).
-
-**Validation Results:**
-| Ticker | Pass Rate | Notes |
-|--------|-----------|-------|
-| WES AU Equity | 18/18 (100%) | Perfect alignment across all years |
-| WOW AU Equity | 17/18 (94.4%) | Only 2020 shows minor discrepancy |
-| CSL AU Equity | 14/18 (77.8%) | 2010-2013 data quality anomaly |
-
-**Key Findings:**
-- Database calculations match corrected reference data with high fidelity
-- Discrepancies are due to underlying data source differences, not formula errors
-- 2010-2013 anomalies in some tickers suggest potential data quality issue for those specific years
-- Calculation logic is sound and consistent across multiple tickers
-
-See **[METRICS_VALIDATION_RESULTS.md](METRICS_VALIDATION_RESULTS.md)** for detailed technical analysis.
-
----
-
-## Database Configuration
-
-### Environment Variables
-
-Configuration is loaded from `.env` file (located in `/home/ubuntu/datahex-local/`):
-
-```bash
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=<password>
-POSTGRES_DB=rozetta
-```
-
-All queries automatically use the `cissa` schema (set via `search_path` in connection).
-
----
-
-## Documentation
-
-**Primary References:**
-- **[.planning/README.md](.planning/README.md)** - Planning documentation index
-- **[.planning/LEGACY_METRICS_COMPLETE.md](.planning/LEGACY_METRICS_COMPLETE.md)** - Complete metrics inventory (for alignment work)
-- **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Developer guide for extending metrics system
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Quick testing workflow reference
-
-**Technical References:**
-- **[backend/database/DEPLOYMENT_GUIDE.md](backend/database/DEPLOYMENT_GUIDE.md)** - Deployment instructions
-- **[backend/database/CURRENT_SCHEMA.md](backend/database/CURRENT_SCHEMA.md)** - Schema reference
-
----
-
-## Troubleshooting
-
-### Database Connection Issues
-
-```bash
-# Test connection
-python backend/database/etl/config.py
-# Expected: ✓ Database connection successful
-```
-
-### Schema Already Exists Error
-
-```bash
-# Delete schema first, then reinitialize
-cd backend/database/schema
-python schema_manager.py destroy --confirm
-python schema_manager.py init
-```
-
-### Pipeline Ingestion Fails
-
-Check the pipeline log for details. Common issues:
-- Missing input file (verify path)
-- Database connection problem (check environment variables)
-- Duplicate data detected (normal - will log to audit trail and continue)
-
----
-
-## Project Structure
-
-```
-cissa/
-├── README.md (this file)
-├── requirements.txt
-├── input-data/
-│   └── ASX/
-│       ├── raw-data/ (Bloomberg Excel files)
-│       ├── extracted-worksheets/ (CSV exports)
-│       └── consolidated-data/ (merged metrics)
-├── backend/
-│   └── database/
-│       ├── etl/
-│       │   ├── pipeline.py (orchestrator)
-│       │   ├── ingestion.py (Stage 1)
-│       │   ├── processing.py (Stage 2)
-│       │   ├── fy_aligner.py (fiscal year alignment)
-│       │   ├── imputation_engine.py (7-step cascade)
-│       │   ├── config.py (database connection)
-│       │   └── validators.py (numeric validation)
-│       ├── schema/
-│       │   ├── schema.sql (table definitions)
-│       │   ├── schema_manager.py (initialization tool)
-│       │   └── destroy_schema.sql (cleanup)
-│       ├── DEPLOYMENT_GUIDE.md
-│       ├── CURRENT_SCHEMA.md
-│       └── USAGE.md
-└── VALIDATION_QUERIES.md
-```
-
----
-
-## Contributing
-
-When modifying the pipeline:
-
-1. Update schema.sql if tables/columns change
-2. Add validation queries to VALIDATION_QUERIES.md
-3. Test with fresh data ingestion
-4. Commit changes with clear messages describing data quality or pipeline improvements
-
----
-
-## License
-
-[License information to be added]
+**ETL:** Bloomberg Excel → raw_data → fundamentals → metrics_outputs (PostgreSQL)
