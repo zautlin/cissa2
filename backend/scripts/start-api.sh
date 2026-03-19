@@ -50,16 +50,12 @@ else
     echo "✓ PostgreSQL connection successful"
 fi
 
-# Step 3: Load SQL functions (if not already loaded)
+# Step 3: Load SQL functions (always reload to ensure latest definitions)
 echo ""
 echo "[3/4] Loading SQL functions into database..."
-if ! psql "$DB_URL" -c "SELECT 1 FROM information_schema.routines WHERE routine_name = 'fn_calc_market_cap'" 2>/dev/null | grep -q 1; then
-    echo "  Loading functions.sql..."
-    psql "$DB_URL" -f "$BACKEND_DIR/database/schema/functions.sql" > /dev/null 2>&1
-    echo "  ✓ Functions loaded"
-else
-    echo "  ✓ Functions already loaded"
-fi
+echo "  Loading functions.sql..."
+psql "$DB_URL" -f "$BACKEND_DIR/database/schema/functions.sql" > /dev/null 2>&1
+echo "  ✓ Functions loaded/updated"
 
 # Step 4: Start FastAPI server
 echo ""
