@@ -60,9 +60,9 @@ const PIPELINE_STAGES: PipelineStage[] = [
   // L1 Pre-computed Metrics
   {
     id: "l1-metrics",
-    phase: "Phase 1 — L1 Core Metrics",
+    phase: "Phase 1 — L1 Pre-Computed Metrics",
     label: "L1 Metric Calculation",
-    description: "Pre-compute 11 L1 metrics in 4 parallel groups: book value, equity, returns, EP components",
+    description: "Pre-compute 11 L1 metrics in 4 parallel groups: Calc MC, Assets, OA, Op/Non-Op/Tax/XO Cost, ECF, EE, FY TSR, FY TSR PREL",
     icon: "M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z",
     color: "hsl(38 60% 52%)",
     endpoint: "/api/v1/metrics/calculate",
@@ -73,19 +73,19 @@ const PIPELINE_STAGES: PipelineStage[] = [
     id: "l2-core",
     phase: "Phase 2 — L2 Derived Metrics",
     label: "L2 Core Metrics",
-    description: "Derive 2 sequential L2 metrics dependent on Phase 1 outputs: market value ratios, economic profit metrics",
+    description: "Sequential: Core EP metrics (EP, PAT_EX, XO_COST_EX, FC) dependent on L1 Phase 1 outputs",
     icon: "M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z",
     color: "hsl(38 60% 52%)",
-    endpoint: "/api/v1/metrics/calculate-l2",
+    endpoint: "/api/v1/metrics/l2-core/calculate",
     method: "POST",
     depends: ["l1-metrics"],
   },
-  // Runtime Metrics
+  // Runtime Metrics (Phase 3+ — parameter-dependent, called via runtime-metrics orchestrator)
   {
     id: "beta",
-    phase: "Phase 3 — Runtime Metrics",
-    label: "Beta Calculation",
-    description: "Calculate systematic risk (β) from pre-computed data using market index regression",
+    phase: "Phase 3 — Runtime: Beta & Ke",
+    label: "Beta Rounding",
+    description: "Apply parameter-specific rounding to pre-computed Beta values → Calc Beta Rounded (~11,000 records, ~1.5s)",
     icon: "M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z",
     color: "hsl(152 60% 40%)",
     endpoint: "/api/v1/metrics/beta/calculate-from-precomputed",
@@ -93,48 +93,82 @@ const PIPELINE_STAGES: PipelineStage[] = [
     depends: ["l1-metrics"],
   },
   {
-    id: "coe",
-    phase: "Phase 3 — Runtime Metrics",
-    label: "Cost of Equity (Ke)",
-    description: "Calculate CAPM-based cost of equity capital: Ke = Rf + β × (Rm − Rf) using active parameter set",
-    icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
-    color: "hsl(152 60% 40%)",
-    endpoint: "/api/v1/metrics/cost-of-equity/calculate",
-    method: "POST",
-    depends: ["beta"],
-  },
-  {
     id: "rates",
-    phase: "Phase 4 — Market Rates",
-    label: "Risk-Free Rates",
-    description: "Fetch and compute risk-free rate time series from government bond yield data (RBA / FRED)",
+    phase: "Phase 3 — Runtime: Beta & Ke",
+    label: "Risk-Free Rate (Rf)",
+    description: "Calculate Calc Rf from benchmark rates and risk premium parameter → ~10,905 records (~7.9s)",
     icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
-    color: "hsl(188 78% 35%)",
+    color: "hsl(152 60% 40%)",
     endpoint: "/api/v1/metrics/rates/calculate",
     method: "POST",
+    depends: ["l1-metrics"],
   },
   {
-    id: "l2-advanced",
-    phase: "Phase 5 — Wealth Creation",
-    label: "L2-Core Wealth Metrics",
-    description: "Calculate advanced wealth creation metrics: TER-Ke, TSR-Ke, TSR Alpha, EP Bow Wave indices",
-    icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6",
-    color: "hsl(0 72% 51%)",
-    endpoint: "/api/v1/metrics/l2-core/calculate",
+    id: "coe",
+    phase: "Phase 4 — Runtime: Cost of Equity",
+    label: "Cost of Equity (Ke)",
+    description: "Calc KE = Calc Rf + Calc Beta Rounded × Risk Premium → ~10,905 records (~1.6s)",
+    icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+    color: "hsl(188 78% 35%)",
+    endpoint: "/api/v1/metrics/cost-of-equity/calculate",
     method: "POST",
-    depends: ["coe", "rates", "l2-core"],
+    depends: ["beta", "rates"],
   },
-  // Orchestration
   {
-    id: "orchestrate",
-    phase: "Phase 6 — Orchestration",
-    label: "Full L1 Orchestration",
-    description: "Unified orchestrator: parallelises Phase 1 (4 concurrent groups), sequences Phase 2, aggregates results",
-    icon: "M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zm11-1a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z",
+    id: "fv-ecf",
+    phase: "Phase 5 — Runtime: FV ECF → TER → TER Alpha",
+    label: "Future Value ECF",
+    description: "Project equity cash flows forward: Calc 1Y/3Y/5Y/10Y FV ECF → ~42,120 records (~51.9s, bottleneck)",
+    icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6",
     color: "hsl(270 60% 50%)",
-    endpoint: "/api/v1/orchestration/l1",
+    endpoint: "/api/v1/metrics/l2-fv-ecf/calculate",
+    method: "POST",
+    depends: ["coe"],
+  },
+  {
+    id: "ter",
+    phase: "Phase 5 — Runtime: FV ECF → TER → TER Alpha",
+    label: "TER & TER-Ke",
+    description: "Calc 1Y/3Y/5Y/10Y TER + TER-KE (8 metrics) → ~89,660 records (~14.4s)",
+    icon: "M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z",
+    color: "hsl(270 60% 50%)",
+    endpoint: "/api/v1/metrics/l2-ter/calculate",
+    method: "POST",
+    depends: ["fv-ecf"],
+  },
+  {
+    id: "ter-alpha",
+    phase: "Phase 5 — Runtime: FV ECF → TER → TER Alpha",
+    label: "TER Alpha",
+    description: "Risk-adjusted performance: Calc 1Y/3Y/5Y/10Y Load RA MM + WC TERA + TER Alpha (12 metrics) → ~131,780 records (~23.9s)",
+    icon: "M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zm11-1a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z",
+    color: "hsl(0 72% 51%)",
+    endpoint: "/api/v1/metrics/l2-ter-alpha/calculate",
+    method: "POST",
+    depends: ["ter"],
+  },
+  // Full orchestrators
+  {
+    id: "orchestrate-l1",
+    phase: "Phase 6 — Orchestrators",
+    label: "L1 Pre-Computation Orchestrator",
+    description: "Parallelises Phase 1 (4 concurrent groups × 11 metrics), sequences Phase 2 — use after fresh data ingestion",
+    icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
+    color: "hsl(213 75% 22%)",
+    endpoint: "/api/v1/metrics/calculate-l1",
     method: "POST",
     depends: ["ingest", "fy-align"],
+  },
+  {
+    id: "orchestrate-runtime",
+    phase: "Phase 6 — Orchestrators",
+    label: "Runtime Metrics Orchestrator",
+    description: "Full Phase 3+ pipeline: Beta Rounding → Rf → Ke → FV-ECF → TER → TER Alpha. ~101s total wall-clock time (~296k records)",
+    icon: "M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18",
+    color: "hsl(213 75% 22%)",
+    endpoint: "/api/v1/metrics/runtime-metrics?dataset_id={id}&param_set_id={id}",
+    method: "POST",
+    depends: ["orchestrate-l1"],
   },
 ];
 
@@ -144,15 +178,22 @@ const PHASES = Array.from(new Set(PIPELINE_STAGES.map(s => s.phase)));
 // ── Mock fallback states ───────────────────────────────────────────────────
 
 const MOCK_STATES: PipelineStatesMap = {
-  ingest:       { status: "success",  message: "1,247 companies loaded",        records: 1247,  duration: 4.2,  lastRun: "2026-03-19 06:00 AEDT" },
-  "fy-align":   { status: "success",  message: "FY alignment complete",          records: 1247,  duration: 2.1,  lastRun: "2026-03-19 06:00 AEDT" },
-  "l1-metrics": { status: "success",  message: "11 metrics × 1,247 companies",  records: 13717, duration: 38.4, lastRun: "2026-03-19 06:05 AEDT" },
-  "l2-core":    { status: "success",  message: "2 L2 metrics calculated",        records: 2494,  duration: 6.8,  lastRun: "2026-03-19 06:06 AEDT" },
-  beta:         { status: "success",  message: "Beta calculated (5yr window)",   records: 1247,  duration: 12.3, lastRun: "2026-03-19 06:07 AEDT" },
-  coe:          { status: "success",  message: "Ke = CAPM × active param set",   records: 1247,  duration: 3.5,  lastRun: "2026-03-19 06:07 AEDT" },
-  rates:        { status: "warning",  message: "RBA feed — 1 day stale",         records: 24,    duration: 1.8,  lastRun: "2026-03-18 06:00 AEDT" },
-  "l2-advanced":{ status: "idle",     message: "Pending rates refresh" },
-  orchestrate:  { status: "success",  message: "13/13 metrics complete",         records: 16211, duration: 52.1, lastRun: "2026-03-19 06:06 AEDT" },
+  // ETL (CLI only — no direct API endpoint, status inferred from statistics)
+  ingest:            { status: "success", message: "500 tickers × ~20 years ≈ 10,000 fundamentals records", records: 10000, duration: 180, lastRun: "2026-03-19 06:00 AEDT" },
+  "fy-align":        { status: "success", message: "FY alignment & imputation complete",                   records: 10000, duration: 45,  lastRun: "2026-03-19 06:03 AEDT" },
+  // L1 pre-computed (13 metrics ≈ 130,000 records)
+  "l1-metrics":      { status: "success", message: "13 L0 metrics calculated",                             records: 130000, duration: 38, lastRun: "2026-03-19 06:05 AEDT" },
+  "l2-core":         { status: "success", message: "Core EP metrics (EP, PAT_EX, XO_COST_EX, FC)",          records: 10000, duration: 6.8, lastRun: "2026-03-19 06:06 AEDT" },
+  // Runtime (parameter-dependent)
+  beta:              { status: "success", message: "Calc Beta Rounded — 11,000 records",                   records: 11000, duration: 1.5,  lastRun: "2026-03-19 06:07 AEDT" },
+  rates:             { status: "success", message: "Calc Rf — 10,905 records",                             records: 10905, duration: 7.9,  lastRun: "2026-03-19 06:07 AEDT" },
+  coe:               { status: "success", message: "Calc KE = Rf + Beta × Risk Premium",                  records: 10905, duration: 1.6,  lastRun: "2026-03-19 06:07 AEDT" },
+  "fv-ecf":          { status: "success", message: "Calc 1Y/3Y/5Y/10Y FV ECF — 42,120 records",            records: 42120, duration: 51.9, lastRun: "2026-03-19 06:08 AEDT" },
+  ter:               { status: "success", message: "8 TER/TER-KE metrics — 89,660 records",                 records: 89660, duration: 14.4, lastRun: "2026-03-19 06:09 AEDT" },
+  "ter-alpha":       { status: "warning", message: "TER Alpha implementation pending (Phase 10d)",          records: 131780, duration: 23.9, lastRun: "2026-03-18 06:00 AEDT" },
+  // Orchestrators
+  "orchestrate-l1":  { status: "success", message: "13/13 L1 metrics complete — ~130k records",            records: 130000, duration: 52,   lastRun: "2026-03-19 06:06 AEDT" },
+  "orchestrate-runtime": { status: "success", message: "All phases complete — ~296k records in ~101s",    records: 296370, duration: 101.2, lastRun: "2026-03-19 06:10 AEDT" },
 };
 
 // ── Status helpers ─────────────────────────────────────────────────────────
@@ -671,11 +712,12 @@ export default function PipelinePage() {
       }}>
         <div>
           <div style={{ fontWeight: 600, fontSize: "0.875rem", marginBottom: "0.25rem" }}>
-            Run Full L1 Orchestration
+            Run Full Pipeline
           </div>
           <div style={{ fontSize: "0.6875rem", color: "hsl(var(--muted-foreground))" }}>
-            Triggers <code style={{ fontFamily: "monospace" }}>POST /api/v1/orchestration/l1</code> — parallelises 11 L1 metrics, then sequences 2 L2 metrics.
-            Requires a valid <code style={{ fontFamily: "monospace" }}>dataset_id</code> and active parameter set.
+            Step 1 — L1 pre-computation: <code style={{ fontFamily: "monospace" }}>POST /api/v1/metrics/calculate-l1</code> (parallelises 11 metrics, ~52s)<br/>
+            Step 2 — Runtime orchestration: <code style={{ fontFamily: "monospace" }}>POST /api/v1/metrics/runtime-metrics?dataset_id=&amp;param_set_id=</code> (~101s, ~296k records)<br/>
+            Requires <code style={{ fontFamily: "monospace" }}>dataset_id</code> from ETL ingestion + <code style={{ fontFamily: "monospace" }}>param_set_id</code> from schema init.
           </div>
         </div>
         <button
