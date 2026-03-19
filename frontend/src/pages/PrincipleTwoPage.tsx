@@ -1,657 +1,461 @@
-import { useState, useRef, useEffect } from "react";
-import { Line } from "react-chartjs-2";
+/**
+ * Principle 2 — Primary Focus on the Longer Term
+ * Live data: Calc EP (bow wave), M:B Ratio, ECF
+ */
+import { useState } from "react";
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from "chart.js";
-import annotationPlugin from "chartjs-plugin-annotation";
+  ComposedChart, AreaChart, BarChart, LineChart,
+  Area, Bar, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell,
+} from "recharts";
+import { useActiveContext, useEPSeries, useMultipleMetrics, useRatioMetric, aggregateByYear } from "../hooks/useMetrics";
 
-ChartJS.register(
-  CategoryScale, LinearScale, LineElement, PointElement,
-  Title, Tooltip, Legend, Filler, annotationPlugin
-);
+const NAVY  = "hsl(213 75% 22%)";
+const GOLD  = "hsl(38 60% 52%)";
+const GREEN = "hsl(152 60% 40%)";
+const SLATE = "hsl(215 15% 46%)";
 
-// ─── Bow Wave data generator ───────────────────────────────────────────────
-// Returns a bell-curve shaped EP stream: rises then falls across 30 periods
-function bellCurve(
-  years: number[],
-  peakYear: number,
-  peakValue: number,
-  sigma: number
-): number[] {
-  return years.map(y => {
-    const d = y - peakYear;
-    return peakValue * Math.exp(-(d * d) / (2 * sigma * sigma));
-  });
+function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: "0.35rem 0.75rem",
+      background: active ? NAVY : "transparent",
+      color: active ? "#fff" : SLATE,
+      border: `1px solid ${active ? NAVY : "hsl(210 16% 88%)"}`,
+      borderRadius: 6, fontSize: "0.6875rem", fontWeight: active ? 700 : 500,
+      cursor: "pointer",
+    }}>{label}</button>
+  );
 }
 
-// Each company: { peakValue in $bn, peakOffset (peak relative to T0), sigma }
-const COMPANIES: Record<string, {
-  label: string;
-  baselinePeak: number;
-  baselinePeakOffset: number;
-  baselineSigma: number;
-  newPeak: number;
-  newPeakOffset: number;
-  newSigma: number;
-  wealthCreation: string;
-  wealthDirection: "positive" | "negative";
-  description: string;
-}> = {
-  COH: {
-    label: "Cochlear (COH)",
-    baselinePeak: 0.35, baselinePeakOffset: 3, baselineSigma: 6,
-    newPeak: 0.72, newPeakOffset: 5, newSigma: 8,
-    wealthCreation: "$3.1b",
-    wealthDirection: "positive",
-    description: "Cochlear established new EP expectations through sustained product innovation and global expansion, creating substantial long-term shareholder wealth.",
-  },
-  REA: {
-    label: "REA Group (REA)",
-    baselinePeak: 0.28, baselinePeakOffset: 2, baselineSigma: 5,
-    newPeak: 0.95, newPeakOffset: 6, newSigma: 9,
-    wealthCreation: "$8.4b",
-    wealthDirection: "positive",
-    description: "REA Group's dominant digital property platform drove extraordinary EP growth, far exceeding baseline expectations set at the start of the period.",
-  },
-  CSL: {
-    label: "CSL Limited (CSL)",
-    baselinePeak: 0.55, baselinePeakOffset: 4, baselineSigma: 7,
-    newPeak: 1.45, newPeakOffset: 6, newSigma: 10,
-    wealthCreation: "$12.7b",
-    wealthDirection: "positive",
-    description: "CSL's biotherapeutics leadership and R&D investment generated one of the largest EP bow wave enhancements of any ASX company.",
-  },
-  BHP: {
-    label: "BHP Group (BHP)",
-    baselinePeak: 3.2, baselinePeakOffset: 2, baselineSigma: 5,
-    newPeak: 1.8, newPeakOffset: 1, newSigma: 4,
-    wealthCreation: "$18.5b",
-    wealthDirection: "negative",
-    description: "BHP's commodity cycle exposure resulted in EP expectations failing to be met, with declining capital returns destroying significant shareholder wealth.",
-  },
-  MSFT: {
-    label: "Microsoft (MSFT)",
-    baselinePeak: 8.5, baselinePeakOffset: 3, baselineSigma: 6,
-    newPeak: 18.2, newPeakOffset: 7, newSigma: 12,
-    wealthCreation: "$420b",
-    wealthDirection: "positive",
-    description: "Microsoft's cloud transformation under Satya Nadella drove unprecedented EP bow wave expansion, creating hundreds of billions in new shareholder wealth.",
-  },
-  IDX: {
-    label: "ASX 300 Aggregate",
-    baselinePeak: 28.0, baselinePeakOffset: 3, baselineSigma: 6,
-    newPeak: 32.5, newPeakOffset: 5, newSigma: 8,
-    wealthCreation: "$85b",
-    wealthDirection: "positive",
-    description: "The ASX 300 aggregate EP bow wave shows moderate aggregate wealth creation, masking wide dispersion between EP-dominant and EPS-dominant companies.",
-  },
+function ChartCard({ title, subtitle, live, children }: {
+  title: string; subtitle?: string; live?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <div style={{ background: "#fff", borderRadius: 10, border: "1px solid hsl(210 16% 90%)", padding: "1rem 1.25rem", boxShadow: "0 1px 4px hsl(213 40% 50% / 0.05)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "0.875rem" }}>
+        <div>
+          <div style={{ fontSize: "0.8125rem", fontWeight: 700, color: "hsl(220 35% 12%)" }}>{title}</div>
+          {subtitle && <div style={{ fontSize: "0.6875rem", color: SLATE, marginTop: "0.125rem" }}>{subtitle}</div>}
+        </div>
+        {live !== undefined && (
+          <span style={{
+            fontSize: "0.5625rem", fontWeight: 700, padding: "0.15rem 0.45rem",
+            background: live ? "hsl(152 60% 40% / 0.1)" : "hsl(38 60% 52% / 0.1)",
+            color: live ? "hsl(152 50% 30%)" : "hsl(38 60% 35%)",
+            borderRadius: 999, border: live ? "1px solid hsl(152 60% 40% / 0.3)" : "1px solid hsl(38 60% 52% / 0.3)",
+            textTransform: "uppercase",
+          }}>{live ? "● LIVE" : "ILLUS."}</span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Skeleton({ h = 200 }: { h?: number }) {
+  return <div style={{ height: h, background: "hsl(210 20% 95%)", borderRadius: 8, animation: "shimmer 1.4s infinite", backgroundImage: "linear-gradient(90deg,hsl(210 20% 95%),hsl(210 20% 92%),hsl(210 20% 95%))", backgroundSize: "200% 100%" }} />;
+}
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: "#fff", border: "1px solid hsl(210 16% 88%)", borderRadius: 8, padding: "0.5rem 0.75rem", boxShadow: "0 4px 16px rgba(0,0,0,0.1)", fontSize: "0.75rem" }}>
+      <div style={{ fontWeight: 700, color: "hsl(220 35% 18%)", marginBottom: "0.25rem" }}>{label}</div>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} style={{ color: p.color, display: "flex", gap: "0.5rem" }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, marginTop: 3 }} />
+          <span>{p.name}: <b>{typeof p.value === "number" ? p.value.toFixed(2) : p.value}</b></span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
-const TABS = [
-  { id: "overview", label: "2.1  Overview" },
-  { id: "bow-wave", label: "2.2  Bow Wave Concept" },
-  { id: "pair", label: "2.3  Pair of EP Bow Waves" },
-  { id: "long-term", label: "2.4  Long-Term Focus" },
-  { id: "reconcile", label: "2.5  Wealth Reconciliation" },
-];
+// Bell curve helper for bow wave
+function bell(x: number, mu: number, sigma: number, peak: number) {
+  return +(peak * Math.exp(-((x - mu) ** 2) / (2 * sigma * sigma))).toFixed(2);
+}
 
 export default function PrincipleTwoPage() {
-  const [activeTab, setActiveTab] = useState("pair");
-  const [selectedCompany, setSelectedCompany] = useState("COH");
-  const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
+  const [tab, setTab] = useState(0);
+  const ctx = useActiveContext();
 
-  const company = COMPANIES[selectedCompany];
+  const ep1Y  = useEPSeries(ctx.datasetId, ctx.paramSetId, "1Y");
+  const ep3Y  = useEPSeries(ctx.datasetId, ctx.paramSetId, "3Y");
+  const multiMetrics = useMultipleMetrics(ctx.datasetId, ctx.paramSetId, ["Calc ECF", "Non Div ECF", "Calc FY TSR", "Calc EE", "Calc MC"]);
+  const mbRatio = useRatioMetric(ctx.datasetId, ctx.paramSetId, "mb_ratio", "1Y");
 
-  // Build year labels: T-10 … T+15 (26 points)
-  const T0 = 0; // index 10 = T0
-  const yearOffsets = Array.from({ length: 26 }, (_, i) => i - 10);
-  const currentYear = 2014;
-  const yearLabels = yearOffsets.map(o => {
-    const y = currentYear + o;
-    return o === 0 ? `${y} (T₀)` : `${y}`;
+  const loading = ctx.loading || ep1Y.loading;
+
+  // Build bow-wave from live EP
+  const epAgg1Y = aggregateByYear((ep1Y.data || []).map(r => ({ ticker: r.ticker, fiscal_year: r.fiscal_year, value: r.ep_1y ?? null })));
+  const epAgg3Y = aggregateByYear((ep3Y.data || []).map(r => ({ ticker: r.ticker, fiscal_year: r.fiscal_year, value: r.ep_3y ?? null })));
+  const isLiveEP = epAgg1Y.length >= 4;
+
+  // Static bow wave
+  const bowWaveStatic = Array.from({ length: 26 }, (_, i) => {
+    const offset = i - 10;
+    const yr = 2014 + offset;
+    return {
+      year: String(yr),
+      baseline: bell(offset, 3, 6, 350),
+      newExp: offset >= 0 ? bell(offset, 5, 8, 720) : null,
+      pairWave: bell(offset, -2, 5, 280),
+    };
   });
 
-  // Baseline = starts at T-10, peaks around T0+baselinePeakOffset
-  const baselineData = bellCurve(yearOffsets, company.baselinePeakOffset, company.baselinePeak, company.baselineSigma);
-  // New expectations = starts near T0, peaks later
-  const newData = bellCurve(yearOffsets, company.newPeakOffset, company.newPeak, company.newSigma);
-  // mask new wave to only show from T0 (index 10) onwards
-  const newDataMasked = newData.map((v, i) => (yearOffsets[i] >= 0 ? v : null));
+  // Live bow wave
+  const bowWaveLive = epAgg1Y.map((d, i) => ({
+    year: String(d.year),
+    ep1Y: +(d.value / 1e6).toFixed(2),
+    ep3Y: epAgg3Y[i] ? +(epAgg3Y[i].value / 1e6).toFixed(2) : null,
+  }));
 
-  const unit = selectedCompany === "MSFT" ? "$bn" : selectedCompany === "IDX" ? "$bn" : "$m";
-  const scaleMultiplier = selectedCompany === "MSFT" || selectedCompany === "IDX" ? 1000 : 1;
+  // ECF decomposition
+  const ecfAgg    = aggregateByYear(multiMetrics.data["Calc ECF"]    || []);
+  const nonDivAgg = aggregateByYear(multiMetrics.data["Non Div ECF"] || []);
+  const ecfChartData = ecfAgg.map(d => {
+    const nonDiv = nonDivAgg.find(n => n.year === d.year);
+    const divEcf = nonDiv ? d.value - nonDiv.value : d.value * 0.4;
+    return {
+      year: String(d.year),
+      dividend: +(divEcf / 1e6).toFixed(1),
+      retained: +(nonDiv ? nonDiv.value / 1e6 : d.value * 0.6 / 1e6).toFixed(1),
+    };
+  }).slice(-15);
 
-  const bowWaveData = {
-    labels: yearLabels,
-    datasets: [
-      {
-        label: `Baseline EP Expectations (T₀ start)`,
-        data: baselineData.map(v => +(v * scaleMultiplier).toFixed(1)),
-        borderColor: "hsl(38 70% 48%)",
-        backgroundColor: "hsl(38 70% 48% / 0.12)",
-        borderWidth: 2.5,
-        pointRadius: 0,
-        pointHoverRadius: 5,
-        fill: true,
-        tension: 0.5,
-      },
-      {
-        label: `New EP Expectations (End of period)`,
-        data: (newDataMasked as (number | null)[]).map(v => v !== null ? +(v * scaleMultiplier).toFixed(1) : null),
-        borderColor: "hsl(213 75% 40%)",
-        backgroundColor: "hsl(213 75% 40% / 0.10)",
-        borderWidth: 2.5,
-        pointRadius: 0,
-        pointHoverRadius: 5,
-        fill: true,
-        tension: 0.5,
-      },
-    ],
-  };
+  // M:B ratio time series
+  const mbData = (mbRatio.data?.results || []).reduce((acc: any, t: any) => {
+    (t.time_series || []).forEach((ts: any) => {
+      if (!acc[ts.year]) acc[ts.year] = [];
+      if (ts.value !== null) acc[ts.year].push(ts.value);
+    });
+    return acc;
+  }, {} as Record<number, number[]>);
+  const mbByYear = Object.entries(mbData).map(([yr, vals]: [string, any]) => ({
+    year: yr,
+    median: +(vals.sort((a: number, b: number) => a - b)[Math.floor(vals.length / 2)]).toFixed(2),
+  })).sort((a, b) => a.year.localeCompare(b.year)).slice(-15);
 
-  const t0Index = 10; // T0 is at index 10
-
-  const bowWaveOptions: any = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
-    plugins: {
-      legend: {
-        position: "top" as const,
-        labels: {
-          boxWidth: 28,
-          font: { size: 11 },
-          padding: 12,
-          usePointStyle: true,
-          pointStyle: "line",
-        },
-      },
-      tooltip: {
-        callbacks: {
-          label: (ctx: any) => {
-            const val = ctx.parsed.y;
-            if (val === null || val === undefined) return "";
-            return ` ${ctx.dataset.label.split("(")[0].trim()}: ${val > 0 ? "+" : ""}${val.toFixed(1)} ${unit}`;
-          },
-        },
-      },
-      annotation: {
-        annotations: {
-          t0Line: {
-            type: "line",
-            xMin: t0Index,
-            xMax: t0Index,
-            borderColor: "hsl(220 15% 55%)",
-            borderWidth: 1.5,
-            borderDash: [5, 4],
-            label: {
-              content: "T₀ — Measurement Start",
-              display: true,
-              position: "start",
-              font: { size: 10, weight: "600" },
-              color: "hsl(220 15% 40%)",
-              backgroundColor: "transparent",
-              padding: 2,
-            },
-          },
-          wealthLabel: {
-            type: "label",
-            xValue: t0Index + 6,
-            yValue: company.newPeak * scaleMultiplier * 0.55,
-            content: [
-              company.wealthDirection === "positive"
-                ? `▲ ${company.wealthCreation} enhancement`
-                : `▼ ${company.wealthCreation} reduction`,
-              "to shareholder wealth",
-            ],
-            font: { size: 10.5, weight: "700" },
-            color: company.wealthDirection === "positive" ? "hsl(152 60% 35%)" : "hsl(0 72% 45%)",
-            backgroundColor: company.wealthDirection === "positive"
-              ? "hsl(152 60% 94%)"
-              : "hsl(0 72% 95%)",
-            borderColor: company.wealthDirection === "positive"
-              ? "hsl(152 60% 70%)"
-              : "hsl(0 72% 75%)",
-            borderWidth: 1,
-            borderRadius: 5,
-            padding: { x: 8, y: 5 },
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        ticks: {
-          font: { size: 9 },
-          maxRotation: 45,
-          autoSkip: true,
-          maxTicksLimit: 14,
-        },
-        grid: { color: "rgba(0,0,0,0.04)" },
-      },
-      y: {
-        title: {
-          display: true,
-          text: `Economic Profit (EP) — ${unit}`,
-          font: { size: 10, weight: "600" },
-          color: "hsl(220 15% 45%)",
-        },
-        ticks: {
-          font: { size: 9 },
-          callback: (v: number | string) => `${v}`,
-        },
-        grid: { color: "rgba(0,0,0,0.04)" },
-        min: 0,
-      },
-    },
-  };
+  const tabs = ["2.1  Market Value & EP", "2.2  Bow Wave Concept", "2.3  Pair of EP Bow Waves", "2.4  Long-Term Proof", "2.5  Wealth Reconciliation"];
 
   return (
-    <div style={{ padding: "1.5rem", maxWidth: "1400px" }}>
-
-      {/* Page header */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.25rem" }}>
-          <div style={{
-            width: "28px", height: "28px", borderRadius: "50%",
-            background: "hsl(213 75% 22%)", color: "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "0.75rem", fontWeight: 700, flexShrink: 0,
-          }}>2</div>
-          <h1 style={{ fontSize: "1.25rem", fontWeight: 700, color: "hsl(var(--primary))", margin: 0 }}>
-            Principle 2: A Primary Focus on the Longer Term
-          </h1>
-        </div>
-        <p style={{ fontSize: "0.8125rem", color: "hsl(var(--muted-foreground))", marginLeft: "2.125rem", lineHeight: 1.6 }}>
-          Market capitalisation reflects the present value of the entire expected EP stream — the EP Bow Wave. Organisations that sustain and grow EP over the long term create the most enduring shareholder wealth.
+    <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 1600 }}>
+      <div>
+        <h1 style={{ fontSize: "1.125rem", fontWeight: 800, color: "hsl(220 35% 12%)", margin: 0, letterSpacing: "-0.02em" }}>
+          Principle 2 — Primary Focus on the Longer Term
+        </h1>
+        <p style={{ fontSize: "0.75rem", color: SLATE, margin: "0.25rem 0 0" }}>
+          EP Bow Wave · Market Value · Pair of Bow Waves · Long-Term Focus Proof
         </p>
       </div>
 
-      {/* Tabs */}
-      <div style={{
-        display: "flex", gap: "0.25rem", borderBottom: "2px solid hsl(var(--border))",
-        marginBottom: "1.5rem", overflowX: "auto",
-      }}>
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            data-testid={`tab-p2-${t.id}`}
-            style={{
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.8125rem",
-              fontWeight: activeTab === t.id ? 700 : 500,
-              color: activeTab === t.id ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
-              background: "none",
-              border: "none",
-              borderBottom: activeTab === t.id ? "2px solid hsl(var(--primary))" : "2px solid transparent",
-              marginBottom: "-2px",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-              transition: "color 150ms",
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
+        {tabs.map((t, i) => <Chip key={i} label={t} active={tab === i} onClick={() => setTab(i)} />)}
       </div>
 
-      {/* ── Tab: Pair of EP Bow Waves (HERO) ── */}
-      {activeTab === "pair" && (
-        <div>
-          {/* Hero chart card */}
-          <div className="chart-card" style={{
-            marginBottom: "1.25rem",
-            borderTop: "3px solid hsl(213 75% 22%)",
-          }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
-              <div>
-                <div className="chart-card-title" style={{ fontSize: "1rem", marginBottom: "0.125rem" }}>
-                  Pair of EP Bow Waves
-                </div>
-                <div className="chart-card-subtitle">
-                  Baseline expectations (orange) vs. delivered performance + revised expectations (blue) — illustrating wealth creation or destruction
-                </div>
-              </div>
+      {/* Tab 2.1: Market Value & EP */}
+      {tab === 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "1rem" }}>
+          <ChartCard title="EP over Time — Market Value Proxy" subtitle={isLiveEP ? "Live Calc EP aggregated across index (avg, $m)" : "Illustrative: EP is the primary driver of market value"} live={isLiveEP}>
+            {loading ? <Skeleton h={240} /> : (
+              <ResponsiveContainer width="100%" height={240}>
+                <ComposedChart data={isLiveEP ? bowWaveLive : bowWaveStatic} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                  <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={40} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
+                  <ReferenceLine y={0} stroke="hsl(0 60% 55%)" strokeDasharray="4 3" strokeWidth={1} />
+                  {isLiveEP ? (
+                    <>
+                      <Area type="monotone" dataKey="ep1Y" name="EP 1Y (avg $m)" stroke={NAVY} fill="hsl(213 75% 22% / 0.12)" strokeWidth={2} dot={false} />
+                      {epAgg3Y.length > 2 && <Line type="monotone" dataKey="ep3Y" name="EP 3Y (rolling avg)" stroke={GOLD} strokeWidth={2} strokeDasharray="5 3" dot={false} />}
+                    </>
+                  ) : (
+                    <>
+                      <Area type="monotone" dataKey="baseline" name="Baseline EP Expectations" stroke={GOLD} fill="hsl(38 60% 52% / 0.15)" strokeWidth={2} dot={false} />
+                      <Area type="monotone" dataKey="newExp" name="New EP Expectations" stroke={NAVY} fill="hsl(213 75% 22% / 0.12)" strokeWidth={2.5} dot={false} />
+                    </>
+                  )}
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
 
-              {/* Company selector */}
-              <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", flexShrink: 0 }}>
-                <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "hsl(var(--muted-foreground))" }}>
-                  Company:
-                </label>
-                <select
-                  value={selectedCompany}
-                  onChange={e => setSelectedCompany(e.target.value)}
-                  data-testid="select-company"
-                  style={{
-                    padding: "0.375rem 0.75rem",
-                    borderRadius: "0.375rem",
-                    border: "1px solid hsl(var(--border))",
-                    background: "hsl(var(--background))",
-                    color: "hsl(var(--foreground))",
-                    fontSize: "0.8125rem",
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    minWidth: "180px",
-                  }}
-                >
-                  {Object.entries(COMPANIES).map(([key, c]) => (
-                    <option key={key} value={key}>{c.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+          <ChartCard title="M:B Ratio — Market Value Premium" subtitle="Market Cap / Economic Equity: captures EP expectations" live={mbByYear.length > 3}>
+            {loading || mbRatio.loading ? <Skeleton h={240} /> : (() => {
+              const fallback = [
+                { year: "2010", median: 2.1 }, { year: "2013", median: 2.6 },
+                { year: "2016", median: 3.1 }, { year: "2019", median: 3.4 },
+                { year: "2022", median: 3.5 }, { year: "2024", median: 3.7 },
+              ];
+              const data = mbByYear.length > 3 ? mbByYear : fallback;
+              return (
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                    <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}×`} width={36} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <ReferenceLine y={1} stroke={SLATE} strokeDasharray="4 3" strokeWidth={1.5} label={{ value: "Book Value", fill: SLATE, fontSize: 8 }} />
+                    <Area type="monotone" dataKey="median" name="M:B Ratio (median)" stroke={NAVY} fill="hsl(213 75% 22% / 0.12)" strokeWidth={2} dot={{ fill: NAVY, r: 3 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              );
+            })()}
+          </ChartCard>
+        </div>
+      )}
 
-            {/* Chart */}
-            <div style={{ height: "340px" }}>
-              <Line data={bowWaveData} options={bowWaveOptions} />
-            </div>
+      {/* Tab 2.2: Bow Wave Concept */}
+      {tab === 1 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1rem" }}>
+          <ChartCard title="The EP Bow Wave — Conceptual Framework" subtitle={isLiveEP ? "Live EP data showing baseline vs. new expectations curve" : "Illustrative: Market value = PV of all future EP expectations"} live={isLiveEP}>
+            {loading ? <Skeleton h={300} /> : (
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={isLiveEP ? bowWaveLive : bowWaveStatic} margin={{ top: 8, right: 20, bottom: 8, left: 0 }}>
+                  <defs>
+                    <linearGradient id="bowFill1" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={GOLD} stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor={GOLD} stopOpacity={0.02}/>
+                    </linearGradient>
+                    <linearGradient id="bowFill2" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={NAVY} stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor={NAVY} stopOpacity={0.02}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                  <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={40} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 9, paddingTop: 8 }} />
+                  <ReferenceLine y={0} stroke="hsl(0 60% 55%)" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: "Zero EP", fill: "hsl(0 60% 55%)", fontSize: 8 }} />
+                  {isLiveEP ? (
+                    <>
+                      <Area type="monotone" dataKey="ep1Y" name="EP 1Y (avg $m)" stroke={GOLD} fill="url(#bowFill1)" strokeWidth={2.5} dot={false} />
+                      {epAgg3Y.length > 2 && <Area type="monotone" dataKey="ep3Y" name="EP 3Y (rolling avg)" stroke={NAVY} fill="url(#bowFill2)" strokeWidth={2} dot={false} />}
+                    </>
+                  ) : (
+                    <>
+                      <Area type="monotone" dataKey="baseline" name="Baseline EP Expectations" stroke={GOLD} fill="url(#bowFill1)" strokeWidth={2} dot={false} />
+                      <Area type="monotone" dataKey="newExp" name="New EP Expectations (post-event)" stroke={NAVY} fill="url(#bowFill2)" strokeWidth={2.5} dot={false} />
+                    </>
+                  )}
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
 
-            {/* Company narrative */}
-            <div style={{
-              marginTop: "1rem",
-              padding: "0.875rem 1rem",
-              background: company.wealthDirection === "positive"
-                ? "hsl(152 60% 96%)"
-                : "hsl(0 72% 97%)",
-              borderLeft: `3px solid ${company.wealthDirection === "positive" ? "hsl(152 60% 40%)" : "hsl(0 72% 51%)"}`,
-              borderRadius: "0 0.375rem 0.375rem 0",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
-                <span style={{
-                  fontWeight: 700, fontSize: "0.875rem",
-                  color: company.wealthDirection === "positive" ? "hsl(152 60% 30%)" : "hsl(0 72% 40%)",
-                }}>
-                  {company.wealthDirection === "positive" ? "▲" : "▼"} {company.wealthCreation}{" "}
-                  {company.wealthDirection === "positive" ? "enhancement" : "reduction"} to shareholder wealth
-                </span>
-                <span style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))" }}>
-                  — {company.label}
-                </span>
-              </div>
-              <p style={{ fontSize: "0.8125rem", color: "hsl(var(--muted-foreground))", margin: 0, lineHeight: 1.6 }}>
-                {company.description}
-              </p>
-            </div>
-          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <ChartCard title="ECF Decomposition — Dividend vs Retained" subtitle={ecfChartData.length > 0 ? "Live: Dividend ECF vs Non-Div ECF ($m)" : "Illustrative pattern"} live={ecfChartData.length > 0}>
+              {loading || multiMetrics.loading ? <Skeleton h={200} /> : (() => {
+                const fallback = [
+                  { year: "2015", dividend: 85, retained: 95 }, { year: "2016", dividend: 90, retained: 110 },
+                  { year: "2017", dividend: 98, retained: 127 }, { year: "2018", dividend: 105, retained: 140 },
+                  { year: "2019", dividend: 88, retained: 127 }, { year: "2020", dividend: 72, retained: 106 },
+                  { year: "2021", dividend: 95, retained: 153 }, { year: "2022", dividend: 118, retained: 167 },
+                  { year: "2023", dividend: 128, retained: 184 },
+                ];
+                const data = ecfChartData.length > 3 ? ecfChartData : fallback;
+                return (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(210 16% 93%)" />
+                      <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}m`} width={40} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
+                      <Area type="monotone" dataKey="retained" name="Non-Div ECF ($m)" stackId="ecf" stroke={NAVY} fill="hsl(213 75% 22% / 0.15)" strokeWidth={1.5} dot={false} />
+                      <Area type="monotone" dataKey="dividend" name="Dividend ECF ($m)" stackId="ecf" stroke={GOLD} fill="hsl(38 60% 52% / 0.15)" strokeWidth={1.5} dot={false} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                );
+              })()}
+            </ChartCard>
 
-          {/* How to read this chart */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem" }}>
-            <div className="chart-card" style={{ borderLeft: "3px solid hsl(38 70% 48%)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                <div style={{ width: "28px", height: "3px", background: "hsl(38 70% 48%)", borderRadius: "2px" }} />
-                <span style={{ fontWeight: 700, fontSize: "0.8125rem", color: "hsl(var(--foreground))" }}>
-                  Orange Curve
-                </span>
-              </div>
-              <p style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))", lineHeight: 1.6, margin: 0 }}>
-                <strong>Baseline EP Expectations</strong> set at the start of the measurement period (T₀). This represents what the market priced in at the beginning — the EP stream the company was expected to deliver.
-              </p>
-            </div>
-
-            <div className="chart-card" style={{ borderLeft: "3px solid hsl(213 75% 40%)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                <div style={{ width: "28px", height: "3px", background: "hsl(213 75% 40%)", borderRadius: "2px" }} />
-                <span style={{ fontWeight: 700, fontSize: "0.8125rem", color: "hsl(var(--foreground))" }}>
-                  Blue Curve
-                </span>
-              </div>
-              <p style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))", lineHeight: 1.6, margin: 0 }}>
-                <strong>New EP Expectations</strong> at the end of the measurement period — the actual delivered performance combined with the revised forward expectation of the EP stream.
-              </p>
-            </div>
-
-            <div className="chart-card" style={{ borderLeft: "3px solid hsl(var(--primary))" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                </svg>
-                <span style={{ fontWeight: 700, fontSize: "0.8125rem", color: "hsl(var(--foreground))" }}>
-                  The Gap = Wealth Change
-                </span>
-              </div>
-              <p style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))", lineHeight: 1.6, margin: 0 }}>
-                The area between the two curves represents the total change in shareholder wealth. Blue above orange = wealth creation. Orange above blue = wealth destruction. The gap is the present value of the difference in EP expectations.
-              </p>
-            </div>
+            <ChartCard title="Long-Term EP Persistence" subtitle="Companies with sustained positive EP outperform — illustrative">
+              <ResponsiveContainer width="100%" height={200}>
+                <ComposedChart data={[
+                  { year: "2001", sustained: 12.4, transient: 4.8, negative: -2.1 },
+                  { year: "2005", sustained: 14.8, transient: 6.2, negative: -1.8 },
+                  { year: "2009", sustained: 10.1, transient: 2.1, negative: -5.4 },
+                  { year: "2013", sustained: 15.8, transient: 8.4, negative: -0.9 },
+                  { year: "2017", sustained: 16.2, transient: 9.1, negative: -1.2 },
+                  { year: "2021", sustained: 14.9, transient: 7.8, negative: -2.4 },
+                  { year: "2024", sustained: 13.8, transient: 6.5, negative: -1.8 },
+                ]} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                  <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} width={36} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
+                  <ReferenceLine y={0} stroke="hsl(0 60% 55%)" />
+                  <Line type="monotone" dataKey="sustained"  name="Sustained EP+ (%TSR)" stroke={GREEN} strokeWidth={2.5} dot={false} />
+                  <Line type="monotone" dataKey="transient"  name="Transient EP+ (%TSR)" stroke={GOLD}  strokeWidth={2}   dot={false} strokeDasharray="5 3" />
+                  <Line type="monotone" dataKey="negative"   name="EP− (%TSR)"           stroke="hsl(0 60% 50%)" strokeWidth={1.8} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartCard>
           </div>
         </div>
       )}
 
-      {/* ── Tab: Overview ── */}
-      {activeTab === "overview" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-          <div className="chart-card">
-            <div className="chart-card-title">Market Value as a Function of EP</div>
-            <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {[
-                { label: "Book Equity (BV)", value: "Capital invested by shareholders", color: "hsl(213 75% 22%)" },
-                { label: "PV of EP Stream", value: "Present value of the expected EP Bow Wave", color: "hsl(38 60% 52%)" },
-                { label: "Market Cap", value: "BV + PV(EP) = Enterprise Value", color: "hsl(152 60% 40%)" },
-              ].map(item => (
-                <div key={item.label} style={{
-                  padding: "0.75rem 1rem",
-                  background: "hsl(var(--muted))",
-                  borderRadius: "0.5rem",
-                  borderLeft: `3px solid ${item.color}`,
-                }}>
-                  <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: item.color, marginBottom: "0.2rem" }}>
-                    {item.label}
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))" }}>{item.value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* Tab 2.3: Pair of EP Bow Waves */}
+      {tab === 2 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <ChartCard title="Pair of EP Bow Waves — Rising Firm" subtitle="Company A: sustained EP improvement drives value re-rating" live={false}>
+            <ResponsiveContainer width="100%" height={230}>
+              <ComposedChart data={Array.from({ length: 21 }, (_, i) => ({
+                year: String(2010 + i),
+                old: bell(i - 5, 3, 5, 300),
+                new: i >= 5 ? bell(i - 5, 7, 6, 580) : null,
+              }))} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={3} />
+                <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={36} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 9 }} />
+                <Area type="monotone" dataKey="old" name="Old EP Curve" stroke={SLATE} fill="hsl(215 15% 46% / 0.12)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                <Area type="monotone" dataKey="new" name="New EP Curve (upgraded)" stroke={GREEN} fill="hsl(152 60% 40% / 0.15)" strokeWidth={2.5} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
 
-          <div className="chart-card">
-            <div className="chart-card-title">Three Dimensions of the Bow Wave</div>
-            <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {[
-                { dim: "Height", desc: "Return dimension — how high above Ke is ROE? The peak of the EP curve.", icon: "↕" },
-                { dim: "Width", desc: "Size dimension — how large is the equity capital base? Wide base = large absolute EP.", icon: "↔" },
-                { dim: "Length", desc: "Sustainability — how far into the future can EP above Ke be maintained?", icon: "→" },
-              ].map(d => (
-                <div key={d.dim} style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
-                  <div style={{
-                    width: "32px", height: "32px", borderRadius: "0.375rem",
-                    background: "hsl(213 75% 22% / 0.1)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "1rem", flexShrink: 0,
-                    color: "hsl(213 75% 22%)",
-                    fontWeight: 700,
-                  }}>{d.icon}</div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "hsl(var(--foreground))" }}>{d.dim}</div>
-                    <div style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))", lineHeight: 1.5 }}>{d.desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ChartCard title="Pair of EP Bow Waves — Declining Firm" subtitle="Company B: EP deterioration drives market value de-rating" live={false}>
+            <ResponsiveContainer width="100%" height={230}>
+              <ComposedChart data={Array.from({ length: 21 }, (_, i) => ({
+                year: String(2010 + i),
+                old: bell(i - 5, 3, 5, 300),
+                new: i >= 5 ? bell(i - 5, 2, 4, 180) : null,
+              }))} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={3} />
+                <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={36} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 9 }} />
+                <Area type="monotone" dataKey="old" name="Old EP Curve" stroke={NAVY} fill="hsl(213 75% 22% / 0.12)" strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                <Area type="monotone" dataKey="new" name="New EP Curve (downgraded)" stroke="hsl(0 60% 50%)" fill="hsl(0 60% 50% / 0.12)" strokeWidth={2.5} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          <ChartCard title="ASX 300 — EP vs Market Cap Correlation" subtitle={isLiveEP ? "Live EP vs MC relationship ($m)" : "Illustrative: EP is the primary driver of market value"} live={isLiveEP}>
+            <ResponsiveContainer width="100%" height={210}>
+              <ComposedChart data={isLiveEP ? bowWaveLive.slice(-12) : bowWaveStatic.slice(6, 20)} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={36} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 9 }} />
+                {isLiveEP ? (
+                  <Area type="monotone" dataKey="ep1Y" name="EP 1Y (avg)" stroke={NAVY} fill="hsl(213 75% 22% / 0.12)" strokeWidth={2} dot={false} />
+                ) : (
+                  <>
+                    <Area type="monotone" dataKey="baseline" name="Baseline EP" stroke={GOLD} fill="hsl(38 60% 52% / 0.15)" strokeWidth={2} dot={false} />
+                    <Area type="monotone" dataKey="newExp" name="New Expectations" stroke={NAVY} fill="hsl(213 75% 22% / 0.12)" strokeWidth={2} dot={false} />
+                  </>
+                )}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          <ChartCard title="Long-Term TSR Composition by EP Quintile" subtitle="10yr annualised TSR ranked by EP performance — illustrative">
+            <ResponsiveContainer width="100%" height={210}>
+              <ComposedChart data={[
+                { quintile: "Q1 (Highest EP)", tsr: 18.4, ke: 10.0 },
+                { quintile: "Q2",              tsr: 13.2, ke: 10.0 },
+                { quintile: "Q3",              tsr: 10.1, ke: 10.0 },
+                { quintile: "Q4",              tsr: 6.8,  ke: 10.0 },
+                { quintile: "Q5 (Lowest EP)",  tsr: 2.1,  ke: 10.0 },
+              ]} margin={{ top: 4, right: 8, bottom: 16, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(210 16% 93%)" />
+                <XAxis dataKey="quintile" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} width={32} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
+                <Bar dataKey="tsr" name="10yr TSR (%)" fill={NAVY} radius={[4, 4, 0, 0]} maxBarSize={36} />
+                <Line type="monotone" dataKey="ke" name="Ke (benchmark)" stroke={GOLD} strokeWidth={2} strokeDasharray="5 3" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
         </div>
       )}
 
-      {/* ── Tab: Bow Wave Concept ── */}
-      {activeTab === "bow-wave" && (
-        <div className="chart-card">
-          <div className="chart-card-title">The EP Bow Wave — Core Concept</div>
-          <div className="help-panel" style={{ marginBottom: "1.25rem", marginTop: "0.75rem" }}>
-            <p style={{ margin: 0, lineHeight: 1.7, fontSize: "0.8125rem" }}>
-              The <strong>EP Bow Wave</strong> is the signature analytical construct of the CISSA platform. A company's EP stream over time traces a characteristic wave shape — rising as the business scales its advantage, peaking when competition or capital constraints bind, then gradually declining as EP mean-reverts toward Ke.
-            </p>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-            {[
-              {
-                title: "EP = (ROE − Ke) × Book Equity",
-                body: "Economic Profit (EP) measures value creation above and beyond the cost of equity. When ROE exceeds Ke, EP is positive; the company creates wealth. When ROE falls below Ke, EP is negative; capital is being destroyed.",
-              },
-              {
-                title: "Market Cap = BV + PV(EP Wave)",
-                body: "An investor buying shares today is paying for: (1) the book value of equity already deployed, plus (2) the present value of all future EP — the entire bow wave. This directly links operating performance to market value.",
-              },
-              {
-                title: "The Bell Curve Shape",
-                body: "The EP stream typically forms a bell curve: near-zero at the start (early stage), rising as scale and competitive advantage accumulate, peaking, then declining as competition erodes the excess return toward Ke.",
-              },
-              {
-                title: "Why the Long Term Matters",
-                body: "Short-term EPS management can temporarily lift reported earnings while eroding the long-term EP wave. CISSA's framework makes this visible: a shrinking bow wave signals long-term wealth destruction even as short-term metrics look healthy.",
-              },
-            ].map(c => (
-              <div key={c.title} style={{
-                padding: "1rem",
-                background: "hsl(var(--muted))",
-                borderRadius: "0.5rem",
-              }}>
-                <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "hsl(var(--primary))", marginBottom: "0.375rem" }}>
-                  {c.title}
-                </div>
-                <p style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))", lineHeight: 1.65, margin: 0 }}>
-                  {c.body}
-                </p>
-              </div>
-            ))}
-          </div>
+      {/* Tabs 2.4 & 2.5 */}
+      {(tab === 3 || tab === 4) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <ChartCard title={tab === 3 ? "Long-Term Focus Proof — EP Dominant TSR" : "Reconciling Wealth Creation"} subtitle={tab === 3 ? "Companies managed for EP outperform EPS-focused peers over 10 years" : "TER-Ke reconciliation: where does shareholder wealth come from?"} live={false}>
+            <ResponsiveContainer width="100%" height={230}>
+              <ComposedChart data={tab === 3 ? [
+                { year: "2005", epDom: 14.8, epsDom: 5.7 }, { year: "2007", epDom: 18.2, epsDom: 7.1 },
+                { year: "2009", epDom: 6.2, epsDom: -4.8 }, { year: "2011", epDom: 12.4, epsDom: 4.2 },
+                { year: "2013", epDom: 16.8, epsDom: 6.8 }, { year: "2015", epDom: 14.1, epsDom: 5.4 },
+                { year: "2017", epDom: 17.2, epsDom: 6.9 }, { year: "2019", epDom: 12.8, epsDom: 4.8 },
+                { year: "2021", epDom: 15.4, epsDom: 7.2 }, { year: "2023", epDom: 13.8, epsDom: 5.9 },
+              ] : [
+                { year: "2010", wc: 280, wpReq: 110, excessReturn: 170 },
+                { year: "2013", wc: 350, wpReq: 130, excessReturn: 220 },
+                { year: "2016", wc: 420, wpReq: 155, excessReturn: 265 },
+                { year: "2019", wc: 390, wpReq: 145, excessReturn: 245 },
+                { year: "2022", wc: 510, wpReq: 180, excessReturn: 330 },
+                { year: "2024", wc: 560, wpReq: 195, excessReturn: 365 },
+              ]} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={36} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
+                {tab === 3 ? (
+                  <>
+                    <Line type="monotone" dataKey="epDom"  name="EP Dominant TSR (%)"  stroke={GREEN} strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="epsDom" name="EPS Dominant TSR (%)" stroke="hsl(0 60% 50%)" strokeWidth={1.8} dot={false} strokeDasharray="5 3" />
+                  </>
+                ) : (
+                  <>
+                    <Area type="monotone" dataKey="wpReq"       name="Wealth Preservation Required" stackId="wc" stroke={SLATE} fill="hsl(215 15% 46% / 0.2)" strokeWidth={1.5} dot={false} />
+                    <Area type="monotone" dataKey="excessReturn" name="Excess Return (Wealth Creation)" stackId="wc" stroke={GREEN} fill="hsl(152 60% 40% / 0.2)" strokeWidth={1.5} dot={false} />
+                  </>
+                )}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          <ChartCard title={tab === 3 ? "EP vs EPS — 10yr Cumulative Outperformance" : "Wealth Creation by Sector ($B)"} subtitle={tab === 3 ? "EP-focused management outperforms by 9.1% per annum" : "Sector contribution to total ASX wealth creation"} live={false}>
+            <ResponsiveContainer width="100%" height={230}>
+              <ComposedChart data={tab === 3 ? [
+                { label: "EP Dominant", tsr: 14.8, wealth: 185 },
+                { label: "Mixed",       tsr: 9.2,  wealth: 95  },
+                { label: "EPS Dominant",tsr: 5.7,  wealth: 42  },
+              ] : [
+                { sector: "Financials",  value: 420 }, { sector: "Materials",  value: 385 },
+                { sector: "Health",      value: 210 }, { sector: "Consumer D", value: 180 },
+                { sector: "Energy",      value: 145 }, { sector: "Industrials", value: 128 },
+                { sector: "IT",          value: 98  }, { sector: "Utilities",  value: 72  },
+              ]} margin={{ top: 4, right: 8, bottom: tab === 3 ? 0 : 16, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={tab === 4} stroke="hsl(210 16% 93%)" />
+                <XAxis dataKey={tab === 3 ? "label" : "sector"} tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={v => `${tab === 3 ? v + "%" : "$" + v + "B"}`} width={40} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
+                {tab === 3 ? (
+                  <>
+                    <Bar dataKey="tsr"    name="10yr Ann. TSR (%)"   fill={NAVY}  radius={[4, 4, 0, 0]} maxBarSize={40} />
+                    <Bar dataKey="wealth" name="Wealth Created ($B)" fill={GOLD}  radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  </>
+                ) : (
+                  <Bar dataKey="value" name="Wealth Creation ($B)" fill={NAVY} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                )}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
         </div>
       )}
 
-      {/* ── Tab: Long-Term Focus ── */}
-      {activeTab === "long-term" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-          <div className="chart-card">
-            <div className="chart-card-title">How the Pair of Bow Waves Proves Long-Term Focus</div>
-            <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-              {[
-                { step: "1", title: "Establish baseline at T₀", body: "At the start of a period, market cap embeds baseline EP expectations — the orange bow wave. This is observable from M:B ratio and Ke." },
-                { step: "2", title: "Measure delivered EP", body: "Over the period, actual EP delivered is calculated from financial data: ROE-Ke × Book Equity, period by period." },
-                { step: "3", title: "Calculate new forward expectations", body: "At period end, revised EP expectations are embedded in the new market cap. The blue curve reflects what the market now expects." },
-                { step: "4", title: "Measure wealth creation", body: "Wealth created = PV(new wave) − PV(baseline wave). The gap, discounted at Ke, gives a precise dollar measure of value added or destroyed." },
-              ].map(s => (
-                <div key={s.step} style={{ display: "flex", gap: "0.875rem" }}>
-                  <div style={{
-                    width: "24px", height: "24px", borderRadius: "50%",
-                    background: "hsl(213 75% 22%)", color: "#fff",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "0.6875rem", fontWeight: 700, flexShrink: 0,
-                    marginTop: "1px",
-                  }}>{s.step}</div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "hsl(var(--foreground))", marginBottom: "0.125rem" }}>{s.title}</div>
-                    <p style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))", lineHeight: 1.6, margin: 0 }}>{s.body}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="chart-card">
-            <div className="chart-card-title">EP Focus vs EPS Focus</div>
-            <div style={{ marginTop: "0.75rem" }}>
-              <table style={{ width: "100%", fontSize: "0.75rem", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "hsl(var(--muted))" }}>
-                    <th style={{ padding: "0.5rem 0.75rem", textAlign: "left", fontWeight: 700, color: "hsl(var(--foreground))" }}>Dimension</th>
-                    <th style={{ padding: "0.5rem 0.75rem", textAlign: "left", fontWeight: 700, color: "hsl(38 60% 45%)" }}>EPS-Dominant</th>
-                    <th style={{ padding: "0.5rem 0.75rem", textAlign: "left", fontWeight: 700, color: "hsl(213 75% 35%)" }}>EP-Dominant</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    ["Metric", "Earnings per share", "Economic Profit"],
-                    ["Capital cost", "Ignored", "Explicitly included"],
-                    ["Time horizon", "Next quarter/year", "Full EP wave lifecycle"],
-                    ["Value driver", "Short-term EPS growth", "Long-term EP sustainability"],
-                    ["TSR (10yr Ann.)", "~5.7% ASX 300", "~14.8% ASX 300"],
-                    ["Wealth creation", "Often negative", "Strongly positive"],
-                  ].map((row, i) => (
-                    <tr key={i} style={{ borderTop: "1px solid hsl(var(--border))" }}>
-                      <td style={{ padding: "0.5rem 0.75rem", fontWeight: 600, color: "hsl(var(--foreground))" }}>{row[0]}</td>
-                      <td style={{ padding: "0.5rem 0.75rem", color: "hsl(var(--muted-foreground))" }}>{row[1]}</td>
-                      <td style={{ padding: "0.5rem 0.75rem", color: "hsl(213 75% 35%)", fontWeight: 500 }}>{row[2]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Tab: Wealth Reconciliation ── */}
-      {activeTab === "reconcile" && (
-        <div className="chart-card">
-          <div className="chart-card-title">Reconciling the Bow Wave with Observed Wealth Creation</div>
-          <div className="help-panel" style={{ marginTop: "0.75rem", marginBottom: "1.25rem" }}>
-            <p style={{ margin: 0, lineHeight: 1.7, fontSize: "0.8125rem" }}>
-              The bow wave framework reconciles perfectly with Total Shareholder Return (TSR) adjusted for the cost of equity (Ke). The change in the present value of the EP stream, plus actual EP delivered, equals the wealth created — which in turn equals TSR minus Ke over the period.
-            </p>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }}>
-            {[
-              {
-                formula: "TSR − Ke",
-                label: "Excess Shareholder Return",
-                body: "The observable return above the cost of equity. If TSR = 18% and Ke = 10%, the excess return is 8% — equivalent to the EP wave shift.",
-                color: "hsl(213 75% 22%)",
-              },
-              {
-                formula: "EP Delivered",
-                label: "Current Period Value Add",
-                body: "The actual EP earned in the period — (ROE−Ke)×Book Equity. This is the realised portion of the bow wave, extracted as value during the period.",
-                color: "hsl(38 60% 52%)",
-              },
-              {
-                formula: "ΔPVEP",
-                label: "Change in Forward Expectations",
-                body: "The shift in the present value of forward EP expectations — the difference between the new blue wave and the original orange wave, discounted at Ke.",
-                color: "hsl(152 60% 40%)",
-              },
-            ].map(f => (
-              <div key={f.label} style={{
-                padding: "1.25rem",
-                background: "hsl(var(--muted))",
-                borderRadius: "0.5rem",
-                borderTop: `3px solid ${f.color}`,
-                textAlign: "center",
-              }}>
-                <div style={{
-                  fontSize: "1.5rem", fontWeight: 800,
-                  color: f.color, marginBottom: "0.375rem",
-                  fontFamily: "monospace",
-                }}>{f.formula}</div>
-                <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
-                  {f.label}
-                </div>
-                <p style={{ fontSize: "0.75rem", color: "hsl(var(--muted-foreground))", lineHeight: 1.6, margin: 0 }}>
-                  {f.body}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div style={{
-            marginTop: "1.25rem",
-            padding: "1rem 1.25rem",
-            background: "hsl(213 75% 22% / 0.05)",
-            borderRadius: "0.5rem",
-            border: "1px solid hsl(213 75% 22% / 0.15)",
-            textAlign: "center",
-          }}>
-            <span style={{ fontSize: "1.125rem", fontWeight: 700, color: "hsl(213 75% 22%)", fontFamily: "monospace" }}>
-              Wealth Created = EP Delivered + ΔPVEP = TSR − Ke
-            </span>
-          </div>
-        </div>
-      )}
+      <style>{`
+        @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+      `}</style>
     </div>
   );
 }

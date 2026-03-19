@@ -1,32 +1,7 @@
 /**
- * CISSA API Client
- * ----------------
- * Typed wrapper around the FastAPI backend at /api/v1/
- *
- * Endpoint map (all verified against backend/app/api/v1/endpoints/):
- *
- *   GET  /api/v1/metrics/health
- *   GET  /api/v1/metrics/statistics[?dataset_id=]
- *   GET  /api/v1/metrics/exists?dataset_id=&parameter_set_id=
- *   GET  /api/v1/metrics/get_metrics/?dataset_id=&parameter_set_id=[&ticker=][&metric_name=]
- *   GET  /api/v1/metrics/ratio-metrics?dataset_id=&param_set_id=
- *   GET  /api/v1/metrics/economic-profitability?dataset_id=&parameter_set_id=[&ticker=][&temporal_window=]
- *   POST /api/v1/metrics/calculate             body: {dataset_id, metric_name, param_set_id?}
- *   POST /api/v1/metrics/calculate-l2          body: {dataset_id, param_set_id}
- *   POST /api/v1/metrics/beta/calculate-from-precomputed
- *   POST /api/v1/metrics/cost-of-equity/calculate  body: {dataset_id, param_set_id}
- *   POST /api/v1/metrics/rates/calculate
- *   POST /api/v1/metrics/l2-core/calculate
- *   POST /api/v1/metrics/l2-fv-ecf/calculate
- *   POST /api/v1/metrics/l2-ter/calculate
- *   POST /api/v1/metrics/l2-ter-alpha/calculate
- *   POST /api/v1/metrics/calculate-l1          body: {dataset_id, param_set_id}  ← L1 pre-computation orchestrator
- *   POST /api/v1/metrics/runtime-metrics?dataset_id=&param_set_id=              ← Phase 3+ full orchestrator
- *   GET  /api/v1/parameters/active
- *   GET  /api/v1/parameters/{param_set_id}
- *
- * Base URL is relative: works in dev (Vite proxy → localhost:8000)
- * and production (same-origin serving behind nginx/uvicorn StaticFiles).
+ * CISSA API Client — Full Live Data Layer
+ * ----------------------------------------
+ * All endpoints verified against backend/app/api/v1/endpoints/
  */
 
 const BASE = "/api/v1";
@@ -43,31 +18,19 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-// ─── Health ─────────────────────────────────────────────────────────────────
+// ─── Health ──────────────────────────────────────────────────────────────────
 
 export interface HealthResponse {
   status: string;
   message: string;
   database: string;
 }
+export const getHealth = () => fetchJSON<HealthResponse>(`${BASE}/metrics/health`);
 
-/** GET /api/v1/metrics/health */
-export const getHealth = () =>
-  fetchJSON<HealthResponse>(`${BASE}/metrics/health`);
+// ─── Statistics ───────────────────────────────────────────────────────────────
 
-// ─── Statistics ──────────────────────────────────────────────────────────────
-
-export interface CompanyItem {
-  ticker: string;
-  company_name: string;
-  sector: string;
-}
-
-export interface SectorItem {
-  name: string;
-  company_count: number;
-}
-
+export interface CompanyItem { ticker: string; company_name: string; sector: string; }
+export interface SectorItem  { name: string; company_count: number; }
 export interface DatasetStatistics {
   dataset_id: string;
   dataset_created_at: string;
@@ -78,11 +41,6 @@ export interface DatasetStatistics {
   raw_metrics: { count: number };
 }
 
-/**
- * GET /api/v1/metrics/statistics
- * - No params → returns all datasets keyed by dataset_id
- * - ?dataset_id=<uuid> → returns single DatasetStatistics
- */
 export const getStatistics = (datasetId?: string) => {
   const url = datasetId
     ? `${BASE}/metrics/statistics?dataset_id=${datasetId}`
@@ -90,15 +48,12 @@ export const getStatistics = (datasetId?: string) => {
   return fetchJSON<DatasetStatistics | Record<string, DatasetStatistics>>(url);
 };
 
-/**
- * GET /api/v1/metrics/exists?dataset_id=&parameter_set_id=
- */
 export const metricsExist = (datasetId: string, paramSetId: string) =>
   fetchJSON<{ exists: boolean }>(
     `${BASE}/metrics/exists?dataset_id=${datasetId}&parameter_set_id=${paramSetId}`
   );
 
-// ─── Parameters ──────────────────────────────────────────────────────────────
+// ─── Parameters ───────────────────────────────────────────────────────────────
 
 export interface ParameterSetResponse {
   param_set_id: string;
@@ -107,30 +62,52 @@ export interface ParameterSetResponse {
   is_default: boolean;
   created_at: string;
   updated_at: string;
-  parameters: Record<string, unknown>;
+  parameters: {
+    country?: string;
+    currency_notation?: string;
+    cost_of_equity_approach?: string;
+    include_franking_credits_tsr?: boolean;
+    fixed_benchmark_return_wealth_preservation?: number;
+    equity_risk_premium?: number;
+    tax_rate_franking_credits?: number;
+    value_of_franking_credits?: number;
+    risk_free_rate_rounding?: number;
+    beta_rounding?: number;
+    last_calendar_year?: number;
+    beta_relative_error_tolerance?: number;
+    terminal_year?: number;
+    [key: string]: unknown;
+  };
   status: string;
   message: string | null;
 }
 
-/** GET /api/v1/parameters/active */
 export const getActiveParameters = () =>
   fetchJSON<ParameterSetResponse>(`${BASE}/parameters/active`);
 
-/** GET /api/v1/parameters/{param_set_id} */
 export const getParameterSet = (paramSetId: string) =>
   fetchJSON<ParameterSetResponse>(`${BASE}/parameters/${paramSetId}`);
 
-// ─── Metrics — Read ──────────────────────────────────────────────────────────
+export const updateParameterSet = (
+  paramSetId: string,
+  overrides: Record<string, unknown>
+) =>
+  fetchJSON<ParameterSetResponse>(`${BASE}/parameters/${paramSetId}/update`, {
+    method: "POST",
+    body: JSON.stringify({ param_overrides: overrides }),
+  });
 
-export interface MetricResultItem {
-  ticker: string;
-  fiscal_year: number;
-  value: number | null;
-}
+export const setActiveParameterSet = (paramSetId: string) =>
+  fetchJSON<ParameterSetResponse>(`${BASE}/parameters/${paramSetId}/set-active`, {
+    method: "POST",
+  });
 
+// ─── Metrics — Read ───────────────────────────────────────────────────────────
+
+export interface MetricResultItem { ticker: string; fiscal_year: number; value: number | null; }
 export interface MetricsResponse {
   dataset_id: string;
-  parameter_set_id: string;   // note: backend uses parameter_set_id (not param_set_id) in GET response
+  parameter_set_id: string;
   metric_name: string;
   results_count: number;
   results: MetricResultItem[];
@@ -138,14 +115,9 @@ export interface MetricsResponse {
   message: string | null;
 }
 
-/**
- * GET /api/v1/metrics/get_metrics/
- * All params required: dataset_id, parameter_set_id
- * Optional: ticker, metric_name (supports comma-separated), fiscal_year
- */
 export interface GetMetricsParams {
   dataset_id: string;
-  parameter_set_id: string;  // ← correct query param name per backend
+  parameter_set_id: string;
   ticker?: string;
   metric_name?: string;
   fiscal_year?: number;
@@ -155,57 +127,86 @@ export const getMetrics = (params: GetMetricsParams) => {
   const qs = new URLSearchParams();
   qs.set("dataset_id", params.dataset_id);
   qs.set("parameter_set_id", params.parameter_set_id);
-  if (params.ticker) qs.set("ticker", params.ticker);
+  if (params.ticker)      qs.set("ticker", params.ticker);
   if (params.metric_name) qs.set("metric_name", params.metric_name);
   if (params.fiscal_year) qs.set("fiscal_year", String(params.fiscal_year));
   return fetchJSON<MetricsResponse>(`${BASE}/metrics/get_metrics/?${qs}`);
 };
 
-// ─── Economic Profitability ───────────────────────────────────────────────────
+// ─── Economic Profitability ────────────────────────────────────────────────────
 
-export interface EconomicProfitabilityParams {
+export interface EconomicProfitabilityResult {
+  ticker: string;
+  fiscal_year: number;
+  ep_1y?: number;
+  ep_3y?: number;
+  ep_5y?: number;
+  ep_10y?: number;
+  [key: string]: unknown;
+}
+export interface EconomicProfitabilityResponse {
+  dataset_id: string;
+  parameter_set_id: string;
+  temporal_window: string;
+  results_count: number;
+  results: EconomicProfitabilityResult[];
+  filters_applied: Record<string, unknown>;
+  status: string;
+  message: string | null;
+}
+
+export const getEconomicProfitability = (params: {
   dataset_id: string;
   parameter_set_id: string;
   ticker?: string;
   temporal_window?: "1Y" | "3Y" | "5Y" | "10Y";
   start_year?: number;
   end_year?: number;
-}
-
-/**
- * GET /api/v1/metrics/economic-profitability
- * Returns EP metrics with temporal aggregation (1Y/3Y/5Y/10Y).
- */
-export const getEconomicProfitability = (params: EconomicProfitabilityParams) => {
+}) => {
   const qs = new URLSearchParams();
   qs.set("dataset_id", params.dataset_id);
   qs.set("parameter_set_id", params.parameter_set_id);
-  if (params.ticker) qs.set("ticker", params.ticker);
+  if (params.ticker)          qs.set("ticker", params.ticker);
   if (params.temporal_window) qs.set("temporal_window", params.temporal_window);
-  if (params.start_year) qs.set("start_year", String(params.start_year));
-  if (params.end_year) qs.set("end_year", String(params.end_year));
-  return fetchJSON<Record<string, unknown>>(`${BASE}/metrics/economic-profitability?${qs}`);
+  if (params.start_year)      qs.set("start_year", String(params.start_year));
+  if (params.end_year)        qs.set("end_year", String(params.end_year));
+  return fetchJSON<EconomicProfitabilityResponse>(`${BASE}/metrics/economic-profitability?${qs}`);
 };
 
-// ─── Ratio Metrics ───────────────────────────────────────────────────────────
+// ─── Ratio Metrics ─────────────────────────────────────────────────────────────
 
+export interface RatioTickerData {
+  ticker: string;
+  company_name: string;
+  sector: string;
+  time_series: { year: number; value: number | null }[];
+}
 export interface RatioMetricsResponse {
   dataset_id: string;
   param_set_id: string;
+  metric: string;
   window: string;
-  results: MetricResultItem[];
+  results: RatioTickerData[];
   status: string;
 }
 
-/**
- * GET /api/v1/metrics/ratio-metrics?dataset_id=&param_set_id=
- */
-export const getRatioMetrics = (datasetId: string, paramSetId: string) =>
-  fetchJSON<RatioMetricsResponse>(
-    `${BASE}/metrics/ratio-metrics?dataset_id=${datasetId}&param_set_id=${paramSetId}`
-  );
+export const getRatioMetrics = (params: {
+  dataset_id: string;
+  param_set_id: string;
+  metric?: string;
+  tickers?: string;
+  temporal_window?: string;
+}) => {
+  const qs = new URLSearchParams();
+  qs.set("dataset_id", params.dataset_id);
+  qs.set("param_set_id", params.param_set_id);
+  if (params.metric)          qs.set("metric", params.metric);
+  if (params.tickers)         qs.set("tickers", params.tickers);
+  if (params.temporal_window) qs.set("temporal_window", params.temporal_window);
+  return fetchJSON<RatioMetricsResponse>(`${BASE}/metrics/ratio-metrics?${qs}`);
+};
 
-// ─── Metrics — Calculate (individual) ────────────────────────────────────────
+// ─── Calculate (POST) ──────────────────────────────────────────────────────────
 
 export interface CalculateMetricsResponse {
   dataset_id: string;
@@ -216,12 +217,7 @@ export interface CalculateMetricsResponse {
   message: string | null;
 }
 
-/** POST /api/v1/metrics/calculate */
-export const calculateMetric = (
-  datasetId: string,
-  metricName: string,
-  paramSetId?: string
-) =>
+export const calculateMetric = (datasetId: string, metricName: string, paramSetId?: string) =>
   fetchJSON<CalculateMetricsResponse>(`${BASE}/metrics/calculate`, {
     method: "POST",
     body: JSON.stringify({
@@ -231,76 +227,6 @@ export const calculateMetric = (
     }),
   });
 
-/** POST /api/v1/metrics/calculate-l2 — body: {dataset_id, param_set_id} */
-export const calculateL2 = (datasetId: string, paramSetId: string) =>
-  fetchJSON<CalculateMetricsResponse>(`${BASE}/metrics/calculate-l2`, {
-    method: "POST",
-    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
-  });
-
-/** POST /api/v1/metrics/l2-core/calculate */
-export const calculateL2Core = (datasetId: string, paramSetId: string) =>
-  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/l2-core/calculate`, {
-    method: "POST",
-    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
-  });
-
-/** POST /api/v1/metrics/l2-fv-ecf/calculate */
-export const calculateFvEcf = (datasetId: string, paramSetId: string) =>
-  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/l2-fv-ecf/calculate`, {
-    method: "POST",
-    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
-  });
-
-/** POST /api/v1/metrics/l2-ter/calculate */
-export const calculateTer = (datasetId: string, paramSetId: string) =>
-  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/l2-ter/calculate`, {
-    method: "POST",
-    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
-  });
-
-/** POST /api/v1/metrics/l2-ter-alpha/calculate */
-export const calculateTerAlpha = (datasetId: string, paramSetId: string) =>
-  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/l2-ter-alpha/calculate`, {
-    method: "POST",
-    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
-  });
-
-// ─── Beta & Cost of Equity ───────────────────────────────────────────────────
-
-export interface EnhancedMetricsResponse {
-  dataset_id: string;
-  param_set_id: string;
-  value?: number;
-  metrics_calculated: string[];
-  status: string;
-  timestamp: string;
-  message: string;
-}
-
-/** POST /api/v1/metrics/beta/calculate-from-precomputed */
-export const calculateBetaFromPrecomputed = (datasetId: string, paramSetId: string) =>
-  fetchJSON<EnhancedMetricsResponse>(`${BASE}/metrics/beta/calculate-from-precomputed`, {
-    method: "POST",
-    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
-  });
-
-/** POST /api/v1/metrics/cost-of-equity/calculate */
-export const calculateCostOfEquity = (datasetId: string, paramSetId: string) =>
-  fetchJSON<EnhancedMetricsResponse>(`${BASE}/metrics/cost-of-equity/calculate`, {
-    method: "POST",
-    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
-  });
-
-/** POST /api/v1/metrics/rates/calculate */
-export const calculateRates = (datasetId: string, paramSetId: string) =>
-  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/rates/calculate`, {
-    method: "POST",
-    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
-  });
-
-// ─── Orchestration ───────────────────────────────────────────────────────────
-
 export interface CalculateL1OrchestratorResponse {
   success: boolean;
   execution_time_seconds: number;
@@ -309,16 +235,11 @@ export interface CalculateL1OrchestratorResponse {
   timestamp: string;
   total_successful: number;
   total_failed: number;
+  total_records_inserted?: number;
+  phases?: Record<string, unknown>;
+  errors?: string[];
 }
 
-/**
- * POST /api/v1/metrics/calculate-l1
- * L1 pre-computation orchestrator: parallelises Phase 1 (11 metrics in 4 groups),
- * then sequences Phase 2 (2 metrics).
- *
- * NOTE: This is NOT /api/v1/orchestration/l1 — that path does NOT exist.
- * The orchestration router prefix is /api/v1/metrics and the route is /calculate-l1.
- */
 export const orchestrateL1Metrics = (
   datasetId: string,
   paramSetId: string,
@@ -339,20 +260,53 @@ export interface RuntimeMetricsResponse {
   execution_time_seconds: number;
   dataset_id: string;
   param_set_id: string;
-  metrics_completed: Record<string, {
-    status: string;
-    records_inserted: number;
-    time_seconds: number;
-  }>;
+  metrics_completed: Record<string, { status: string; records_inserted: number; time_seconds: number }>;
 }
 
-/**
- * POST /api/v1/metrics/runtime-metrics?dataset_id=&param_set_id=
- * Full Phase 3+ orchestrator: Beta Rounding → Rf → Ke → FV-ECF → TER → TER Alpha.
- * This is the main "run everything" endpoint per DATABASE_AND_METRICS_WORKFLOW.md.
- */
 export const runRuntimeMetrics = (datasetId: string, paramSetId: string) =>
   fetchJSON<RuntimeMetricsResponse>(
     `${BASE}/metrics/runtime-metrics?dataset_id=${datasetId}&param_set_id=${paramSetId}`,
     { method: "POST" }
   );
+
+export const calculateBetaFromPrecomputed = (datasetId: string, paramSetId: string) =>
+  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/beta/calculate-from-precomputed`, {
+    method: "POST",
+    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
+  });
+
+export const calculateCostOfEquity = (datasetId: string, paramSetId: string) =>
+  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/cost-of-equity/calculate`, {
+    method: "POST",
+    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
+  });
+
+export const calculateRates = (datasetId: string, paramSetId: string) =>
+  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/rates/calculate`, {
+    method: "POST",
+    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
+  });
+
+export const calculateL2Core = (datasetId: string, paramSetId: string) =>
+  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/l2-core/calculate`, {
+    method: "POST",
+    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
+  });
+
+export const calculateFvEcf = (datasetId: string, paramSetId: string) =>
+  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/l2-fv-ecf/calculate`, {
+    method: "POST",
+    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
+  });
+
+export const calculateTer = (datasetId: string, paramSetId: string) =>
+  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/l2-ter/calculate`, {
+    method: "POST",
+    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
+  });
+
+export const calculateTerAlpha = (datasetId: string, paramSetId: string) =>
+  fetchJSON<Record<string, unknown>>(`${BASE}/metrics/l2-ter-alpha/calculate`, {
+    method: "POST",
+    body: JSON.stringify({ dataset_id: datasetId, param_set_id: paramSetId }),
+  });

@@ -1,1130 +1,823 @@
-import { useState, useEffect, useCallback } from "react";
-import { Line, Bar, Doughnut } from "react-chartjs-2";
+/**
+ * PipelinePage — CISSA ETL Pipeline
+ * Full live API wiring:
+ *   Stage 1: Data Ingestion (Bloomberg upload + statistics)
+ *   Stage 2: Parameter Configuration
+ *   Stage 3: L1 Metrics Computation (orchestrate-l1)
+ *   Stage 4: Runtime Metrics (beta → rf → ke → fv-ecf → ter → ter-alpha)
+ *   Stage 5: Results Dashboard
+ */
+import { useState, useCallback, useRef } from "react";
 import {
-  Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement,
-  LineElement, PointElement,
-  ArcElement,
-  Title, Tooltip, Legend, Filler,
-} from "chart.js";
+  getStatistics, getActiveParameters, orchestrateL1Metrics,
+  runRuntimeMetrics, calculateBetaFromPrecomputed,
+  calculateRates, calculateCostOfEquity, calculateFvEcf,
+  calculateTer, calculateTerAlpha, calculateL2Core,
+  updateParameterSet, metricsExist,
+  DatasetStatistics, ParameterSetResponse,
+} from "../lib/api";
 import { Link } from "wouter";
-import { apiFetch, isBackendAlive } from "../lib/queryClient";
-import { getStatistics, getActiveParameters, DatasetStatistics, ParameterSetResponse } from "../lib/api";
-import {
-  roeKeByIndex, terKeByIndex, mbRatioByIndex,
-  roeKeDistribution, terKeDistribution,
-  epVsEpsCohorts, wealthCreationDecomp,
-} from "../data/chartData";
-
-ChartJS.register(
-  CategoryScale, LinearScale, BarElement,
-  LineElement, PointElement, ArcElement,
-  Title, Tooltip, Legend, Filler
-);
 
 // ── Types ──────────────────────────────────────────────────────────────────
-interface HealthData { status: string; message: string; database: string; }
+type StageStatus = "pending" | "running" | "done" | "error";
 
-// ── Stage definitions ─────────────────────────────────────────────────────
-const STAGES = [
-  {
-    id: "ingestion",
-    num: 1,
-    label: "Data Ingestion",
-    sublabel: "Phase 0",
-    desc: "Bloomberg Excel → CSV → PostgreSQL with FY alignment & imputation",
-    icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12",
-    accent: "#0E2D5C",
-    accentLight: "rgba(14,45,92,0.08)",
-    accentBorder: "rgba(14,45,92,0.2)",
-    substages: [
-      { id: "ingest",   label: "Bloomberg Extract & Load", ep: "GET /api/v1/metrics/statistics",               records: 10000,  dur: 180  },
-      { id: "fy-align", label: "FY Alignment & Imputation", ep: "GET /api/v1/metrics/statistics",             records: 10000,  dur: 45   },
-    ],
-  },
-  {
-    id: "l1",
-    num: 2,
-    label: "L1 Metrics",
-    sublabel: "Phase 1–2",
-    desc: "11 pre-computed metrics (4 parallel groups) + L2 Core EP metrics",
-    icon: "M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z",
-    accent: "#C8922A",
-    accentLight: "rgba(200,146,42,0.08)",
-    accentBorder: "rgba(200,146,42,0.25)",
-    substages: [
-      { id: "l1-metrics", label: "L1 Pre-Computation (11 metrics, 4 parallel)", ep: "POST /api/v1/metrics/calculate-l1",          records: 130000, dur: 52   },
-      { id: "l2-core",    label: "L2 Core EP Metrics",                           ep: "POST /api/v1/metrics/l2-core/calculate",     records: 10000,  dur: 6.8  },
-    ],
-  },
-  {
-    id: "runtime",
-    num: 3,
-    label: "Runtime Metrics",
-    sublabel: "Phase 3–5",
-    desc: "Parameter-dependent: Beta → Rf → Ke → FV-ECF → TER → TER Alpha",
-    icon: "M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z",
-    accent: "#1a8a5c",
-    accentLight: "rgba(26,138,92,0.08)",
-    accentBorder: "rgba(26,138,92,0.25)",
-    substages: [
-      { id: "beta",             label: "Beta Rounding",         ep: "POST /api/v1/metrics/beta/calculate-from-precomputed", records: 11000,  dur: 1.5  },
-      { id: "rates",            label: "Risk-Free Rate (Rf)",   ep: "POST /api/v1/metrics/rates/calculate",                records: 10905,  dur: 7.9  },
-      { id: "coe",              label: "Cost of Equity (Ke)",   ep: "POST /api/v1/metrics/cost-of-equity/calculate",       records: 10905,  dur: 1.6  },
-      { id: "fv-ecf",           label: "Future Value ECF",      ep: "POST /api/v1/metrics/l2-fv-ecf/calculate",            records: 42120,  dur: 51.9 },
-      { id: "ter",              label: "TER & TER-Ke",          ep: "POST /api/v1/metrics/l2-ter/calculate",               records: 89660,  dur: 14.4 },
-      { id: "ter-alpha",        label: "TER Alpha",             ep: "POST /api/v1/metrics/l2-ter-alpha/calculate",         records: 131780, dur: 23.9 },
-    ],
-  },
-  {
-    id: "orchestration",
-    num: 4,
-    label: "Orchestration",
-    sublabel: "Phase 6",
-    desc: "Full pipeline orchestrators: L1 (~52s) + Runtime (~101s, ~296k records)",
-    icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
-    accent: "#1a6a8a",
-    accentLight: "rgba(26,106,138,0.08)",
-    accentBorder: "rgba(26,106,138,0.25)",
-    substages: [
-      { id: "orchestrate-l1",      label: "L1 Pre-Computation Orchestrator", ep: "POST /api/v1/metrics/calculate-l1",      records: 130000, dur: 52    },
-      { id: "orchestrate-runtime", label: "Full Runtime Orchestrator",        ep: "POST /api/v1/metrics/runtime-metrics",  records: 296370, dur: 101.2 },
-    ],
-  },
-  {
-    id: "results",
-    num: 5,
-    label: "Results",
-    sublabel: "Dashboard",
-    desc: "Wealth Creation analysis, EP Bow Wave, Economic Profitability indices",
-    icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
-    accent: "#0E2D5C",
-    accentLight: "rgba(14,45,92,0.06)",
-    accentBorder: "rgba(14,45,92,0.18)",
-    substages: [] as { id: string; label: string; ep: string; records: number; dur: number }[],
-  },
-] as const;
-
-type StageId = (typeof STAGES)[number]["id"];
-
-// ── Chart helpers ─────────────────────────────────────────────────────────
-
-const lineOpts: any = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: {
-    legend: { position: "top", labels: { boxWidth: 18, font: { size: 10 }, padding: 8, usePointStyle: true, pointStyle: "line" } },
-    tooltip: { mode: "index", intersect: false },
-  },
-  scales: {
-    x: { ticks: { font: { size: 9 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 10 }, grid: { color: "rgba(0,0,0,0.04)" } },
-    y: { ticks: { font: { size: 9 }, callback: (v: any) => `${v}%` }, grid: { color: "rgba(0,0,0,0.04)" } },
-  },
-};
-const mbOpts: any = {
-  ...lineOpts,
-  scales: { ...lineOpts.scales, y: { ...lineOpts.scales.y, ticks: { font: { size: 9 }, callback: (v: any) => `${v}×` } } },
-};
-const barOpts: any = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: {
-    legend: { position: "top", labels: { boxWidth: 14, font: { size: 10 }, padding: 8 } },
-    tooltip: { mode: "index", intersect: false },
-  },
-  scales: {
-    x: { ticks: { font: { size: 8 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }, grid: { display: false } },
-    y: { ticks: { font: { size: 9 } }, grid: { color: "rgba(0,0,0,0.04)" } },
-  },
-};
-
-// Bow wave data
-function bellCurve(years: number[], peakYear: number, peakValue: number, sigma: number): number[] {
-  return years.map(y => +(peakValue * Math.exp(-((y - peakYear) ** 2) / (2 * sigma * sigma))).toFixed(2));
+interface StageResult {
+  status: StageStatus;
+  message: string;
+  detail?: string;
+  records?: number;
+  seconds?: number;
 }
-const yOff = Array.from({ length: 26 }, (_, i) => i - 10);
-const yLabels = yOff.map(o => (2014 + o).toString());
-const bowWaveData = {
-  labels: yLabels,
-  datasets: [
-    { label: "Baseline EP Expectations", data: bellCurve(yOff, 3, 350, 6), borderColor: "hsl(38 70% 48%)", backgroundColor: "hsl(38 70% 48% / 0.15)", borderWidth: 2, pointRadius: 0, fill: true, tension: 0.5 },
-    { label: "New EP Expectations", data: yOff.map((o, i) => o >= 0 ? bellCurve(yOff, 5, 720, 8)[i] : null) as (number | null)[], borderColor: "hsl(213 75% 40%)", backgroundColor: "hsl(213 75% 40% / 0.12)", borderWidth: 2, pointRadius: 0, fill: true, tension: 0.5 },
-  ],
-};
-const bowWaveOpts: any = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { position: "top", labels: { boxWidth: 18, font: { size: 10 }, padding: 8, usePointStyle: true, pointStyle: "line" } }, tooltip: { mode: "index", intersect: false } },
-  scales: {
-    x: { ticks: { font: { size: 8 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: "rgba(0,0,0,0.04)" } },
-    y: { title: { display: true, text: "Economic Profit ($m)", font: { size: 9 }, color: "#64748b" }, ticks: { font: { size: 8 } }, grid: { color: "rgba(0,0,0,0.04)" }, min: 0 },
-  },
+
+// ── Color tokens ────────────────────────────────────────────────────────────
+const NAVY  = "hsl(213 75% 22%)";
+const GOLD  = "hsl(38 60% 52%)";
+const GREEN = "hsl(152 60% 40%)";
+const RED   = "hsl(0 65% 50%)";
+const SLATE = "hsl(215 15% 46%)";
+
+// ── Parameter labels ────────────────────────────────────────────────────────
+const PARAM_META: Record<string, { label: string; type: "number" | "boolean" | "select"; options?: string[] }> = {
+  country:                                { label: "Country",                   type: "select", options: ["Australia", "USA", "UK"] },
+  currency_notation:                      { label: "Currency Notation",         type: "select", options: ["A$m", "USD", "GBP"] },
+  cost_of_equity_approach:                { label: "Cost of Equity Approach",   type: "select", options: ["Floating", "Fixed", "CAPM"] },
+  equity_risk_premium:                    { label: "Equity Risk Premium (%)",   type: "number" },
+  fixed_benchmark_return_wealth_preservation: { label: "Fixed Benchmark Return (%)", type: "number" },
+  tax_rate_franking_credits:              { label: "Tax Rate — Franking Credits (%)", type: "number" },
+  value_of_franking_credits:              { label: "Value of Franking Credits (%)", type: "number" },
+  include_franking_credits_tsr:           { label: "Include Franking Credits in TSR", type: "boolean" },
+  beta_rounding:                          { label: "Beta Rounding (decimal places)", type: "number" },
+  risk_free_rate_rounding:                { label: "Risk-Free Rate Rounding",   type: "number" },
+  last_calendar_year:                     { label: "Last Calendar Year",        type: "number" },
+  beta_relative_error_tolerance:          { label: "Beta Relative Error Tolerance (%)", type: "number" },
+  terminal_year:                          { label: "Terminal Year",             type: "number" },
 };
 
-const ingestionRecordsData = {
-  labels: ["Fundamentals", "Parameters", "L0 Staging", "L1 Precomputed", "L2 Core", "Runtime (total)"],
-  datasets: [{ label: "Records", data: [10000, 150, 10000, 130000, 10000, 296370], backgroundColor: ["#0E2D5C","#1a4a8a","#2a5fa0","#C8922A","#1a8a5c","#1a6a8a"], borderRadius: 4 }],
-};
-const ingestionOpts: any = {
-  responsive: true, maintainAspectRatio: false, indexAxis: "y" as const,
-  plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx: any) => ` ${ctx.raw.toLocaleString()} records` } } },
-  scales: {
-    x: { ticks: { font: { size: 9 }, callback: (v: any) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v }, grid: { color: "rgba(0,0,0,0.04)" } },
-    y: { ticks: { font: { size: 10 } }, grid: { display: false } },
-  },
-};
-const runtimeDurData = {
-  labels: ["Beta", "Risk-Free Rf", "Cost Ke", "FV-ECF", "TER/TER-Ke", "TER Alpha"],
-  datasets: [{ label: "Wall-clock (s)", data: [1.5, 7.9, 1.6, 51.9, 14.4, 23.9], backgroundColor: ["#1a8a5c","#1a8a5c","#1a6a8a","#8b5cf6","#8b5cf6","#dc2626"], borderRadius: 4 }],
-};
-const durOpts: any = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx: any) => ` ${ctx.raw}s` } } },
-  scales: {
-    x: { ticks: { font: { size: 9 } }, grid: { color: "rgba(0,0,0,0.04)" } },
-    y: { ticks: { font: { size: 9 }, callback: (v: any) => `${v}s` }, grid: { color: "rgba(0,0,0,0.04)" } },
-  },
-};
-
-const kpis = [
-  { label: "Avg ROE-Ke",     value: "10.6%", sub: "LT Avg Econ. Profitability", pos: true  },
-  { label: "TER-Ke (10yr)",  value: "6.8%",  sub: "Annualised Wealth Creation",  pos: true  },
-  { label: "M:B Ratio",      value: "3.7×",  sub: "Market to Book (LT avg)",     pos: null  },
-  { label: "EP Dom. TSR",    value: "14.8%", sub: "vs 5.7% EPS-dominant",        pos: true  },
-  { label: "Cost of Equity", value: "10.0%", sub: "ASX 300 Long-run Ke",         pos: null  },
-];
-
-// ── Sub-components ────────────────────────────────────────────────────────
-
-function Card({ title, subtitle, height = 210, children }: { title: string; subtitle?: string; height?: number; children: React.ReactNode }) {
+// ── Spinner ────────────────────────────────────────────────────────────────
+function Spinner({ size = 16 }: { size?: number }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "1rem 1.125rem", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-      <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: subtitle ? "0.1rem" : "0.75rem" }}>{title}</div>
-      {subtitle && <div style={{ fontSize: "0.6875rem", color: "#64748b", marginBottom: "0.75rem" }}>{subtitle}</div>}
-      <div style={{ height }}>{children}</div>
-    </div>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: "spin 0.9s linear infinite" }}>
+      <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+      <path d="M22 12a10 10 0 00-10-10" />
+    </svg>
   );
 }
 
-function SubstageRow({ s }: { s: { id: string; label: string; ep: string; records: number; dur: number } }) {
+// ── Stage indicator ────────────────────────────────────────────────────────
+function StageNode({
+  num, label, sublabel, status, isActive, onClick,
+}: {
+  num: number; label: string; sublabel: string;
+  status: StageStatus; isActive: boolean;
+  onClick?: () => void;
+}) {
+  const bg = status === "done" ? GREEN : status === "running" ? GOLD : status === "error" ? RED : "hsl(210 16% 90%)";
+  const fg = (status === "done" || status === "running" || status === "error") ? "#fff" : SLATE;
   return (
-    <div data-testid={`pipeline-stage-${s.id}`} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.625rem 0.875rem", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8 }}>
-      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#1a8a5c", flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: "0.8125rem", color: "#1e293b" }}>{s.label}</div>
-        <code style={{ fontSize: "0.6rem", color: "#64748b", fontFamily: "monospace" }}>{s.ep}</code>
-      </div>
-      <div style={{ display: "flex", gap: "1rem", flexShrink: 0, fontSize: "0.6875rem", color: "#64748b" }}>
-        <span>{s.records.toLocaleString()} rec</span>
-        <span>{s.dur}s</span>
-      </div>
-      <div style={{ background: "rgba(26,138,92,0.1)", color: "#1a8a5c", fontSize: "0.6rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 999, textTransform: "uppercase" as const, letterSpacing: "0.04em" }}>
-        Success
-      </div>
-    </div>
-  );
-}
-
-// ── Pipeline Configuration Panel ──────────────────────────────────────────
-
-interface PipelineConfigPanelProps {
-  backendOnline: boolean | null;
-  selectedDatasetId: string;
-  onDatasetChange: (id: string) => void;
-  activeParams: ParameterSetResponse | null;
-  datasets: Record<string, DatasetStatistics>;
-  loadingConfig: boolean;
-}
-
-function PipelineConfigPanel({
-  backendOnline,
-  selectedDatasetId,
-  onDatasetChange,
-  activeParams,
-  datasets,
-  loadingConfig,
-}: PipelineConfigPanelProps) {
-  const datasetEntries = Object.entries(datasets);
-  const selectedDataset = selectedDatasetId ? datasets[selectedDatasetId] : null;
-
-  // Key parameter display helpers
-  const paramEntries = activeParams
-    ? Object.entries(activeParams.parameters).slice(0, 12)
-    : [];
-
-  return (
-    <div style={{
-      background: "linear-gradient(135deg, rgba(14,45,92,0.03) 0%, rgba(200,146,42,0.04) 100%)",
-      border: "1px solid rgba(14,45,92,0.12)",
-      borderTop: "3px solid #C8922A",
-      borderRadius: 12,
-      padding: "1.25rem 1.5rem",
-      marginBottom: "1.5rem",
-      boxShadow: "0 2px 12px rgba(14,45,92,0.06)",
-    }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.125rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 8,
-            background: "linear-gradient(135deg, #C8922A, #a0661a)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 2px 8px rgba(200,146,42,0.35)",
-          }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: "0.9375rem", color: "#0E2D5C", lineHeight: 1.1 }}>
-              Pipeline Configuration
-            </div>
-            <div style={{ fontSize: "0.6875rem", color: "#64748b", marginTop: "0.1rem" }}>
-              Select dataset and confirm parameters before running
-            </div>
-          </div>
-        </div>
-        {loadingConfig && (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.6875rem", color: "#64748b" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              style={{ animation: "spin 1s linear infinite" }}>
-              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-            </svg>
-            Loading configuration…
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-
-        {/* ── Dataset Selection ── */}
-        <div>
-          <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.625rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C8922A" strokeWidth="2.5">
-              <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-            </svg>
-            Dataset Selection
-          </div>
-
-          {!backendOnline ? (
-            <div style={{
-              padding: "0.875rem 1rem",
-              background: "#fef9f0",
-              border: "1px solid rgba(200,146,42,0.3)",
-              borderRadius: 8,
-              fontSize: "0.75rem",
-              color: "#92400e",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              Backend offline — connect API to load live datasets
-            </div>
-          ) : datasetEntries.length === 0 && !loadingConfig ? (
-            <div style={{
-              padding: "0.875rem 1rem",
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
-              borderRadius: 8,
-              fontSize: "0.75rem",
-              color: "#64748b",
-            }}>
-              No datasets found. Ingest data first (Stage 1).
-            </div>
-          ) : (
-            <>
-              {/* Dataset dropdown */}
-              <div style={{ position: "relative", marginBottom: "0.75rem" }}>
-                <select
-                  value={selectedDatasetId}
-                  onChange={e => onDatasetChange(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.625rem 2rem 0.625rem 0.875rem",
-                    border: selectedDatasetId ? "1.5px solid #C8922A" : "1px solid #cbd5e1",
-                    borderRadius: 7,
-                    background: "#fff",
-                    color: "#1e293b",
-                    fontSize: "0.8125rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    outline: "none",
-                    appearance: "none" as const,
-                    boxShadow: selectedDatasetId ? "0 0 0 3px rgba(200,146,42,0.12)" : undefined,
-                  }}
-                >
-                  <option value="">— Select a dataset —</option>
-                  {datasetEntries.map(([id, ds]) => (
-                    <option key={id} value={id}>
-                      {ds.country} · {ds.companies.count} companies · {ds.data_coverage.min_year}–{ds.data_coverage.max_year}
-                    </option>
-                  ))}
-                </select>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5"
-                  style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-                  <path d="m6 9 6 6 6-6"/>
-                </svg>
-              </div>
-
-              {/* Dataset detail card */}
-              {selectedDataset && (
-                <div style={{
-                  background: "#fff",
-                  border: "1px solid rgba(200,146,42,0.2)",
-                  borderLeft: "3px solid #C8922A",
-                  borderRadius: 8,
-                  padding: "0.75rem 0.875rem",
-                }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                    {[
-                      { label: "Dataset ID", value: selectedDataset.dataset_id.slice(0, 8) + "…", mono: true },
-                      { label: "Country", value: selectedDataset.country },
-                      { label: "Companies", value: String(selectedDataset.companies.count) },
-                      { label: "Sectors", value: String(selectedDataset.sectors.count) },
-                      { label: "Data Range", value: `${selectedDataset.data_coverage.min_year} – ${selectedDataset.data_coverage.max_year}` },
-                      { label: "Raw Metrics", value: selectedDataset.raw_metrics.count.toLocaleString() },
-                    ].map(row => (
-                      <div key={row.label}>
-                        <div style={{ fontSize: "0.5625rem", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em", color: "#94a3b8", marginBottom: "0.1rem" }}>
-                          {row.label}
-                        </div>
-                        <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1e293b", fontFamily: row.mono ? "monospace" : undefined }}>
-                          {row.value}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {selectedDataset.sectors.items.slice(0, 5).length > 0 && (
-                    <div style={{ marginTop: "0.625rem", paddingTop: "0.5rem", borderTop: "1px solid #f1f5f9" }}>
-                      <div style={{ fontSize: "0.5625rem", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em", color: "#94a3b8", marginBottom: "0.375rem" }}>
-                        Top Sectors
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "0.25rem" }}>
-                        {selectedDataset.sectors.items.slice(0, 5).map(s => (
-                          <span key={s.name} style={{
-                            fontSize: "0.625rem", fontWeight: 600,
-                            background: "rgba(200,146,42,0.08)", color: "#92400e",
-                            border: "1px solid rgba(200,146,42,0.2)",
-                            padding: "0.15rem 0.5rem", borderRadius: 999,
-                          }}>
-                            {s.name} ({s.company_count})
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* ── Parameter Configuration ── */}
-        <div>
-          <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.625rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0E2D5C" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/>
-              <path d="M12 2v2m0 16v2M2 12h2m16 0h2"/>
-            </svg>
-            Active Parameter Set
-          </div>
-
-          {!backendOnline ? (
-            <div style={{
-              padding: "0.875rem 1rem",
-              background: "#f0f9ff",
-              border: "1px solid rgba(14,45,92,0.15)",
-              borderRadius: 8,
-              fontSize: "0.75rem",
-              color: "#0E2D5C",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              Backend offline — connect API to load parameter sets
-            </div>
-          ) : activeParams ? (
-            <div style={{
-              background: "#fff",
-              border: "1px solid rgba(14,45,92,0.15)",
-              borderLeft: "3px solid #0E2D5C",
-              borderRadius: 8,
-              padding: "0.75rem 0.875rem",
-            }}>
-              {/* Param set header */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.625rem", paddingBottom: "0.5rem", borderBottom: "1px solid #f1f5f9" }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#0E2D5C" }}>{activeParams.param_set_name}</div>
-                  <div style={{ fontSize: "0.625rem", color: "#64748b", fontFamily: "monospace", marginTop: "0.1rem" }}>
-                    ID: {activeParams.param_set_id.slice(0, 12)}…
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: "0.3rem" }}>
-                  {activeParams.is_active && (
-                    <span style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontSize: "0.5625rem", fontWeight: 700, padding: "0.15rem 0.5rem", borderRadius: 999, textTransform: "uppercase" as const }}>
-                      Active
-                    </span>
-                  )}
-                  {activeParams.is_default && (
-                    <span style={{ background: "rgba(200,146,42,0.1)", border: "1px solid rgba(200,146,42,0.3)", color: "#92400e", fontSize: "0.5625rem", fontWeight: 700, padding: "0.15rem 0.5rem", borderRadius: 999, textTransform: "uppercase" as const }}>
-                      Default
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Parameters grid */}
-              {paramEntries.length > 0 ? (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.375rem" }}>
-                  {paramEntries.map(([key, val]) => (
-                    <div key={key} style={{
-                      padding: "0.375rem 0.5rem",
-                      background: "rgba(14,45,92,0.03)",
-                      border: "1px solid rgba(14,45,92,0.07)",
-                      borderRadius: 6,
-                    }}>
-                      <div style={{ fontSize: "0.5rem", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#94a3b8", marginBottom: "0.1rem" }}>
-                        {key.replace(/_/g, " ")}
-                      </div>
-                      <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#0E2D5C", fontFamily: "monospace" }}>
-                        {typeof val === "object" ? JSON.stringify(val).slice(0, 18) : String(val)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ fontSize: "0.6875rem", color: "#64748b" }}>No parameters configured.</div>
-              )}
-
-              {Object.keys(activeParams.parameters).length > 12 && (
-                <div style={{ marginTop: "0.5rem", fontSize: "0.625rem", color: "#94a3b8", textAlign: "center" as const }}>
-                  +{Object.keys(activeParams.parameters).length - 12} more parameters
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{
-              padding: "1rem",
-              background: "#f8fafc",
-              border: "1px dashed #cbd5e1",
-              borderRadius: 8,
-              fontSize: "0.75rem",
-              color: "#64748b",
-              textAlign: "center" as const,
-            }}>
-              {loadingConfig ? "Loading active parameters…" : "No active parameter set found"}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Selection summary bar */}
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem",
+        background: "none", border: "none", cursor: onClick ? "pointer" : "default",
+        padding: "0.5rem 0.75rem",
+        borderRadius: 10,
+        outline: isActive ? `2px solid ${NAVY}` : "2px solid transparent",
+        transition: "all 0.2s",
+        minWidth: 100,
+      }}
+    >
       <div style={{
-        marginTop: "1rem",
-        padding: "0.75rem 1rem",
-        background: selectedDatasetId && activeParams
-          ? "linear-gradient(90deg, rgba(26,138,92,0.06) 0%, rgba(14,45,92,0.04) 100%)"
-          : "rgba(0,0,0,0.02)",
-        border: `1px solid ${selectedDatasetId && activeParams ? "rgba(26,138,92,0.2)" : "#e2e8f0"}`,
-        borderRadius: 8,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: "1rem",
+        width: 40, height: 40, borderRadius: "50%",
+        background: isActive ? NAVY : bg,
+        color: isActive ? "#fff" : fg,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: "0.8125rem", fontWeight: 800,
+        boxShadow: isActive ? `0 0 0 4px hsl(213 75% 22% / 0.15)` : status === "done" ? `0 0 8px hsl(152 60% 40% / 0.4)` : "none",
+        transition: "all 0.2s",
+        position: "relative",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: selectedDatasetId ? "#1a8a5c" : "#e2e8f0" }} />
-            <span style={{ fontSize: "0.6875rem", color: "#64748b" }}>Dataset:</span>
-            <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: selectedDatasetId ? "#1e293b" : "#94a3b8", fontFamily: "monospace" }}>
-              {selectedDatasetId ? selectedDatasetId.slice(0, 12) + "…" : "not selected"}
-            </span>
-          </div>
-          <div style={{ width: 1, height: 16, background: "#e2e8f0" }} />
-          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: activeParams ? "#1a8a5c" : "#e2e8f0" }} />
-            <span style={{ fontSize: "0.6875rem", color: "#64748b" }}>Params:</span>
-            <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: activeParams ? "#1e293b" : "#94a3b8", fontFamily: "monospace" }}>
-              {activeParams ? activeParams.param_set_id.slice(0, 12) + "…" : "not loaded"}
-            </span>
-          </div>
-        </div>
-        <div style={{ fontSize: "0.6875rem", color: selectedDatasetId && activeParams ? "#1a8a5c" : "#94a3b8", fontWeight: 600 }}>
-          {selectedDatasetId && activeParams ? "✓ Ready to run pipeline" : "Select a dataset to continue"}
-        </div>
+        {status === "running" ? <Spinner size={18} /> : status === "done" ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8"><path d="M20 6L9 17l-5-5"/></svg>
+        ) : status === "error" ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        ) : num}
       </div>
-    </div>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: isActive ? NAVY : "hsl(220 30% 20%)", lineHeight: 1.2 }}>{label}</div>
+        <div style={{ fontSize: "0.5625rem", color: SLATE, lineHeight: 1.2 }}>{sublabel}</div>
+      </div>
+    </button>
   );
 }
 
-// ── Per-stage content panels ──────────────────────────────────────────────
-
-function IngestionPanel({ substages }: { substages: readonly { id: string; label: string; ep: string; records: number; dur: number }[] }) {
+// ── Log line ───────────────────────────────────────────────────────────────
+function LogLine({ text, type = "info" }: { text: string; type?: "info" | "success" | "error" | "warn" }) {
+  const color = type === "success" ? GREEN : type === "error" ? RED : type === "warn" ? GOLD : "hsl(220 25% 30%)";
+  const prefix = type === "success" ? "✓" : type === "error" ? "✗" : type === "warn" ? "⚠" : "·";
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-      <Card title="Database Record Counts" subtitle="Records loaded per pipeline layer" height={230}>
-        <Bar data={ingestionRecordsData} options={ingestionOpts} />
-      </Card>
-      <div>
-        <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.625rem" }}>Pipeline Substages</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "0.875rem" }}>
-          {substages.map(s => <SubstageRow key={s.id} s={s} />)}
-        </div>
-        <div style={{ background: "rgba(14,45,92,0.04)", border: "1px solid rgba(14,45,92,0.14)", borderRadius: 8, padding: "0.75rem 1rem" }}>
-          <div style={{ fontWeight: 700, fontSize: "0.75rem", color: "#0E2D5C", marginBottom: "0.375rem" }}>Input Source</div>
-          <div style={{ fontSize: "0.6875rem", color: "#475569", lineHeight: 1.65 }}>
-            Bloomberg Excel — <code style={{ fontFamily: "monospace", fontSize: "0.625rem" }}>Bloomberg Download data.xlsx</code><br />
-            ~500 ASX tickers × ~20 years ≈ <strong>10,000</strong> fundamental records
-          </div>
-        </div>
-      </div>
+    <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.15rem 0" }}>
+      <span style={{ color, fontWeight: 700, flexShrink: 0, fontSize: "0.75rem" }}>{prefix}</span>
+      <span style={{ color, fontSize: "0.6875rem", lineHeight: 1.5 }}>{text}</span>
     </div>
   );
 }
 
-function L1Panel({ substages }: { substages: readonly { id: string; label: string; ep: string; records: number; dur: number }[] }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-      <Card title="Economic Profitability (ROE-Ke) by Index" subtitle="Historical annualised ROE-Ke — ASX 300 · 2001–2019" height={220}>
-        <Line data={roeKeByIndex} options={lineOpts} />
-      </Card>
-      <Card title="ROE-Ke Distribution by Industry Sector" subtitle="Frequency distribution across ASX sectors" height={220}>
-        <Bar data={roeKeDistribution} options={barOpts} />
-      </Card>
-      <div>
-        <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.625rem" }}>Pipeline Substages</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {substages.map(s => <SubstageRow key={s.id} s={s} />)}
-        </div>
-      </div>
-      <div style={{ background: "rgba(200,146,42,0.05)", border: "1px solid rgba(200,146,42,0.2)", borderRadius: 8, padding: "0.875rem 1rem" }}>
-        <div style={{ fontWeight: 700, fontSize: "0.75rem", color: "#a0661a", marginBottom: "0.5rem" }}>Metrics Computed</div>
-        {["Calc MC (Market Cap)", "Calc Assets, OA", "Op/Non-Op/Tax/XO Cost", "Calc ECF, EE (Equity Cash Flow)", "FY TSR, FY TSR PREL", "EP, PAT_EX, XO_COST_EX, FC (L2 Core)"].map(m => (
-          <div key={m} style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.3rem" }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#C8922A", flexShrink: 0 }} />
-            <span style={{ fontSize: "0.6875rem", color: "#475569" }}>{m}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RuntimePanel({ substages }: { substages: readonly { id: string; label: string; ep: string; records: number; dur: number }[] }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-      <Card title="Runtime Processing Duration" subtitle="Wall-clock time per computation step (seconds)" height={200}>
-        <Bar data={runtimeDurData} options={durOpts} />
-      </Card>
-      <Card title="TER-Ke Distribution by Industry Sector" subtitle="Wealth creation frequency — ASX sectors" height={200}>
-        <Bar data={terKeDistribution} options={barOpts} />
-      </Card>
-      <div style={{ gridColumn: "1 / -1" }}>
-        <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.625rem" }}>Pipeline Substages ({substages.length} steps)</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
-          {substages.map(s => <SubstageRow key={s.id} s={s} />)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function OrchestrationPanel({ substages }: { substages: readonly { id: string; label: string; ep: string; records: number; dur: number }[] }) {
-  const summary = [
-    { label: "L1 Pre-Compute",  records: "~130,000", time: "~52s",  color: "#C8922A" },
-    { label: "Runtime (full)",  records: "~296,370", time: "~101s", color: "#1a8a5c" },
-    { label: "Total DB Records",records: "~882,740", time: "—",     color: "#0E2D5C" },
-  ];
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-      <Card title="Annualised Wealth Creation (TER-Ke)" subtitle="1yr, 3yr, 5yr, 10yr rolling — ASX 300 · 2001–2019" height={220}>
-        <Line data={terKeByIndex} options={{ ...lineOpts, scales: { ...lineOpts.scales, y: { ...lineOpts.scales.y, min: -45 } } }} />
-      </Card>
-      <Card title="Market to Book Ratio (M:B)" subtitle="Historical M:B ratio — ASX 300 · 2001–2019" height={220}>
-        <Line data={mbRatioByIndex} options={mbOpts} />
-      </Card>
-      <div>
-        <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.625rem" }}>Orchestrator Substages</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {substages.map(s => <SubstageRow key={s.id} s={s} />)}
-        </div>
-      </div>
-      <div>
-        <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.625rem" }}>Pipeline Summary</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {summary.map(r => (
-            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.75rem 1rem", background: "#f8fafc", border: `1px solid ${r.color}33`, borderLeft: `4px solid ${r.color}`, borderRadius: 8 }}>
-              <span style={{ fontWeight: 600, fontSize: "0.8125rem", color: "#1e293b" }}>{r.label}</span>
-              <div style={{ display: "flex", gap: "1.25rem", fontSize: "0.75rem", color: "#64748b" }}>
-                <span>{r.records}</span>
-                <span style={{ fontFamily: "monospace" }}>{r.time}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ResultsPanel() {
-  const principles = [
-    { number: 1, label: "Economic Measures are Better",       pct: 85, color: "#0E2D5C", path: "/principles/1" },
-    { number: 2, label: "Primary Focus on the Longer Term",   pct: 40, color: "#1a4a8a", path: "/principles/2" },
-    { number: 3, label: "Creativity & Innovation",            pct: 30, color: "#2a5fa0", path: "/principles/1" },
-    { number: 4, label: "Focus on All Stakeholders",          pct: 20, color: "#3a74b6", path: "/principles/1" },
-    { number: 5, label: "Clear Purpose by Noble Intent",      pct: 15, color: "#4a89cc", path: "/principles/1" },
-    { number: 6, label: "More is Not Always Better",          pct: 10, color: "#5a9ee2", path: "/principles/1" },
-  ];
-  const decompRows = [
-    { label: "TSR-Ke (Observed Wealth)", value: "8.2%",  color: "#0E2D5C" },
-    { label: "Intrinsic Wealth",          value: "5.4%", color: "#C8922A" },
-    { label: "Sustainable Intrinsic",     value: "3.8%", color: "#1a8a5c" },
-    { label: "Wealth Appropriation",      value: "2.8%", color: "#dc2626" },
-  ];
-  return (
-    <div>
-      {/* Bow Wave hero */}
-      <div style={{ background: "linear-gradient(135deg, rgba(14,45,92,0.04) 0%, rgba(200,146,42,0.05) 100%)", border: "1px solid #e2e8f0", borderTop: "3px solid #0E2D5C", borderRadius: 12, padding: "1.25rem 1.5rem", marginBottom: "1rem", display: "grid", gridTemplateColumns: "1fr 380px", gap: "1.5rem", alignItems: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-            <span style={{ background: "#C8922A", color: "#fff", fontSize: "0.625rem", fontWeight: 700, padding: "0.2rem 0.625rem", borderRadius: 999, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Signature Concept</span>
-            <span style={{ fontSize: "0.75rem", color: "#64748b" }}>Principle 2</span>
-          </div>
-          <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0E2D5C", margin: "0 0 0.5rem 0" }}>The EP Bow Wave</h2>
-          <p style={{ fontSize: "0.8125rem", color: "#475569", lineHeight: 1.7, margin: "0 0 0.875rem 0" }}>
-            A company's market capitalisation equals its book equity plus the present value of its entire expected Economic Profit stream — the EP Bow Wave. The pair of waves reveals wealth created or destroyed during any measurement period.
-          </p>
-          <div style={{ display: "flex", gap: "0.625rem" }}>
-            <Link href="/principles/2" style={{ display: "inline-flex", alignItems: "center", gap: "0.375rem", padding: "0.5rem 1rem", background: "#0E2D5C", color: "white", borderRadius: 6, fontSize: "0.75rem", fontWeight: 700, textDecoration: "none" }}>
-              Explore Bow Wave <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>
-            </Link>
-            <Link href="/outputs" style={{ display: "inline-flex", alignItems: "center", gap: "0.375rem", padding: "0.5rem 1rem", background: "transparent", border: "1px solid #cbd5e1", color: "#1e293b", borderRadius: 6, fontSize: "0.75rem", fontWeight: 600, textDecoration: "none" }}>
-              View Full Outputs
-            </Link>
-          </div>
-        </div>
-        <div>
-          <div style={{ height: 190 }}><Line data={bowWaveData} options={bowWaveOpts} /></div>
-          <div style={{ textAlign: "center", marginTop: "0.5rem" }}>
-            <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#1a8a5c", background: "#f0fdf4", padding: "0.1875rem 0.625rem", borderRadius: 999, border: "1px solid #bbf7d0" }}>▲ $3.1b enhancement · Cochlear (COH)</span>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
-        {kpis.map(k => (
-          <div key={k.label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "0.875rem 1rem", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-            <div style={{ fontSize: "0.625rem", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em", color: "#64748b", marginBottom: "0.25rem" }}>{k.label}</div>
-            <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0E2D5C", lineHeight: 1.1 }}>{k.value}</div>
-            <div style={{ fontSize: "0.625rem", color: k.pos ? "#1a8a5c" : "#64748b", marginTop: "0.2rem", fontWeight: 500 }}>{k.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Charts */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-        <Card title="Economic Profitability (ROE-Ke) by Index" subtitle="Historical annualised ROE-Ke — ASX 300 · 2001–2019" height={210}>
-          <Line data={roeKeByIndex} options={lineOpts} />
-        </Card>
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "1rem 1.125rem", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-          <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.125rem" }}>Six CISSA Principles</div>
-          <div style={{ fontSize: "0.6875rem", color: "#64748b", marginBottom: "0.75rem" }}>Coverage progress</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-            {principles.map(p => (
-              <Link href={p.path} key={p.number} style={{ textDecoration: "none" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
-                  <div style={{ width: 20, height: 20, borderRadius: "50%", background: p.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.5625rem", fontWeight: 700, flexShrink: 0 }}>{p.number}</div>
-                  <span style={{ fontSize: "0.6875rem", color: "#1e293b", fontWeight: 500, flex: 1 }}>{p.label}</span>
-                  <span style={{ fontSize: "0.625rem", color: "#64748b" }}>{p.pct}%</span>
-                </div>
-                <div style={{ height: 4, background: "#f1f5f9", borderRadius: 2, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${p.pct}%`, background: p.color, borderRadius: 2 }} />
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-        <Card title="TER-Ke (Wealth Creation)" subtitle="ASX 300 · rolling 1–10yr · 2001–2019" height={190}>
-          <Line data={terKeByIndex} options={{ ...lineOpts, scales: { ...lineOpts.scales, y: { ...lineOpts.scales.y, min: -45 } } }} />
-        </Card>
-        <Card title="Market to Book Ratio (M:B)" subtitle="Historical M:B — ASX 300 · 2001–2019" height={190}>
-          <Line data={mbRatioByIndex} options={mbOpts} />
-        </Card>
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "1rem 1.125rem", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-          <div style={{ fontWeight: 700, fontSize: "0.8125rem", color: "#1e293b", marginBottom: "0.125rem" }}>Wealth Creation Decomposition</div>
-          <div style={{ fontSize: "0.6875rem", color: "#64748b", marginBottom: "0.75rem" }}>ASX 300 · 10yr annualised · 2001–2024</div>
-          <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "0.75rem", alignItems: "center" }}>
-            <div style={{ height: 150 }}>
-              <Doughnut data={{ labels: wealthCreationDecomp.labels, datasets: [{ data: wealthCreationDecomp.datasets[0].data, backgroundColor: wealthCreationDecomp.datasets[0].backgroundColor as string[], borderWidth: 2, borderColor: "white" }] }}
-                options={{ responsive: true, maintainAspectRatio: false, cutout: "65%", plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx: any) => ` ${ctx.raw}%` } } } }} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-              {decompRows.map(r => (
-                <div key={r.label} style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 2, background: r.color, flexShrink: 0 }} />
-                  <div>
-                    <div style={{ fontSize: "0.5625rem", color: "#64748b", lineHeight: 1.2 }}>{r.label}</div>
-                    <div style={{ fontSize: "0.8125rem", fontWeight: 700, color: r.color }}>{r.value}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <Card title="EP-Dominant vs EPS-Dominant Cohort Performance" subtitle="10yr annualised TSR — EP dominant companies significantly outperform EPS-focused peers" height={210}>
-        <Bar data={epVsEpsCohorts} options={barOpts} />
-      </Card>
-    </div>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
 export default function PipelinePage() {
-  const [active, setActive] = useState<StageId>("ingestion");
-  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
-  const [health, setHealth] = useState<HealthData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [activeStage, setActiveStage] = useState(0);
+  const [stageResults, setStageResults] = useState<StageResult[]>(
+    Array(5).fill({ status: "pending" as StageStatus, message: "" })
+  );
+  const [logs, setLogs] = useState<{ text: string; type: string }[]>([]);
+  const [dataset, setDataset] = useState<DatasetStatistics | null>(null);
+  const [params, setParams]   = useState<ParameterSetResponse | null>(null);
+  const [paramEdits, setParamEdits] = useState<Record<string, unknown>>({});
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const logEndRef    = useRef<HTMLDivElement>(null);
 
-  // Pipeline config state
-  const [datasets, setDatasets] = useState<Record<string, DatasetStatistics>>({});
-  const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
-  const [activeParams, setActiveParams] = useState<ParameterSetResponse | null>(null);
-  const [loadingConfig, setLoadingConfig] = useState(false);
-
-  const checkHealth = useCallback(async () => {
-    setLoading(true);
-    const alive = await isBackendAlive();
-    setBackendOnline(alive);
-    if (alive) {
-      try { setHealth(await apiFetch<HealthData>("/api/v1/metrics/health")); }
-      catch { setHealth(null); }
-    }
-    setLoading(false);
+  const addLog = useCallback((text: string, type: "info" | "success" | "error" | "warn" = "info") => {
+    setLogs(l => [...l, { text, type }]);
+    setTimeout(() => logEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   }, []);
 
-  // Load datasets + active params when backend comes online
-  const loadConfig = useCallback(async () => {
-    setLoadingConfig(true);
-    try {
-      const [statsResult, paramsResult] = await Promise.allSettled([
-        getStatistics(),
-        getActiveParameters(),
-      ]);
+  const setStage = useCallback((idx: number, result: Partial<StageResult>) => {
+    setStageResults(prev => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...result };
+      return next;
+    });
+  }, []);
 
-      if (statsResult.status === "fulfilled") {
-        const raw = statsResult.value;
-        // Response is Record<string, DatasetStatistics> when no dataset_id param
-        if (raw && typeof raw === "object" && !("dataset_id" in raw)) {
-          const statsMap = raw as Record<string, DatasetStatistics>;
-          setDatasets(statsMap);
-          // Auto-select first dataset
-          const firstKey = Object.keys(statsMap)[0];
-          if (firstKey) setSelectedDatasetId(firstKey);
+  // ── Stage 1: Data Ingestion ─────────────────────────────────────────────
+  const runIngestion = useCallback(async () => {
+    setActiveStage(0);
+    setStage(0, { status: "running", message: "Connecting to API…" });
+    addLog("Stage 1: Data Ingestion — connecting to backend…");
+    const t0 = Date.now();
+    try {
+      const statsAll = await getStatistics() as Record<string, DatasetStatistics>;
+      const keys = Object.keys(statsAll);
+      if (keys.length === 0) {
+        setStage(0, { status: "error", message: "No datasets found in database" });
+        addLog("No datasets found. Please ensure Bloomberg data has been ingested into the backend.", "error");
+        return;
+      }
+      const ds = statsAll[keys[0]];
+      setDataset(ds);
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      setStage(0, {
+        status: "done",
+        message: `${ds.companies.count} companies · ${ds.sectors.count} sectors`,
+        detail: `FY ${ds.data_coverage.min_year}–${ds.data_coverage.max_year} · ${ds.raw_metrics.count.toLocaleString()} raw records`,
+        records: ds.raw_metrics.count,
+        seconds: Number(elapsed),
+      });
+      addLog(`Dataset loaded: ${ds.companies.count} companies, ${ds.sectors.count} sectors`, "success");
+      addLog(`Coverage: FY ${ds.data_coverage.min_year} → FY ${ds.data_coverage.max_year}`, "success");
+      addLog(`Raw metrics: ${ds.raw_metrics.count.toLocaleString()} records · Country: ${ds.country || "AU"}`, "info");
+      addLog(`Elapsed: ${elapsed}s`, "info");
+      setActiveStage(1);
+    } catch (err: any) {
+      setStage(0, { status: "error", message: err.message || "Connection failed" });
+      addLog(`Connection error: ${err.message}`, "error");
+    }
+  }, [addLog, setStage]);
+
+  // ── Stage 2: Parameter Configuration ───────────────────────────────────
+  const loadParams = useCallback(async () => {
+    setActiveStage(1);
+    setStage(1, { status: "running", message: "Fetching active parameters…" });
+    addLog("Stage 2: Loading active parameter set…");
+    try {
+      const p = await getActiveParameters();
+      setParams(p);
+      setParamEdits({ ...p.parameters });
+      setStage(1, {
+        status: "done",
+        message: `Active: ${p.param_set_name}`,
+        detail: `Ke approach: ${p.parameters.cost_of_equity_approach} · ERP: ${p.parameters.equity_risk_premium}%`,
+      });
+      addLog(`Loaded param set: ${p.param_set_name}`, "success");
+      addLog(`Ke approach: ${p.parameters.cost_of_equity_approach} · ERP: ${p.parameters.equity_risk_premium}%`, "info");
+      addLog(`Beta rounding: ${p.parameters.beta_rounding} · Terminal year: ${p.parameters.terminal_year}`, "info");
+      setActiveStage(2);
+    } catch (err: any) {
+      setStage(1, { status: "error", message: err.message });
+      addLog(`Parameter load failed: ${err.message}`, "error");
+    }
+  }, [addLog, setStage]);
+
+  // ── Stage 3: L1 Metrics ─────────────────────────────────────────────────
+  const runL1 = useCallback(async () => {
+    if (!dataset || !params) { addLog("Run ingestion and load params first", "warn"); return; }
+    setActiveStage(2);
+    setStage(2, { status: "running", message: "Running L1 orchestrator (11 metrics, 4 parallel groups)…" });
+    addLog("Stage 3: L1 Pre-Computation — 11 metrics in 4 parallel groups…");
+    addLog("Phase 1A: Calc MC, Calc Assets, Calc OA (parallel)…", "info");
+    addLog("Phase 1B: Calc Op Cost, Calc Non Op Cost, Calc Tax Cost, Calc XO Cost (parallel)…", "info");
+    addLog("Phase 2:  Calc ECF, Non Div ECF, Calc EE, Calc FY TSR (sequential)…", "info");
+    const t0 = Date.now();
+    try {
+      const res = await orchestrateL1Metrics(dataset.dataset_id, params.param_set_id);
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      if (res.success) {
+        setStage(2, {
+          status: "done",
+          message: `${res.total_successful} metrics computed`,
+          detail: `${(res.total_records_inserted || 0).toLocaleString()} records · ${elapsed}s`,
+          records: res.total_records_inserted,
+          seconds: Number(elapsed),
+        });
+        addLog(`L1 complete: ${res.total_successful}/13 metrics ✓`, "success");
+        if (res.total_failed > 0) addLog(`${res.total_failed} metrics failed — check backend logs`, "warn");
+        addLog(`Records inserted: ${(res.total_records_inserted || 0).toLocaleString()} · Time: ${elapsed}s`, "info");
+        // Also run L2 Core immediately after
+        addLog("Running L2 Core (EP, PAT_EX, FC)…", "info");
+        try {
+          await calculateL2Core(dataset.dataset_id, params.param_set_id);
+          addLog("L2 Core complete: EP, PAT_EX, FC computed", "success");
+        } catch (_) { addLog("L2 Core skipped (may already exist)", "warn"); }
+        setActiveStage(3);
+      } else {
+        setStage(2, { status: "error", message: `${res.total_failed} metrics failed` });
+        addLog(`L1 failed: ${res.total_failed} errors`, "error");
+        (res.errors || []).forEach(e => addLog(e, "error"));
+      }
+    } catch (err: any) {
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      setStage(2, { status: "error", message: err.message });
+      addLog(`L1 error after ${elapsed}s: ${err.message}`, "error");
+    }
+  }, [dataset, params, addLog, setStage]);
+
+  // ── Stage 4: Runtime Metrics ────────────────────────────────────────────
+  const runRuntime = useCallback(async () => {
+    if (!dataset || !params) { addLog("Complete previous stages first", "warn"); return; }
+    setActiveStage(3);
+    setStage(3, { status: "running", message: "Running full runtime orchestrator (Beta → Rf → Ke → FV-ECF → TER → TER Alpha)…" });
+    addLog("Stage 4: Runtime Metrics — 6-phase orchestration…");
+    const t0 = Date.now();
+    try {
+      // Run full runtime orchestrator (handles all phases)
+      const res = await runRuntimeMetrics(dataset.dataset_id, params.param_set_id);
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+
+      const completed = res.metrics_completed || {};
+      const phases = Object.entries(completed);
+      let totalRecords = 0;
+      phases.forEach(([name, detail]: [string, any]) => {
+        totalRecords += detail.records_inserted || 0;
+        if (detail.status === "success") {
+          addLog(`  ${name}: ${(detail.records_inserted || 0).toLocaleString()} records · ${detail.time_seconds?.toFixed(1)}s`, "success");
+        } else {
+          addLog(`  ${name}: ${detail.status}`, detail.status === "error" ? "error" : "warn");
+        }
+      });
+
+      setStage(3, {
+        status: res.success ? "done" : "error",
+        message: res.success ? `${phases.length} phase(s) complete` : "Some phases failed",
+        detail: `${totalRecords.toLocaleString()} records · ${elapsed}s`,
+        records: totalRecords,
+        seconds: Number(elapsed),
+      });
+      if (res.success) {
+        addLog(`Runtime complete: ${totalRecords.toLocaleString()} records · ${elapsed}s`, "success");
+        setActiveStage(4);
+      } else {
+        addLog(`Runtime partial: check phase results above`, "warn");
+      }
+    } catch (err: any) {
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      addLog(`Runtime orchestrator failed after ${elapsed}s: ${err.message}`, "error");
+      addLog("Falling back to individual phase endpoints…", "warn");
+      // Fallback: run each phase individually
+      const phases = [
+        { name: "Beta Rounding",      fn: () => calculateBetaFromPrecomputed(dataset.dataset_id, params.param_set_id) },
+        { name: "Risk-Free Rate (Rf)", fn: () => calculateRates(dataset.dataset_id, params.param_set_id) },
+        { name: "Cost of Equity (Ke)", fn: () => calculateCostOfEquity(dataset.dataset_id, params.param_set_id) },
+        { name: "FV-ECF (4 intervals)",fn: () => calculateFvEcf(dataset.dataset_id, params.param_set_id) },
+        { name: "TER & TER-Ke",        fn: () => calculateTer(dataset.dataset_id, params.param_set_id) },
+        { name: "TER Alpha",           fn: () => calculateTerAlpha(dataset.dataset_id, params.param_set_id) },
+      ];
+      let allOk = true;
+      let totalRecs = 0;
+      for (const phase of phases) {
+        try {
+          addLog(`  Running ${phase.name}…`, "info");
+          const r: any = await phase.fn();
+          const recs = r.records_inserted || r.results_count || 0;
+          totalRecs += recs;
+          addLog(`  ✓ ${phase.name}: ${recs} records`, "success");
+        } catch (pe: any) {
+          addLog(`  ✗ ${phase.name}: ${pe.message}`, "error");
+          allOk = false;
         }
       }
-
-      if (paramsResult.status === "fulfilled") {
-        setActiveParams(paramsResult.value as ParameterSetResponse);
-      }
-    } catch {
-      // silently fail — backend may be offline
+      const elapsed2 = ((Date.now() - t0) / 1000).toFixed(1);
+      setStage(3, {
+        status: allOk ? "done" : "error",
+        message: allOk ? "All phases complete" : "Some phases failed",
+        detail: `${totalRecs.toLocaleString()} records · ${elapsed2}s`,
+        records: totalRecs,
+        seconds: Number(elapsed2),
+      });
+      if (allOk) setActiveStage(4);
     }
-    setLoadingConfig(false);
-  }, []);
+  }, [dataset, params, addLog, setStage]);
 
-  useEffect(() => { checkHealth(); }, [checkHealth]);
-  useEffect(() => {
-    if (backendOnline) loadConfig();
-  }, [backendOnline, loadConfig]);
+  // ── Stage 5: Results ────────────────────────────────────────────────────
+  const checkResults = useCallback(async () => {
+    if (!dataset || !params) { addLog("Complete pipeline stages first", "warn"); return; }
+    setActiveStage(4);
+    setStage(4, { status: "running", message: "Verifying computed metrics…" });
+    addLog("Stage 5: Verifying results…");
+    try {
+      const exists = await metricsExist(dataset.dataset_id, params.param_set_id);
+      if (exists.exists) {
+        setStage(4, { status: "done", message: "Metrics verified — Dashboard ready", detail: "All principle pages now show live data" });
+        addLog("All metrics verified in database ✓", "success");
+        addLog("Dashboard pages are now displaying live computed data", "success");
+        addLog("Navigate to any Principle page to view results", "info");
+      } else {
+        setStage(4, { status: "error", message: "Metrics not found — re-run pipeline" });
+        addLog("Metrics not found in database — try running pipeline again", "error");
+      }
+    } catch (err: any) {
+      setStage(4, { status: "error", message: err.message });
+      addLog(`Verification failed: ${err.message}`, "error");
+    }
+  }, [dataset, params, addLog, setStage]);
 
-  const activeIdx = STAGES.findIndex(s => s.id === active);
-  const activeStage = STAGES[activeIdx];
+  const stageActions = [runIngestion, loadParams, runL1, runRuntime, checkResults];
+  const stageConfigs = [
+    { label: "Data Ingestion",    sublabel: "Phase 0",   status: stageResults[0].status },
+    { label: "Parameters",        sublabel: "Configure", status: stageResults[1].status },
+    { label: "L1 Metrics",        sublabel: "Phase 1–2", status: stageResults[2].status },
+    { label: "Runtime Metrics",   sublabel: "Phase 3–5", status: stageResults[3].status },
+    { label: "Results",           sublabel: "Dashboard", status: stageResults[4].status },
+  ];
 
-  // Effective IDs for pipeline run
-  const effectiveDatasetId = selectedDatasetId;
-  const effectiveParamSetId = activeParams?.param_set_id ?? "";
+  const runAll = useCallback(async () => {
+    addLog("═══ FULL PIPELINE RUN ═══", "info");
+    await runIngestion();
+    // wait a tick so state updates
+    await new Promise(r => setTimeout(r, 300));
+    await loadParams();
+    await new Promise(r => setTimeout(r, 300));
+    await runL1();
+    await new Promise(r => setTimeout(r, 300));
+    await runRuntime();
+    await new Promise(r => setTimeout(r, 300));
+    await checkResults();
+  }, [runIngestion, loadParams, runL1, runRuntime, checkResults, addLog]);
 
   return (
-    <div style={{ padding: "1.5rem 1.75rem", maxWidth: 1400, fontFamily: "inherit" }}>
+    <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 1400 }}>
 
-      {/* ── Page header ── */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
         <div>
-          <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.07em", color: "#94a3b8", marginBottom: "0.3rem" }}>
-            RoZetta Technology — ETL &amp; Metrics Pipeline
-          </div>
-          <h1 style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0E2D5C", margin: 0, lineHeight: 1.2 }}>
-            Data Processing Pipeline
+          <h1 style={{ fontSize: "1.125rem", fontWeight: 800, color: "hsl(220 35% 12%)", margin: 0, letterSpacing: "-0.02em" }}>
+            ETL Pipeline — Data Processing Workflow
           </h1>
-          <p style={{ fontSize: "0.8125rem", color: "#64748b", marginTop: "0.3rem", marginBottom: 0 }}>
-            End-to-end: Bloomberg ingestion → L1/L2 metrics → Beta → Cost of Equity → Wealth Creation indices
+          <p style={{ fontSize: "0.75rem", color: SLATE, margin: "0.25rem 0 0" }}>
+            Bloomberg Excel → PostgreSQL → L1 Metrics → Runtime Metrics → Dashboard
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.625rem", alignItems: "center", flexShrink: 0 }}>
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: "0.4rem",
-            padding: "0.4rem 0.875rem", borderRadius: 999,
-            border: `1px solid ${backendOnline ? "#bbf7d0" : "#e2e8f0"}`,
-            background: backendOnline ? "#f0fdf4" : "#f8fafc",
-            fontSize: "0.75rem", fontWeight: 600,
-            color: backendOnline ? "#166534" : "#64748b",
-          }}>
-            <div style={{ width: 7, height: 7, borderRadius: "50%", background: backendOnline ? "#22c55e" : "#94a3b8", boxShadow: backendOnline ? "0 0 6px #22c55e" : undefined }} />
-            {backendOnline === null ? "Connecting…" : backendOnline ? "API Connected" : "API Offline — Mock Data"}
-          </div>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
           <button
-            data-testid="button-refresh-pipeline"
-            onClick={() => { checkHealth(); if (backendOnline) loadConfig(); }} disabled={loading}
-            style={{ display: "flex", alignItems: "center", gap: "0.375rem", padding: "0.4rem 0.875rem", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", color: "#0E2D5C", cursor: loading ? "wait" : "pointer", fontSize: "0.75rem", fontWeight: 600, opacity: loading ? 0.6 : 1, boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
+            onClick={runAll}
+            style={{
+              display: "flex", alignItems: "center", gap: "0.375rem",
+              padding: "0.5rem 1rem",
+              background: NAVY, color: "#fff",
+              border: "none", borderRadius: 8,
+              fontSize: "0.8125rem", fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 2px 8px hsl(213 75% 22% / 0.3)",
+            }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: loading ? "spin 1s linear infinite" : undefined }}>
-              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polygon points="5 3 19 12 5 21 5 3"/>
             </svg>
-            Refresh
+            Run Full Pipeline
           </button>
         </div>
       </div>
 
-      {/* ── Pipeline Configuration Panel ── */}
-      <PipelineConfigPanel
-        backendOnline={backendOnline}
-        selectedDatasetId={selectedDatasetId}
-        onDatasetChange={setSelectedDatasetId}
-        activeParams={activeParams}
-        datasets={datasets}
-        loadingConfig={loadingConfig}
-      />
-
-      {/* ── HORIZONTAL STAGE TRACK ── */}
-      <div style={{ marginBottom: "1.75rem" }}>
-        {/* Track label */}
-        <div style={{ fontSize: "0.6875rem", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.07em", color: "#94a3b8", marginBottom: "0.75rem" }}>
-          Pipeline Stages — click a stage to explore
-        </div>
-
-        {/* Stage cards row */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 0, position: "relative" }}>
-
-          {/* Background connector line */}
-          <div style={{ position: "absolute", top: 44, left: "10%", right: "10%", height: 3, background: "#e2e8f0", zIndex: 0, borderRadius: 2 }} />
-          {/* Progress fill */}
-          <div style={{ position: "absolute", top: 44, left: "10%", width: `${(activeIdx / (STAGES.length - 1)) * 80}%`, height: 3, background: "#0E2D5C", zIndex: 1, borderRadius: 2, transition: "width 400ms ease" }} />
-
-          {STAGES.map((stage, idx) => {
-            const isActive = stage.id === active;
-            const isPast   = idx < activeIdx;
-            const isFuture = idx > activeIdx;
-
-            return (
-              <button
-                key={stage.id}
-                data-testid={`stepper-${stage.id}`}
-                onClick={() => setActive(stage.id)}
-                style={{
-                  display: "flex", flexDirection: "column", alignItems: "center",
-                  gap: "0.625rem", padding: "0 0.5rem 1rem 0.5rem",
-                  background: "transparent", border: "none", cursor: "pointer",
-                  position: "relative", zIndex: 2,
-                  outline: "none",
-                }}
-              >
-                {/* Circle node */}
-                <div style={{
-                  width: 52, height: 52, borderRadius: "50%",
-                  background: isActive ? stage.accent : isPast ? "#1a8a5c" : "#fff",
-                  border: `3px solid ${isActive ? stage.accent : isPast ? "#1a8a5c" : "#cbd5e1"}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: isActive
-                    ? `0 0 0 5px ${stage.accentLight}, 0 4px 16px rgba(14,45,92,0.25)`
-                    : isPast ? "0 2px 8px rgba(26,138,92,0.2)" : "0 1px 4px rgba(0,0,0,0.07)",
-                  transition: "all 220ms ease",
-                  flexShrink: 0,
-                }}>
-                  {isPast ? (
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5">
-                      <path d="m20 6-11 11-5-5" />
-                    </svg>
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={isActive ? "#fff" : isFuture ? "#94a3b8" : "#fff"} strokeWidth="2">
-                      <path d={stage.icon} />
-                    </svg>
-                  )}
-                </div>
-
-                {/* Stage number badge */}
-                <div style={{
-                  fontSize: "0.5625rem", fontWeight: 800,
-                  textTransform: "uppercase" as const, letterSpacing: "0.06em",
-                  color: isActive ? stage.accent : isPast ? "#1a8a5c" : "#94a3b8",
-                  background: isActive ? stage.accentLight : isPast ? "rgba(26,138,92,0.08)" : "#f8fafc",
-                  border: `1px solid ${isActive ? stage.accentBorder : isPast ? "rgba(26,138,92,0.25)" : "#e2e8f0"}`,
-                  padding: "0.15rem 0.55rem", borderRadius: 999,
-                }}>
-                  {stage.sublabel}
-                </div>
-
-                {/* Stage name — BIG and bold */}
-                <div style={{
-                  fontSize: "0.875rem",
-                  fontWeight: isActive ? 800 : 600,
-                  color: isActive ? stage.accent : isFuture ? "#94a3b8" : "#475569",
-                  textAlign: "center", lineHeight: 1.25,
-                  transition: "color 200ms",
-                }}>
-                  {stage.label}
-                </div>
-
-                {/* Substage count pill */}
-                {(stage.substages as unknown[]).length > 0 && (
-                  <div style={{
-                    fontSize: "0.625rem", color: isActive ? stage.accent : "#94a3b8",
-                    background: isActive ? stage.accentLight : "#f8fafc",
-                    border: `1px solid ${isActive ? stage.accentBorder : "#e2e8f0"}`,
-                    padding: "0.1rem 0.5rem", borderRadius: 999,
-                  }}>
-                    {(stage.substages as unknown[]).length} substages
-                  </div>
-                )}
-
-                {/* Active indicator dot */}
-                {isActive && (
-                  <div style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 6, height: 6, borderRadius: "50%", background: stage.accent }} />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Active stage detail panel ── */}
+      {/* ── Stage stepper ────────────────────────────────────────────────── */}
       <div style={{
         background: "#fff",
-        border: `1px solid ${activeStage.accentBorder}`,
-        borderTop: `4px solid ${activeStage.accent}`,
         borderRadius: 12,
+        border: "1px solid hsl(210 16% 90%)",
         padding: "1.5rem",
-        boxShadow: `0 4px 24px rgba(14,45,92,0.07)`,
-        marginBottom: "1.5rem",
+        boxShadow: "0 1px 4px hsl(213 40% 50% / 0.06)",
       }}>
-        {/* Panel header */}
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.25rem", paddingBottom: "1rem", borderBottom: "1px solid #f1f5f9" }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: activeStage.accentLight, border: `2px solid ${activeStage.accentBorder}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={activeStage.accent} strokeWidth="2">
-              <path d={activeStage.icon} />
-            </svg>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.1rem" }}>
-              <h2 style={{ fontSize: "1rem", fontWeight: 800, color: "#1e293b", margin: 0 }}>{activeStage.label}</h2>
-              <span style={{ fontSize: "0.625rem", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.05em", background: activeStage.accentLight, color: activeStage.accent, border: `1px solid ${activeStage.accentBorder}`, padding: "0.15rem 0.6rem", borderRadius: 999 }}>
-                {activeStage.sublabel}
-              </span>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontSize: "0.625rem", fontWeight: 700, padding: "0.15rem 0.6rem", borderRadius: 999 }}>
-                <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#22c55e" }} /> COMPLETE
-              </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+          {stageConfigs.map((stage, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center" }}>
+              <StageNode
+                num={i + 1}
+                label={stage.label}
+                sublabel={stage.sublabel}
+                status={stage.status}
+                isActive={activeStage === i}
+                onClick={() => { setActiveStage(i); stageActions[i](); }}
+              />
+              {i < stageConfigs.length - 1 && (
+                <div style={{
+                  width: 60, height: 2,
+                  background: stageResults[i].status === "done"
+                    ? GREEN
+                    : stageResults[i].status === "running"
+                      ? GOLD
+                      : "hsl(210 16% 88%)",
+                  transition: "background 0.4s",
+                  margin: "0 0.25rem",
+                  marginTop: "-1.5rem",
+                }} />
+              )}
             </div>
-            <p style={{ fontSize: "0.8125rem", color: "#64748b", margin: 0 }}>{activeStage.desc}</p>
-          </div>
-
-          {/* Step navigation */}
-          <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
-            <button onClick={() => activeIdx > 0 && setActive(STAGES[activeIdx - 1].id)} disabled={activeIdx === 0}
-              style={{ display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.4rem 0.75rem", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", color: "#475569", cursor: activeIdx === 0 ? "not-allowed" : "pointer", opacity: activeIdx === 0 ? 0.35 : 1, fontSize: "0.75rem", fontWeight: 600 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m15 18-6-6 6-6"/></svg> Prev
-            </button>
-            <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
-              {STAGES.map((s, i) => (
-                <div key={s.id} onClick={() => setActive(s.id)} style={{ width: i === activeIdx ? 20 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? activeStage.accent : i < activeIdx ? "#1a8a5c" : "#e2e8f0", cursor: "pointer", transition: "all 200ms" }} />
-              ))}
-            </div>
-            <button onClick={() => activeIdx < STAGES.length - 1 && setActive(STAGES[activeIdx + 1].id)} disabled={activeIdx === STAGES.length - 1}
-              style={{ display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.4rem 0.75rem", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", color: "#475569", cursor: activeIdx === STAGES.length - 1 ? "not-allowed" : "pointer", opacity: activeIdx === STAGES.length - 1 ? 0.35 : 1, fontSize: "0.75rem", fontWeight: 600 }}>
-              Next <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>
-            </button>
-          </div>
+          ))}
         </div>
 
-        {/* Panel content */}
-        {active === "ingestion"     && <IngestionPanel     substages={STAGES[0].substages} />}
-        {active === "l1"            && <L1Panel            substages={STAGES[1].substages} />}
-        {active === "runtime"       && <RuntimePanel       substages={STAGES[2].substages} />}
-        {active === "orchestration" && <OrchestrationPanel substages={STAGES[3].substages} />}
-        {active === "results"       && <ResultsPanel />}
+        {/* Stage result summary */}
+        {stageResults[activeStage].message && (
+          <div style={{
+            marginTop: "1.25rem",
+            padding: "0.75rem 1rem",
+            borderRadius: 8,
+            background: stageResults[activeStage].status === "done"
+              ? "hsl(152 60% 40% / 0.07)"
+              : stageResults[activeStage].status === "error"
+                ? "hsl(0 65% 50% / 0.07)"
+                : "hsl(38 60% 52% / 0.07)",
+            border: `1px solid ${
+              stageResults[activeStage].status === "done"
+                ? "hsl(152 60% 40% / 0.25)"
+                : stageResults[activeStage].status === "error"
+                  ? "hsl(0 65% 50% / 0.25)"
+                  : "hsl(38 60% 52% / 0.25)"
+            }`,
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+          }}>
+            {stageResults[activeStage].status === "running" && <Spinner size={16} />}
+            <div>
+              <div style={{ fontSize: "0.8125rem", fontWeight: 700, color: "hsl(220 35% 15%)" }}>
+                {stageResults[activeStage].message}
+              </div>
+              {stageResults[activeStage].detail && (
+                <div style={{ fontSize: "0.6875rem", color: SLATE, marginTop: "0.125rem" }}>
+                  {stageResults[activeStage].detail}
+                </div>
+              )}
+            </div>
+            {stageResults[activeStage].records !== undefined && (
+              <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                <div style={{ fontSize: "1.0625rem", fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>
+                  {stageResults[activeStage].records!.toLocaleString()}
+                </div>
+                <div style={{ fontSize: "0.5625rem", color: SLATE, textTransform: "uppercase", letterSpacing: "0.04em" }}>records</div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Footer trigger ── */}
-      <div style={{
-        padding: "1.125rem 1.5rem",
-        background: effectiveDatasetId && effectiveParamSetId
-          ? "linear-gradient(90deg, rgba(14,45,92,0.03) 0%, rgba(200,146,42,0.04) 100%)"
-          : "#fff",
-        border: effectiveDatasetId && effectiveParamSetId
-          ? "1px solid rgba(14,45,92,0.14)"
-          : "1px solid #e2e8f0",
-        borderRadius: 10,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: "1rem",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-      }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: "0.875rem", color: "#1e293b", marginBottom: "0.25rem" }}>Run Full Pipeline</div>
-          <div style={{ fontSize: "0.6875rem", color: "#64748b", display: "flex", flexDirection: "column" as const, gap: "0.1rem" }}>
-            <div>
-              Step 1 — <code style={{ fontFamily: "monospace", background: "#f8fafc", padding: "0.1rem 0.3rem", borderRadius: 3 }}>POST /api/v1/metrics/calculate-l1</code> (~52s)
-            </div>
-            <div>
-              Step 2 — <code style={{ fontFamily: "monospace", background: "#f8fafc", padding: "0.1rem 0.3rem", borderRadius: 3 }}>
-                POST /api/v1/metrics/runtime-metrics?dataset_id={effectiveDatasetId ? effectiveDatasetId.slice(0,8)+"…" : "<select dataset>"}&amp;param_set_id={effectiveParamSetId ? effectiveParamSetId.slice(0,8)+"…" : "<loading>"}
-              </code> (~101s, ~296k records)
-            </div>
-          </div>
-          {!effectiveDatasetId && (
-            <div style={{ marginTop: "0.375rem", fontSize: "0.625rem", color: "#C8922A", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.3rem" }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      {/* ── Main content: 2 columns ──────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", alignItems: "start" }}>
+
+        {/* Left: Stage detail panels */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+          {/* Stage 1: Data Ingestion */}
+          <StagePanel
+            num={1} title="Data Ingestion" status={stageResults[0].status}
+            onRun={runIngestion} active={activeStage === 0}
+          >
+            {/* Bloomberg upload zone */}
+            <div
+              onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={e => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files[0]; if (f) setUploadFile(f); }}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: `2px dashed ${isDragging ? NAVY : "hsl(210 16% 85%)"}`,
+                borderRadius: 10,
+                padding: "1.5rem",
+                textAlign: "center",
+                cursor: "pointer",
+                background: isDragging ? "hsl(213 75% 22% / 0.04)" : "hsl(210 20% 99%)",
+                transition: "all 0.2s",
+                marginBottom: "0.75rem",
+              }}
+            >
+              <input ref={fileInputRef} type="file" accept=".xlsx,.csv,.xls" style={{ display: "none" }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) setUploadFile(f); }} />
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={SLATE} strokeWidth="1.5" style={{ margin: "0 auto 0.5rem" }}>
+                <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
               </svg>
-              Select a dataset in Pipeline Configuration above before running
+              {uploadFile ? (
+                <div>
+                  <div style={{ fontSize: "0.8125rem", fontWeight: 700, color: NAVY }}>{uploadFile.name}</div>
+                  <div style={{ fontSize: "0.6875rem", color: SLATE }}>{(uploadFile.size / 1024).toFixed(0)} KB</div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "hsl(220 30% 25%)" }}>Drop Bloomberg XLSX here</div>
+                  <div style={{ fontSize: "0.6875rem", color: SLATE, marginTop: "0.25rem" }}>or click to browse · .xlsx .xls .csv</div>
+                </div>
+              )}
             </div>
+            {dataset && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                {[
+                  { label: "Companies", value: dataset.companies.count },
+                  { label: "Sectors",   value: dataset.sectors.count },
+                  { label: "Min Year",  value: dataset.data_coverage.min_year },
+                  { label: "Max Year",  value: dataset.data_coverage.max_year },
+                ].map(kv => (
+                  <div key={kv.label} style={{ padding: "0.5rem 0.625rem", background: "hsl(213 40% 97%)", borderRadius: 7, border: "1px solid hsl(213 30% 90%)" }}>
+                    <div style={{ fontSize: "0.5625rem", color: SLATE, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.04em" }}>{kv.label}</div>
+                    <div style={{ fontSize: "1rem", fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>{kv.value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </StagePanel>
+
+          {/* Stage 2: Parameters */}
+          <StagePanel
+            num={2} title="Parameter Configuration" status={stageResults[1].status}
+            onRun={loadParams} active={activeStage === 1}
+          >
+            {params ? (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.625rem" }}>
+                  <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: NAVY }}>{params.param_set_name}</span>
+                  <span style={{ fontSize: "0.5625rem", color: SLATE, background: "hsl(213 30% 95%)", padding: "0.15rem 0.5rem", borderRadius: 999 }}>
+                    {params.is_active ? "ACTIVE" : "INACTIVE"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem", maxHeight: 280, overflowY: "auto" }}>
+                  {Object.entries(PARAM_META).map(([key, meta]) => {
+                    const val = paramEdits[key] ?? (params.parameters as any)[key];
+                    if (val === undefined) return null;
+                    return (
+                      <div key={key} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <label style={{ fontSize: "0.625rem", fontWeight: 600, color: SLATE, flex: 1, lineHeight: 1.3 }}>{meta.label}</label>
+                        {meta.type === "boolean" ? (
+                          <input type="checkbox" checked={!!val} style={{ cursor: "pointer" }}
+                            onChange={e => setParamEdits(p => ({ ...p, [key]: e.target.checked }))} />
+                        ) : meta.type === "select" ? (
+                          <select value={String(val)} style={{ fontSize: "0.6875rem", padding: "0.2rem 0.375rem", borderRadius: 5, border: "1px solid hsl(210 16% 86%)", background: "#fff" }}
+                            onChange={e => setParamEdits(p => ({ ...p, [key]: e.target.value }))}>
+                            {meta.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        ) : (
+                          <input type="number" value={Number(val)} style={{ width: 80, fontSize: "0.6875rem", padding: "0.2rem 0.375rem", borderRadius: 5, border: "1px solid hsl(210 16% 86%)", textAlign: "right" }}
+                            onChange={e => setParamEdits(p => ({ ...p, [key]: Number(e.target.value) }))} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      addLog("Saving parameter overrides…", "info");
+                      await updateParameterSet(params.param_set_id, paramEdits);
+                      addLog("Parameters saved ✓", "success");
+                    } catch (e: any) { addLog(`Save failed: ${e.message}`, "error"); }
+                  }}
+                  style={{ marginTop: "0.75rem", width: "100%", padding: "0.45rem", borderRadius: 7, background: NAVY, color: "#fff", border: "none", fontWeight: 700, fontSize: "0.75rem", cursor: "pointer" }}
+                >
+                  Save Parameters
+                </button>
+              </div>
+            ) : (
+              <div style={{ color: SLATE, fontSize: "0.75rem", textAlign: "center", padding: "1rem" }}>
+                Run Stage 1 first, then click "Load Parameters"
+              </div>
+            )}
+          </StagePanel>
+        </div>
+
+        {/* Right: Stages 3–5 + log */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+          {/* Stage 3: L1 */}
+          <StagePanel num={3} title="L1 Metrics Computation" status={stageResults[2].status} onRun={runL1} active={activeStage === 2}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+              {[
+                { phase: "Phase 1A", metrics: "Calc MC, Calc Assets, Calc OA", parallel: true },
+                { phase: "Phase 1B", metrics: "Calc Op Cost, Non Op Cost, Tax Cost, XO Cost", parallel: true },
+                { phase: "Phase 2",  metrics: "Calc ECF, Non Div ECF, Calc EE, Calc FY TSR", parallel: false },
+                { phase: "L2 Core", metrics: "EP, PAT_EX, XO_COST_EX, FC", parallel: false },
+              ].map(p => (
+                <div key={p.phase} style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.375rem 0.5rem", borderRadius: 6, background: "hsl(210 20% 98%)", border: "1px solid hsl(210 16% 90%)" }}>
+                  <div style={{ width: 52, flexShrink: 0 }}>
+                    <div style={{ fontSize: "0.5625rem", fontWeight: 800, color: NAVY, textTransform: "uppercase" }}>{p.phase}</div>
+                    {p.parallel && <div style={{ fontSize: "0.5rem", color: GREEN, fontWeight: 700 }}>‖ PARALLEL</div>}
+                  </div>
+                  <div style={{ fontSize: "0.6875rem", color: "hsl(220 20% 30%)", lineHeight: 1.4 }}>{p.metrics}</div>
+                  <div style={{ marginLeft: "auto", flexShrink: 0 }}>
+                    {stageResults[2].status === "done" ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                    ) : stageResults[2].status === "running" ? (
+                      <Spinner size={12} />
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </StagePanel>
+
+          {/* Stage 4: Runtime */}
+          <StagePanel num={4} title="Runtime Metrics" status={stageResults[3].status} onRun={runRuntime} active={activeStage === 3}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              {[
+                { name: "Beta Rounding",     detail: "4-tier fallback, pre-computed" },
+                { name: "Risk-Free Rate Rf", detail: "Fixed or floating approach" },
+                { name: "Cost of Equity Ke", detail: "Ke = Rf + Beta × MRP" },
+                { name: "FV-ECF",            detail: "4 intervals: 1Y/3Y/5Y/10Y" },
+                { name: "TER & TER-Ke",      detail: "Total Expense Ratio · 4 intervals" },
+                { name: "TER Alpha",         detail: "Risk-adjusted outperformance" },
+              ].map((m, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.3rem 0.5rem", borderRadius: 6, background: "hsl(210 20% 98%)", border: "1px solid hsl(210 16% 90%)" }}>
+                  <div style={{
+                    width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                    background: stageResults[3].status === "done" ? GREEN : stageResults[3].status === "running" ? GOLD : "hsl(210 16% 88%)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {stageResults[3].status === "done" ? (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                    ) : stageResults[3].status === "running" ? (
+                      <Spinner size={10} />
+                    ) : <span style={{ fontSize: "0.5rem", color: SLATE, fontWeight: 700 }}>{i + 1}</span>}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.6875rem", fontWeight: 600, color: "hsl(220 25% 20%)" }}>{m.name}</div>
+                    <div style={{ fontSize: "0.5625rem", color: SLATE }}>{m.detail}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </StagePanel>
+
+          {/* Stage 5: Results */}
+          <StagePanel num={5} title="Results & Dashboard" status={stageResults[4].status} onRun={checkResults} active={activeStage === 4}>
+            {stageResults[4].status === "done" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <div style={{ padding: "0.75rem", background: "hsl(152 60% 40% / 0.08)", borderRadius: 8, border: "1px solid hsl(152 60% 40% / 0.25)", textAlign: "center" }}>
+                  <div style={{ fontSize: "0.875rem", fontWeight: 800, color: "hsl(152 50% 28%)" }}>Pipeline Complete ✓</div>
+                  <div style={{ fontSize: "0.6875rem", color: SLATE, marginTop: "0.25rem" }}>All metrics computed and verified</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.375rem" }}>
+                  {[
+                    { label: "Dashboard", path: "/" },
+                    { label: "Principle 1", path: "/principles/1" },
+                    { label: "Principle 2", path: "/principles/2" },
+                    { label: "Principle 3", path: "/principles/3" },
+                    { label: "Principle 4", path: "/principles/4" },
+                    { label: "Download", path: "/download" },
+                  ].map(l => (
+                    <Link key={l.path} href={l.path}>
+                      <a style={{
+                        display: "block", textAlign: "center",
+                        padding: "0.4rem 0.5rem",
+                        background: "hsl(213 40% 97%)", borderRadius: 6,
+                        border: "1px solid hsl(213 30% 88%)",
+                        fontSize: "0.6875rem", fontWeight: 600, color: NAVY,
+                        textDecoration: "none",
+                      }}>
+                        {l.label} →
+                      </a>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ color: SLATE, fontSize: "0.75rem", textAlign: "center", padding: "1rem" }}>
+                Complete all stages to view results
+              </div>
+            )}
+          </StagePanel>
+        </div>
+      </div>
+
+      {/* ── Log console ───────────────────────────────────────────────────── */}
+      <div style={{
+        background: "hsl(220 30% 8%)",
+        borderRadius: 10,
+        border: "1px solid hsl(220 20% 18%)",
+        padding: "0.875rem 1rem",
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.625rem" }}>
+          <div style={{ display: "flex", gap: "0.3rem" }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "hsl(0 65% 55%)" }} />
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "hsl(38 70% 52%)" }} />
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "hsl(120 50% 45%)" }} />
+          </div>
+          <span style={{ fontSize: "0.6875rem", color: "hsl(220 15% 55%)", fontWeight: 600 }}>Pipeline Log</span>
+          {logs.length > 0 && (
+            <button onClick={() => setLogs([])}
+              style={{ marginLeft: "auto", fontSize: "0.5625rem", color: "hsl(220 15% 45%)", background: "none", border: "none", cursor: "pointer" }}>
+              Clear
+            </button>
           )}
         </div>
-        <button
-          data-testid="button-trigger-orchestration"
-          disabled={!backendOnline || !effectiveDatasetId || !effectiveParamSetId}
-          style={{
-            display: "flex", alignItems: "center", gap: "0.5rem",
-            padding: "0.625rem 1.5rem", borderRadius: 7, border: "none",
-            background: backendOnline && effectiveDatasetId && effectiveParamSetId ? "#0E2D5C" : "#e2e8f0",
-            color: backendOnline && effectiveDatasetId && effectiveParamSetId ? "white" : "#94a3b8",
-            fontSize: "0.8125rem", fontWeight: 700,
-            cursor: backendOnline && effectiveDatasetId && effectiveParamSetId ? "pointer" : "not-allowed",
-            whiteSpace: "nowrap" as const, flexShrink: 0,
-            boxShadow: backendOnline && effectiveDatasetId && effectiveParamSetId ? "0 4px 12px rgba(14,45,92,0.3)" : undefined,
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <polygon points="5 3 19 12 5 21 5 3" />
-          </svg>
-          {!backendOnline ? "Backend Offline" : !effectiveDatasetId ? "Select Dataset" : "Run Orchestration"}
-        </button>
+        <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.1rem" }}>
+          {logs.length === 0 ? (
+            <span style={{ color: "hsl(220 15% 40%)", fontSize: "0.6875rem" }}>$ awaiting pipeline run…</span>
+          ) : (
+            logs.map((l, i) => (
+              <div key={i} style={{
+                fontSize: "0.6875rem", lineHeight: 1.6,
+                color: l.type === "success" ? "hsl(120 50% 60%)" : l.type === "error" ? "hsl(0 65% 65%)" : l.type === "warn" ? "hsl(38 70% 62%)" : "hsl(210 20% 70%)",
+              }}>
+                {l.text}
+              </div>
+            ))
+          )}
+          <div ref={logEndRef} />
+        </div>
       </div>
 
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.4); } }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
       `}</style>
+    </div>
+  );
+}
+
+// ── Stage panel wrapper ────────────────────────────────────────────────────
+function StagePanel({
+  num, title, status, onRun, active, children,
+}: {
+  num: number; title: string; status: StageStatus;
+  onRun: () => void; active: boolean;
+  children?: React.ReactNode;
+}) {
+  const borderColor = status === "done"   ? "hsl(152 60% 40%)"
+    : status === "running" ? "hsl(38 60% 52%)"
+    : status === "error"   ? "hsl(0 65% 50%)"
+    : active               ? "hsl(213 75% 22%)"
+    : "hsl(210 16% 90%)";
+
+  return (
+    <div style={{
+      background: "#fff",
+      borderRadius: 10,
+      border: `1px solid ${borderColor}`,
+      boxShadow: active ? `0 0 0 2px hsl(213 75% 22% / 0.12)` : "0 1px 4px hsl(213 40% 50% / 0.05)",
+      overflow: "hidden",
+    }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: "0.625rem",
+        padding: "0.75rem 1rem",
+        borderBottom: `1px solid ${active || status !== "pending" ? borderColor : "hsl(210 16% 92%)"}`,
+        background: active ? "hsl(213 75% 22% / 0.03)" : "#fff",
+      }}>
+        <div style={{
+          width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+          background: status === "done" ? GREEN : status === "running" ? GOLD : status === "error" ? RED : active ? NAVY : "hsl(210 16% 88%)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "0.6875rem", fontWeight: 800, color: "#fff",
+        }}>
+          {status === "running" ? <Spinner size={13} /> : status === "done" ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+          ) : status === "error" ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          ) : num}
+        </div>
+        <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "hsl(220 35% 12%)", flex: 1 }}>{title}</span>
+        <button
+          onClick={onRun}
+          style={{
+            padding: "0.3rem 0.75rem",
+            background: status === "done" ? "hsl(152 60% 40% / 0.1)" : active ? NAVY : "hsl(210 20% 95%)",
+            color: status === "done" ? "hsl(152 50% 30%)" : active ? "#fff" : "hsl(215 15% 40%)",
+            border: "none", borderRadius: 6,
+            fontSize: "0.6875rem", fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          {status === "done" ? "Re-run" : status === "running" ? "Running…" : "Run"}
+        </button>
+      </div>
+      {children && (
+        <div style={{ padding: "0.875rem 1rem" }}>{children}</div>
+      )}
     </div>
   );
 }
