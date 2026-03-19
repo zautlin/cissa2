@@ -316,11 +316,12 @@ class TERService:
         df['load_trte'] = df['fv_ecf'] + (df['calc_mc'] - df['calc_mc_lag'])
         
         # Step 2: Calculate Load TER
-        # Load TER = (Load TRTE / Open MC) - 1
+        # Load TER = (1 + Load TRTE / Open MC)^(1/interval) - 1
         # Guard against division by zero
+        exponent_ter = 1.0 / interval
         df['load_ter'] = np.where(
             df['open_mc'].notna() & (df['open_mc'] != 0),
-            (df['load_trte'] / df['open_mc']) - 1,
+            np.power(1 + (df['load_trte'] / df['open_mc']), exponent_ter) - 1,
             np.nan
         )
         
