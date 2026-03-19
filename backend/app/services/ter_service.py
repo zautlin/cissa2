@@ -396,6 +396,7 @@ class TERService:
             Tuple of (DataFrame with NULL rows added, null_row_breakdown dict)
         """
         # Get unique tickers and their min/max fiscal years from fundamentals
+        # This ensures we have a complete list of all tickers and their year ranges
         ticker_year_info = fundamentals_df.groupby('ticker')['fiscal_year'].agg(['min', 'max']).reset_index()
         
         null_rows = []
@@ -412,15 +413,27 @@ class TERService:
         
         for _, row in ticker_year_info.iterrows():
             ticker = row['ticker']
-            min_year = int(row['min'])
-            max_year = int(row['max'])
+            fundamental_min_year = int(row['min'])
+            fundamental_max_year = int(row['max'])
             
-            # For 1Y: first year (min_year) should have NULL
-            if min_year <= max_year:
+            # Find the ACTUAL min/max years for this ticker in the calculated TER data
+            # This is important because calculated data might start later than fundamentals
+            # (e.g., if Calc MC data starts in 2000 but fundamentals start in 1994)
+            ticker_ter_data = ter_df[ter_df['ticker'] == ticker]
+            
+            if len(ticker_ter_data) > 0:
+                calculated_min_year = ticker_ter_data['fiscal_year'].min()
+                calculated_max_year = ticker_ter_data['fiscal_year'].max()
+            else:
+                # If no calculated data, skip NULL row generation for this ticker
+                continue
+            
+            # For 1Y: first year should have NULL
+            if fundamental_min_year <= fundamental_max_year:
                 # Add NULL for TER
                 null_rows.append({
                     'ticker': ticker,
-                    'fiscal_year': min_year,
+                    'fiscal_year': fundamental_min_year,
                     'TER_Y': np.nan,
                     'TER_TYPE': 'Calc 1Y TER'
                 })
@@ -428,7 +441,7 @@ class TERService:
                 # Add NULL for TER-KE
                 null_rows.append({
                     'ticker': ticker,
-                    'fiscal_year': min_year,
+                    'fiscal_year': fundamental_min_year,
                     'TER_Y': np.nan,
                     'TER_TYPE': 'Calc 1Y TER-KE'
                 })
@@ -436,8 +449,8 @@ class TERService:
             
             # For 3Y: first 3 years should have NULL
             for year_offset in range(0, 3):
-                target_year = min_year + year_offset
-                if target_year <= max_year:
+                target_year = fundamental_min_year + year_offset
+                if target_year <= fundamental_max_year:
                     # Add NULL for TER
                     null_rows.append({
                         'ticker': ticker,
@@ -457,8 +470,8 @@ class TERService:
             
             # For 5Y: first 5 years should have NULL
             for year_offset in range(0, 5):
-                target_year = min_year + year_offset
-                if target_year <= max_year:
+                target_year = fundamental_min_year + year_offset
+                if target_year <= fundamental_max_year:
                     # Add NULL for TER
                     null_rows.append({
                         'ticker': ticker,
@@ -478,8 +491,8 @@ class TERService:
             
             # For 10Y: first 10 years should have NULL
             for year_offset in range(0, 10):
-                target_year = min_year + year_offset
-                if target_year <= max_year:
+                target_year = fundamental_min_year + year_offset
+                if target_year <= fundamental_max_year:
                     # Add NULL for TER
                     null_rows.append({
                         'ticker': ticker,
