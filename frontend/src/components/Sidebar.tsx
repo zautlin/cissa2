@@ -14,11 +14,11 @@ const navData = [
         color: "hsl(213 75% 30%)",
         badge: "6",
         subItems: [
-          { label: "1.1  Cost of Equity (Ke)", path: "/principles/1" },
-          { label: "1.2  Financial & Capital Bridge", path: "/principles/1" },
-          { label: "1.3  Products & Services Market", path: "/principles/1" },
-          { label: "1.4  Capital Market Predictor", path: "/principles/1" },
-          { label: "1.5  Capital Market Assessment", path: "/principles/1" },
+          { label: "1.1  Cost of Equity (Ke)", path: "/principles/1/1.1" },
+          { label: "1.2  Financial & Capital Bridge", path: "/principles/1/1.2" },
+          { label: "1.3  Products & Services Market", path: "/principles/1/1.3" },
+          { label: "1.4  Capital Market Predictor", path: "/principles/1/1.4" },
+          { label: "1.5  Capital Market Assessment", path: "/principles/1/1.5" },
         ],
       },
       {
@@ -29,11 +29,11 @@ const navData = [
         badge: "★",
         highlight: true,
         subItems: [
-          { label: "2.1  Market Value & EP",           path: "/principles/2" },
-          { label: "2.2  Bow Wave Concept",            path: "/principles/2" },
-          { label: "2.3  Pair of EP Bow Waves",        path: "/principles/2" },
-          { label: "2.4  Long-Term Focus Proof",       path: "/principles/2" },
-          { label: "2.5  Reconciling Wealth Creation", path: "/principles/2" },
+          { label: "2.1  Market Value & EP",           path: "/principles/2/2.1" },
+          { label: "2.2  Bow Wave Concept",            path: "/principles/2/2.2" },
+          { label: "2.3  Pair of EP Bow Waves",        path: "/principles/2/2.3" },
+          { label: "2.4  Long-Term Focus Proof",       path: "/principles/2/2.4" },
+          { label: "2.5  Reconciling Wealth Creation", path: "/principles/2/2.5" },
         ],
       },
       {
@@ -43,11 +43,11 @@ const navData = [
         color: "hsl(38 65% 45%)",
         badge: "5",
         subItems: [
-          { label: "3.1  TER & TSR Overview",    path: "/principles/3" },
-          { label: "3.2  TER Alpha",             path: "/principles/3" },
-          { label: "3.3  ECF Decomposition",     path: "/principles/3" },
-          { label: "3.4  International TER",     path: "/principles/3" },
-          { label: "3.5  Wealth Creation ($B)",  path: "/principles/3" },
+          { label: "3.1  TER & TSR Overview",    path: "/principles/3/3.1" },
+          { label: "3.2  TER Alpha",             path: "/principles/3/3.2" },
+          { label: "3.3  ECF Decomposition",     path: "/principles/3/3.3" },
+          { label: "3.4  International TER",     path: "/principles/3/3.4" },
+          { label: "3.5  Wealth Creation ($B)",  path: "/principles/3/3.5" },
         ],
       },
       {
@@ -57,11 +57,11 @@ const navData = [
         color: "hsl(160 55% 38%)",
         badge: "5",
         subItems: [
-          { label: "4.1  EEAI Overview",               path: "/principles/4" },
-          { label: "4.2  EEAI Heatmap (Companies)",    path: "/principles/4" },
-          { label: "4.3  EP Delivered vs Required",    path: "/principles/4" },
-          { label: "4.4  Sector Aggregations",         path: "/principles/4" },
-          { label: "4.5  Sector EP Score Heatmap",     path: "/principles/4" },
+          { label: "4.1  EEAI Overview",               path: "/principles/4/4.1" },
+          { label: "4.2  EEAI Heatmap (Companies)",    path: "/principles/4/4.2" },
+          { label: "4.3  EP Delivered vs Required",    path: "/principles/4/4.3" },
+          { label: "4.4  Sector Aggregations",         path: "/principles/4/4.4" },
+          { label: "4.5  Sector EP Score Heatmap",     path: "/principles/4/4.5" },
         ],
       },
       {
@@ -71,11 +71,11 @@ const navData = [
         color: "hsl(280 55% 50%)",
         badge: "5",
         subItems: [
-          { label: "5.1  Cost Structure by Sector", path: "/principles/5" },
-          { label: "5.2  Revenue & EE Growth",      path: "/principles/5" },
-          { label: "5.3  ROA & Profit Margin",      path: "/principles/5" },
-          { label: "5.4  Asset Intensity",          path: "/principles/5" },
-          { label: "5.5  ESG & Sustainability",     path: "/principles/5" },
+          { label: "5.1  Cost Structure by Sector", path: "/principles/5/5.1" },
+          { label: "5.2  Revenue & EE Growth",      path: "/principles/5/5.2" },
+          { label: "5.3  ROA & Profit Margin",      path: "/principles/5/5.3" },
+          { label: "5.4  Asset Intensity",          path: "/principles/5/5.4" },
+          { label: "5.5  ESG & Sustainability",     path: "/principles/5/5.5" },
         ],
       },
       {
@@ -85,13 +85,19 @@ const navData = [
         color: "hsl(0 60% 48%)",
         badge: "5",
         subItems: [
-          { label: "6.1  Beta Distribution",        path: "/principles/6" },
-          { label: "6.2  Ke Decomposition",         path: "/principles/6" },
-          { label: "6.3  Risk Free Rate History",   path: "/principles/6" },
-          { label: "6.4  FV-ECF & Valuation",       path: "/principles/6" },
-          { label: "6.5  TER Decomposition",        path: "/principles/6" },
+          { label: "6.1  Beta Distribution",        path: "/principles/6/6.1" },
+          { label: "6.2  Ke Decomposition",         path: "/principles/6/6.2" },
+          { label: "6.3  Risk Free Rate History",   path: "/principles/6/6.3" },
+          { label: "6.4  FV-ECF & Valuation",       path: "/principles/6/6.4" },
+          { label: "6.5  TER Decomposition",        path: "/principles/6/6.5" },
         ],
       },
+    ],
+  },
+  {
+    section: "Executive",
+    items: [
+      { label: "Executive Dashboard", path: "/executive", icon: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z", subItems: [], execHighlight: true },
     ],
   },
   {
@@ -133,6 +139,10 @@ export default function Sidebar() {
 
   const toggle = (label: string) =>
     setOpenItems(prev => ({ ...prev, [label]: !prev[label] }));
+
+  // Helper: is the current location inside this principle section?
+  const isInsideSection = (basePath: string) =>
+    location === basePath || location.startsWith(basePath + "/");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -229,7 +239,12 @@ export default function Sidebar() {
             {section.items.map((item: any) => {
               const hasChildren = item.subItems && item.subItems.length > 0;
               const isOpen = openItems[item.label];
-              const isActive = location === item.path || (hasChildren && item.subItems!.some((s: any) => location === s.path));
+              // Active if at the base path, or at any sub-path
+              const isActive = isInsideSection(item.path);
+              // Auto-open section that contains active route
+              if (isActive && !isOpen && !openItems[item.label + "__checked"]) {
+                setTimeout(() => setOpenItems(prev => ({ ...prev, [item.label]: true, [item.label + "__checked"]: true })), 0);
+              }
 
               return (
                 <div key={item.label}>
@@ -295,28 +310,48 @@ export default function Sidebar() {
 
                       {isOpen && (
                         <div style={{ paddingLeft: "1.625rem", paddingBottom: "0.25rem" }}>
-                          {item.subItems!.map((sub: any) => (
-                            <Link
-                              key={sub.label}
-                              href={sub.path}
-                              data-testid={`nav-sub-${sub.label.replace(/\s+/g, "-").toLowerCase()}`}
-                              style={{
-                                display: "block",
-                                padding: "0.3rem 1rem 0.3rem 0.75rem",
-                                fontSize: "0.6875rem",
-                                fontWeight: 500,
-                                color: "hsl(220 20% 38%)",
-                                textDecoration: "none",
-                                borderLeft: "1px solid hsl(213 30% 86%)",
-                                marginLeft: "0.25rem",
-                                borderRadius: "0 0.25rem 0.25rem 0",
-                              }}
-                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "hsl(213 75% 22%)"; (e.currentTarget as HTMLElement).style.background = "hsl(213 40% 97%)"; }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "hsl(220 20% 38%)"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                            >
-                              {sub.label}
-                            </Link>
-                          ))}
+                          {item.subItems!.map((sub: any) => {
+                            const subActive = location === sub.path;
+                            return (
+                              <Link
+                                key={sub.label}
+                                href={sub.path}
+                                data-testid={`nav-sub-${sub.label.replace(/\s+/g, "-").toLowerCase()}`}
+                                style={{
+                                  display: "block",
+                                  padding: "0.3rem 1rem 0.3rem 0.75rem",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: subActive ? 700 : 500,
+                                  color: subActive ? "hsl(213 75% 22%)" : "hsl(220 20% 38%)",
+                                  textDecoration: "none",
+                                  borderLeft: subActive
+                                    ? "2px solid hsl(213 75% 22%)"
+                                    : "1px solid hsl(213 30% 86%)",
+                                  marginLeft: "0.25rem",
+                                  borderRadius: "0 0.25rem 0.25rem 0",
+                                  background: subActive ? "hsl(213 75% 22% / 0.06)" : "transparent",
+                                  transition: "all 0.12s",
+                                }}
+                                onMouseEnter={e => {
+                                  if (!subActive) {
+                                    (e.currentTarget as HTMLElement).style.color = "hsl(213 75% 22%)";
+                                    (e.currentTarget as HTMLElement).style.background = "hsl(213 40% 97%)";
+                                  }
+                                }}
+                                onMouseLeave={e => {
+                                  if (!subActive) {
+                                    (e.currentTarget as HTMLElement).style.color = "hsl(220 20% 38%)";
+                                    (e.currentTarget as HTMLElement).style.background = "transparent";
+                                  }
+                                }}
+                              >
+                                {subActive && (
+                                  <span style={{ display: "inline-block", width: 4, height: 4, borderRadius: "50%", background: "hsl(213 75% 22%)", marginRight: 6, verticalAlign: "middle" }} />
+                                )}
+                                {sub.label}
+                              </Link>
+                            );
+                          })}
                         </div>
                       )}
                     </>
@@ -328,20 +363,22 @@ export default function Sidebar() {
                         display: "flex",
                         alignItems: "center",
                         gap: "0.5rem",
-                        padding: item.etlHighlight
-                          ? "0.4rem 1.125rem 0.4rem 0.875rem"
-                          : "0.4rem 1.125rem 0.4rem 0.875rem",
+                        padding: "0.4rem 1.125rem 0.4rem 0.875rem",
                         background: item.etlHighlight
                           ? (location === item.path ? "linear-gradient(90deg,#C8922A,#a0661a)" : "hsl(38 60% 52% / 0.08)")
                           : item.downloadHighlight
                             ? (location === item.path ? "linear-gradient(90deg,hsl(152 60% 35%),hsl(152 60% 28%))" : "hsl(152 60% 40% / 0.07)")
-                            : (location === item.path ? "hsl(213 75% 22% / 0.08)" : "transparent"),
+                            : item.execHighlight
+                              ? (location === item.path ? "linear-gradient(90deg,hsl(280 55% 45%),hsl(280 55% 35%))" : "hsl(280 55% 50% / 0.07)")
+                              : (location === item.path ? "hsl(213 75% 22% / 0.08)" : "transparent"),
                         border: "none",
                         borderLeft: item.etlHighlight
                           ? "3px solid #C8922A"
                           : item.downloadHighlight
                             ? "3px solid hsl(152 60% 40%)"
-                            : (location === item.path ? "3px solid hsl(213 75% 22%)" : "3px solid transparent"),
+                            : item.execHighlight
+                              ? "3px solid hsl(280 55% 50%)"
+                              : (location === item.path ? "3px solid hsl(213 75% 22%)" : "3px solid transparent"),
                         cursor: "pointer",
                         textAlign: "left",
                         borderRadius: "0 0.3rem 0.3rem 0",
@@ -354,6 +391,7 @@ export default function Sidebar() {
                         stroke={
                           item.etlHighlight ? (location === item.path ? "#fff" : "#C8922A")
                           : item.downloadHighlight ? (location === item.path ? "#fff" : "hsl(152 60% 35%)")
+                          : item.execHighlight ? (location === item.path ? "#fff" : "hsl(280 55% 50%)")
                           : (location === item.path ? "hsl(213 75% 22%)" : "hsl(215 15% 55%)")
                         }
                         strokeWidth="2">
@@ -367,7 +405,9 @@ export default function Sidebar() {
                           ? (location === item.path ? "#fff" : "#92400e")
                           : item.downloadHighlight
                             ? (location === item.path ? "#fff" : "hsl(152 60% 28%)")
-                            : (location === item.path ? "hsl(213 75% 22%)" : "hsl(220 25% 25%)"),
+                            : item.execHighlight
+                              ? (location === item.path ? "#fff" : "hsl(280 55% 38%)")
+                              : (location === item.path ? "hsl(213 75% 22%)" : "hsl(220 25% 25%)"),
                       }}>
                         {item.label}
                       </span>

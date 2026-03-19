@@ -4,7 +4,8 @@
  *            Calc 1Y FV ECF, Calc 3Y FV ECF, Calc 5Y FV ECF, Calc 10Y FV ECF
  * Sections: Beta Analysis | Ke Decomposition | Risk-Free Rate | FV-ECF / Valuation | TER Decomposition
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useParams, useLocation } from "wouter";
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -12,6 +13,7 @@ import {
   ComposedChart, Area,
 } from "recharts";
 import { useActiveContext, useMultipleMetrics, useRatioMetric, groupByTicker } from "../hooks/useMetrics";
+import { useDrillDown, DrillDownBanner, applyDrillFilter } from "../context/DrillDown";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const NAV = "#0E2D5C";
@@ -105,7 +107,15 @@ function avg(arr: number[]): number {
 }
 
 export default function PrincipleSixPage() {
-  const [activeTab, setActiveTab] = useState("6.1");
+  const params = useParams<{ tab?: string }>();
+  const [, navigate] = useLocation();
+  const drill = useDrillDown();
+  const validTabIds6 = TABS.map(t => t.id);
+  const [activeTab, setActiveTab] = useState(params.tab && validTabIds6.includes(params.tab) ? params.tab : "6.1");
+  useEffect(() => {
+    if (params.tab && validTabIds6.includes(params.tab)) setActiveTab(params.tab);
+  }, [params.tab]);
+  const handleSetTab6 = (id: string) => { setActiveTab(id); navigate(`/principles/6/${id}`); };
 
   const ctx = useActiveContext();
   const live = ctx.hasMetrics;
@@ -277,6 +287,7 @@ export default function PrincipleSixPage() {
 
   return (
     <div style={{ padding: "28px 32px", background: LIGHT_BG, minHeight: "100vh" }}>
+      <DrillDownBanner />
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
@@ -311,7 +322,7 @@ export default function PrincipleSixPage() {
         {TABS.map(t => (
           <button
             key={t.id}
-            onClick={() => setActiveTab(t.id)}
+            onClick={() => handleSetTab6(t.id)}
             style={{
               padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
               background: activeTab === t.id ? NAV : "transparent",

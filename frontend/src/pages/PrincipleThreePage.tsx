@@ -2,13 +2,15 @@
  * Principle 3 — Capital Market Returns
  * Live data: TER_1Y/3Y/5Y/10Y, TER-KE, TER Alpha, ECF, FY TSR
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useLocation } from "wouter";
 import {
   ComposedChart, BarChart, AreaChart,
   Area, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import { useActiveContext, useMultipleMetrics, aggregateByYear } from "../hooks/useMetrics";
+import { useDrillDown, DrillDownBanner } from "../context/DrillDown";
 
 const NAVY = "hsl(213 75% 22%)"; const GOLD = "hsl(38 60% 52%)";
 const GREEN = "hsl(152 60% 40%)"; const SLATE = "hsl(215 15% 46%)";
@@ -53,7 +55,17 @@ function Skel({ h = 200 }: { h?: number }) {
 }
 
 export default function PrincipleThreePage() {
-  const [tab, setTab] = useState(0);
+  const params = useParams<{ tab?: string }>();
+  const [, navigate] = useLocation();
+  const drill = useDrillDown();
+  const TAB_IDS_P3 = ["3.1", "3.2", "3.3", "3.4", "3.5"];
+  const tabFromUrl = params.tab ? TAB_IDS_P3.indexOf(params.tab) : -1;
+  const [tab, setTab] = useState(tabFromUrl >= 0 ? tabFromUrl : 0);
+  useEffect(() => {
+    const idx = params.tab ? TAB_IDS_P3.indexOf(params.tab) : -1;
+    if (idx >= 0) setTab(idx);
+  }, [params.tab]);
+  const handleTabClick = (i: number) => { setTab(i); navigate(`/principles/3/${TAB_IDS_P3[i]}`); };
   const ctx = useActiveContext();
   const metrics = useMultipleMetrics(ctx.datasetId, ctx.paramSetId, [
     "TER_1Y", "TER_3Y", "TER_5Y", "TER_10Y",
@@ -125,6 +137,7 @@ export default function PrincipleThreePage() {
 
   return (
     <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 1600 }}>
+      <DrillDownBanner />
       <div>
         <h1 style={{ fontSize: "1.125rem", fontWeight: 800, color: "hsl(220 35% 12%)", margin: 0, letterSpacing: "-0.02em" }}>
           Principle 3 — Capital Market Returns
@@ -135,7 +148,7 @@ export default function PrincipleThreePage() {
       </div>
       <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
         {tabs.map((t, i) => (
-          <button key={i} onClick={() => setTab(i)} style={{ padding: "0.35rem 0.75rem", background: tab === i ? NAVY : "transparent", color: tab === i ? "#fff" : SLATE, border: `1px solid ${tab === i ? NAVY : "hsl(210 16% 88%)"}`, borderRadius: 6, fontSize: "0.6875rem", fontWeight: tab === i ? 700 : 500, cursor: "pointer" }}>{t}</button>
+          <button key={i} onClick={() => handleTabClick(i)} style={{ padding: "0.35rem 0.75rem", background: tab === i ? NAVY : "transparent", color: tab === i ? "#fff" : SLATE, border: `1px solid ${tab === i ? NAVY : "hsl(210 16% 88%)"}`, borderRadius: 6, fontSize: "0.6875rem", fontWeight: tab === i ? 700 : 500, cursor: "pointer" }}>{t}</button>
         ))}
       </div>
 

@@ -15,38 +15,49 @@ import UnderlyingDataPage from "./pages/UnderlyingDataPage";
 import ReportsPage from "./pages/ReportsPage";
 import MetricsDownloadPage from "./pages/MetricsDownloadPage";
 import PipelinePage from "./pages/PipelinePage";
+import ExecutiveDashboard from "./pages/ExecutiveDashboard";
 import NotFound from "./pages/not-found";
+import { DrillDownProvider } from "./context/DrillDown";
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <Router hook={useHashLocation}>
-      <div className="dashboard-layout" style={{ gridTemplateColumns: sidebarOpen ? "260px 1fr" : "0px 1fr" }}>
-        <div className="dashboard-sidebar" style={{ display: sidebarOpen ? undefined : "none" }}>
-          <Sidebar />
+    <DrillDownProvider>
+      <Router hook={useHashLocation}>
+        <div className="dashboard-layout" style={{ gridTemplateColumns: sidebarOpen ? "260px 1fr" : "0px 1fr" }}>
+          <div className="dashboard-sidebar" style={{ display: sidebarOpen ? undefined : "none" }}>
+            <Sidebar />
+          </div>
+          <div className="dashboard-topbar">
+            <Topbar onToggleSidebar={() => setSidebarOpen(v => !v)} sidebarOpen={sidebarOpen} />
+          </div>
+          <main className="dashboard-main">
+            <Switch>
+              <Route path="/" component={DashboardHome} />
+              <Route path="/principles/1" component={PrincipleOnePage} />
+              <Route path="/principles/1/:tab" component={PrincipleOnePage} />
+              <Route path="/principles/2" component={PrincipleTwoPage} />
+              <Route path="/principles/2/:tab" component={PrincipleTwoPage} />
+              <Route path="/principles/3" component={PrincipleThreePage} />
+              <Route path="/principles/3/:tab" component={PrincipleThreePage} />
+              <Route path="/principles/4" component={PrincipleFourPage} />
+              <Route path="/principles/4/:tab" component={PrincipleFourPage} />
+              <Route path="/principles/5" component={PrincipleFivePage} />
+              <Route path="/principles/5/:tab" component={PrincipleFivePage} />
+              <Route path="/principles/6" component={PrincipleSixPage} />
+              <Route path="/principles/6/:tab" component={PrincipleSixPage} />
+              <Route path="/outputs" component={OutputsPage} />
+              <Route path="/underlying-data" component={UnderlyingDataPage} />
+              <Route path="/reports" component={ReportsPage} />
+              <Route path="/download" component={MetricsDownloadPage} />
+              <Route path="/pipeline" component={PipelinePage} />
+              <Route path="/executive" component={ExecutiveDashboard} />
+              <Route component={NotFound} />
+            </Switch>
+          </main>
         </div>
-        <div className="dashboard-topbar">
-          <Topbar onToggleSidebar={() => setSidebarOpen(v => !v)} sidebarOpen={sidebarOpen} />
-        </div>
-        <main className="dashboard-main">
-          <Switch>
-            <Route path="/" component={DashboardHome} />
-            <Route path="/principles/1" component={PrincipleOnePage} />
-            <Route path="/principles/2" component={PrincipleTwoPage} />
-            <Route path="/principles/3" component={PrincipleThreePage} />
-            <Route path="/principles/4" component={PrincipleFourPage} />
-            <Route path="/principles/5" component={PrincipleFivePage} />
-            <Route path="/principles/6" component={PrincipleSixPage} />
-            <Route path="/outputs" component={OutputsPage} />
-            <Route path="/underlying-data" component={UnderlyingDataPage} />
-            <Route path="/reports" component={ReportsPage} />
-            <Route path="/download" component={MetricsDownloadPage} />
-            <Route path="/pipeline" component={PipelinePage} />
-            <Route component={NotFound} />
-          </Switch>
-        </main>
-      </div>
-    </Router>
+      </Router>
+    </DrillDownProvider>
   );
 }

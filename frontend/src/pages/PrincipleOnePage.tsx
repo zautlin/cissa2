@@ -3,19 +3,33 @@
  * Live data: Ke, Beta, Rf, ratio metrics (mb_ratio, roee, roa, profit_margin)
  * Tabs: 1.1 Ke | 1.2 Financial Bridge | 1.3 Products & Services | 1.4 Predictor | 1.5 Assessment
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useLocation } from "wouter";
 import {
   ComposedChart, BarChart, ScatterChart,
   Area, Bar, Line, Scatter, XAxis, YAxis, ZAxis,
-  CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+  CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell,
 } from "recharts";
-import { useActiveContext, useMultipleMetrics, useRatioMetric, aggregateByYear, groupByTicker } from "../hooks/useMetrics";
+import {
+  useActiveContext, useMultipleMetrics, useRatioMetric,
+  aggregateByYear, NormalizedRatioItem,
+} from "../hooks/useMetrics";
+import { useDrillDown, DrillDownBanner, applyDrillFilter } from "../context/DrillDown";
 
 const NAVY = "hsl(213 75% 22%)";
 const GOLD = "hsl(38 60% 52%)";
 const GREEN = "hsl(152 60% 40%)";
 const SLATE = "hsl(215 15% 46%)";
 const CHART_COLORS = [NAVY, GOLD, GREEN, "hsl(280 55% 50%)", "hsl(0 60% 50%)", "hsl(188 70% 40%)"];
+
+const TAB_IDS = ["1.1", "1.2", "1.3", "1.4", "1.5"];
+const TAB_LABELS = [
+  "1.1  Cost of Equity (Ke)",
+  "1.2  Financial & Capital Bridge",
+  "1.3  Products & Services",
+  "1.4  Capital Market Predictor",
+  "1.5  Capital Market Assessment",
+];
 
 function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
@@ -77,28 +91,43 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function PrincipleOnePage() {
-  const [tab, setTab] = useState(0);
-  const ctx = useActiveContext();
+  const params = useParams<{ tab?: string }>();
+  const [, navigate] = useLocation();
+  const drill = useDrillDown();
 
+  // Sync tab index from URL param
+  const tabFromUrl = params.tab ? TAB_IDS.indexOf(params.tab) : -1;
+  const [tab, setTab] = useState(tabFromUrl >= 0 ? tabFromUrl : 0);
+  useEffect(() => {
+    const idx = params.tab ? TAB_IDS.indexOf(params.tab) : -1;
+    if (idx >= 0) setTab(idx);
+  }, [params.tab]);
+
+  const handleTabClick = (i: number) => {
+    setTab(i);
+    navigate(`/principles/1/${TAB_IDS[i]}`);
+  };
+
+  const ctx = useActiveContext();
   const multiMetrics = useMultipleMetrics(
     ctx.datasetId, ctx.paramSetId,
     ["Calc Beta", "Calc KE", "Calc Rf", "Calc ECF", "Calc FY TSR"]
   );
-  const mbRatio   = useRatioMetric(ctx.datasetId, ctx.paramSetId, "mb_ratio",     "1Y");
-  const roee      = useRatioMetric(ctx.datasetId, ctx.paramSetId, "roee",         "1Y");
-  const roa       = useRatioMetric(ctx.datasetId, ctx.paramSetId, "roa",          "3Y");
-  const profitMgn = useRatioMetric(ctx.datasetId, ctx.paramSetId, "profit_margin","3Y");
+  const mbRatio   = useRatioMetric(ctx.datasetId, ctx.paramSetId, "mb_ratio",      "1Y");
+  const roee      = useRatioMetric(ctx.datasetId, ctx.paramSetId, "roee",          "1Y");
+  const roa       = useRatioMetric(ctx.datasetId, ctx.paramSetId, "roa",           "3Y");
+  const profitMgn = useRatioMetric(ctx.datasetId, ctx.paramSetId, "profit_margin", "3Y");
   const opCost    = useRatioMetric(ctx.datasetId, ctx.paramSetId, "op_cost_margin","1Y");
-  const etr       = useRatioMetric(ctx.datasetId, ctx.paramSetId, "etr",          "1Y");
+  const etr       = useRatioMetric(ctx.datasetId, ctx.paramSetId, "etr",           "1Y");
 
   const loading = ctx.loading || multiMetrics.loading;
 
-  const keAgg   = aggregateByYear(multiMetrics.data["Calc KE"]   || []);
-  const rfAgg   = aggregateByYear(multiMetrics.data["Calc Rf"]   || []);
-  const betaAgg = aggregateByYear(multiMetrics.data["Calc Beta"] || []);
-  const tsrAgg  = aggregateByYear(multiMetrics.data["Calc FY TSR"] || []);
+  const keAgg   = aggregateByYear(multiMetrics.data["Calc KE"]    || []);
+  const rfAgg   = aggregateByYear(multiMetrics.data["Calc Rf"]    || []);
+  const betaAgg = aggregateByYear(multiMetrics.data["Calc Beta"]  || []);
+  const tsrAgg  = aggregateByYear(multiMetrics.data["Calc FY TSR"]|| []);
 
-  // Build Ke decomposition chart: Ke = Rf + Beta × ERP
+  // Build Ke decomposition chart
   const keDecompData = keAgg.map(ke => {
     const rf   = rfAgg.find(r => r.year === ke.year)?.value ?? (ctx.params?.fixed_benchmark_return_wealth_preservation as number ?? 7.5) / 100;
     const beta = betaAgg.find(b => b.year === ke.year)?.value ?? 1.0;
@@ -111,21 +140,33 @@ export default function PrincipleOnePage() {
     };
   }).filter(d => d.year >= "2005");
 
-  // MB ratio time series
-  const mbData = mbRatio.data?.results
-    ? (mbRatio.data.results as any[]).slice(0, 6).flatMap((t: any) =>
-        (t.time_series || []).map((ts: any) => ({ year: String(ts.year), value: ts.value, ticker: t.ticker }))
-      )
-    : null;
-
-  const mbByYear = mbData ? (() => {
+  // MB ratio using normalized NormalizedRatioItem[]
+  const mbRatioFiltered: NormalizedRatioItem[] = applyDrillFilter(mbRatio.data || [], drill);
+  const mbByYear = mbRatioFiltered.length > 0 ? (() => {
     const m: Record<string, number[]> = {};
-    mbData.forEach((d: any) => { if (!m[d.year]) m[d.year] = []; m[d.year].push(d.value); });
+    mbRatioFiltered.forEach((r) => {
+      (r.time_series || []).forEach((ts) => {
+        if (ts.value !== null) {
+          const y = String(ts.year);
+          if (!m[y]) m[y] = [];
+          m[y].push(ts.value);
+        }
+      });
+    });
     return Object.entries(m).map(([year, vals]) => ({
       year,
       median: +(vals.sort((a, b) => a - b)[Math.floor(vals.length / 2)]).toFixed(2),
     })).sort((a, b) => a.year.localeCompare(b.year)).slice(-15);
   })() : null;
+
+  // ROEE data using normalized type
+  const roeeFiltered: NormalizedRatioItem[] = applyDrillFilter(roee.data || [], drill);
+
+  // Op cost sector data
+  const opCostFiltered: NormalizedRatioItem[] = applyDrillFilter(opCost.data || [], drill);
+
+  // ETR data
+  const etrFiltered: NormalizedRatioItem[] = applyDrillFilter(etr.data || [], drill);
 
   // Fallback static data
   const keDecompFallback = [
@@ -139,16 +180,11 @@ export default function PrincipleOnePage() {
     { year: "2024", rf: 4.2, erp: 5.0, ke: 9.2  },
   ];
 
-  const tabs = [
-    "1.1  Cost of Equity (Ke)",
-    "1.2  Financial & Capital Bridge",
-    "1.3  Products & Services",
-    "1.4  Capital Market Predictor",
-    "1.5  Capital Market Assessment",
-  ];
-
   return (
     <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 1600 }}>
+      {/* DrillDown Banner */}
+      <DrillDownBanner />
+
       {/* Header */}
       <div>
         <h1 style={{ fontSize: "1.125rem", fontWeight: 800, color: "hsl(220 35% 12%)", margin: 0, letterSpacing: "-0.02em" }}>
@@ -161,7 +197,7 @@ export default function PrincipleOnePage() {
 
       {/* Tab bar */}
       <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
-        {tabs.map((t, i) => <Chip key={i} label={t} active={tab === i} onClick={() => setTab(i)} />)}
+        {TAB_LABELS.map((t, i) => <Chip key={i} label={t} active={tab === i} onClick={() => handleTabClick(i)} />)}
       </div>
 
       {/* Tab 1.1: Ke Decomposition */}
@@ -186,7 +222,6 @@ export default function PrincipleOnePage() {
 
           <ChartCard title="Beta Distribution" subtitle="Systematic risk across index companies" live={betaAgg.length > 0}>
             {loading ? <Skeleton /> : (() => {
-              // Build histogram from beta data
               const betas = (multiMetrics.data["Calc Beta"] || []).filter(r => r.value !== null && r.value > 0 && r.value < 3).map(r => r.value!);
               const bins: { range: string; count: number }[] = [];
               for (let i = 0; i <= 2.5; i += 0.25) {
@@ -201,12 +236,13 @@ export default function PrincipleOnePage() {
               const data = betas.length > 10 ? bins.filter(b => b.count > 0) : fallbackBins;
               return (
                 <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                  <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+                    onClick={(d) => { if (d?.activePayload?.[0]?.payload) drill.drillIntoSector(d.activePayload[0].payload.range); }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(210 16% 93%)" />
                     <XAxis dataKey="range" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} label={{ value: "Beta", position: "insideBottom", offset: -2, fontSize: 9 }} />
                     <YAxis tick={{ fontSize: 8 }} tickLine={false} axisLine={false} label={{ value: "Count", angle: -90, position: "insideLeft", fontSize: 9 }} width={32} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="count" name="Companies" fill={NAVY} radius={[3, 3, 0, 0]} maxBarSize={28} />
+                    <Bar dataKey="count" name="Companies" fill={NAVY} radius={[3, 3, 0, 0]} maxBarSize={28} cursor="pointer" />
                     <ReferenceLine x="1.00" stroke={GOLD} strokeDasharray="4 3" strokeWidth={1.5} label={{ value: "β=1", fill: GOLD, fontSize: 8 }} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -266,7 +302,7 @@ export default function PrincipleOnePage() {
       {/* Tab 1.2: Financial & Capital Bridge */}
       {tab === 1 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          <ChartCard title="M:B Ratio Over Time" subtitle="Market-to-Book: Market Cap / Economic Equity" live={mbByYear !== null && mbByYear.length > 0}>
+          <ChartCard title="M:B Ratio Over Time" subtitle="Market-to-Book: Market Cap / Economic Equity" live={mbRatioFiltered.length > 0}>
             {loading || mbRatio.loading ? <Skeleton /> : (() => {
               const fallback = [
                 { year: "2010", median: 2.1 }, { year: "2012", median: 2.4 }, { year: "2014", median: 2.8 },
@@ -289,15 +325,28 @@ export default function PrincipleOnePage() {
             })()}
           </ChartCard>
 
-          <ChartCard title="ROEE vs Cost of Equity" subtitle="Return on Economic Equity vs Ke hurdle (%)" live={roee.data !== null}>
+          <ChartCard title="ROEE vs Cost of Equity" subtitle="Return on Economic Equity vs Ke hurdle (%)" live={roeeFiltered.length > 0}>
             {loading || roee.loading ? <Skeleton /> : (() => {
-              const roeData = (roee.data?.results || []).slice(0, 8).flatMap((t: any) =>
-                (t.time_series || []).slice(-8).map((ts: any) => ({ year: String(ts.year), [t.ticker]: +(ts.value * 100).toFixed(1) }))
-              );
-              const byYear: Record<string, any> = {};
-              roeData.forEach((d: any) => { const y = d.year; byYear[y] = { ...byYear[y], ...d }; });
-              const chartData = Object.values(byYear).sort((a: any, b: any) => a.year.localeCompare(b.year));
-              const tickers = (roee.data?.results || []).slice(0, 5).map((t: any) => t.ticker);
+              // Build per-ticker time series lines
+              const tickerData: Record<string, { year: string; value: number }[]> = {};
+              roeeFiltered.slice(0, 6).forEach(r => {
+                tickerData[r.ticker] = (r.time_series || [])
+                  .filter(ts => ts.value !== null)
+                  .slice(-8)
+                  .map(ts => ({ year: String(ts.year), value: +(ts.value! * 100).toFixed(1) }));
+              });
+              const allYears = Array.from(new Set(
+                Object.values(tickerData).flat().map(d => d.year)
+              )).sort();
+              const chartData = allYears.map(year => {
+                const row: any = { year };
+                Object.entries(tickerData).forEach(([ticker, series]) => {
+                  const pt = series.find(s => s.year === year);
+                  if (pt) row[ticker] = pt.value;
+                });
+                return row;
+              });
+              const tickers = Object.keys(tickerData);
               const fallback = [
                 { year: "2015", BHP: 12.1, CBA: 15.4, WBC: 14.2, CSL: 28.1 },
                 { year: "2017", BHP: 9.8,  CBA: 14.8, WBC: 13.5, CSL: 30.2 },
@@ -307,7 +356,6 @@ export default function PrincipleOnePage() {
               ];
               const finalData = chartData.length > 2 ? chartData : fallback;
               const finalTickers = tickers.length > 0 ? tickers : ["BHP", "CBA", "WBC", "CSL"];
-              const keVal = (ctx.params?.equity_risk_premium as number ?? 5.0) + (ctx.params?.fixed_benchmark_return_wealth_preservation as number ?? 7.5) / 2;
               return (
                 <ResponsiveContainer width="100%" height={220}>
                   <ComposedChart data={finalData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -317,8 +365,9 @@ export default function PrincipleOnePage() {
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
                     <ReferenceLine y={10} stroke={GOLD} strokeDasharray="4 3" strokeWidth={1.5} label={{ value: "Ke~10%", fill: GOLD, fontSize: 8 }} />
-                    {finalTickers.slice(0, 4).map((t: string, i: number) => (
-                      <Line key={t} type="monotone" dataKey={t} stroke={CHART_COLORS[i]} strokeWidth={1.8} dot={false} />
+                    {finalTickers.slice(0, 5).map((t: string, i: number) => (
+                      <Line key={t} type="monotone" dataKey={t} stroke={CHART_COLORS[i]} strokeWidth={1.8} dot={false}
+                        activeDot={{ r: 5, cursor: "pointer", onClick: () => drill.drillIntoTicker(t) }} />
                     ))}
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -326,51 +375,57 @@ export default function PrincipleOnePage() {
             })()}
           </ChartCard>
 
-          <ChartCard title="Operating Cost Margin by Sector" subtitle="Op Cost / Revenue — efficiency indicator (%)" live={opCost.data !== null}>
+          <ChartCard title="Operating Cost Margin by Sector" subtitle="Op Cost / Revenue — efficiency indicator (%)" live={opCostFiltered.length > 0}>
             {loading || opCost.loading ? <Skeleton h={200} /> : (() => {
-              const sectorData = (opCost.data?.results || []).reduce((acc: any, t: any) => {
-                const lastVal = t.time_series?.slice(-1)?.[0]?.value;
+              const sectorData: Record<string, number[]> = {};
+              opCostFiltered.forEach(r => {
+                const lastVal = r.time_series?.slice(-1)?.[0]?.value;
                 if (lastVal !== null && lastVal !== undefined) {
-                  const sector = t.sector || "Other";
-                  if (!acc[sector]) acc[sector] = [];
-                  acc[sector].push(lastVal * 100);
+                  const sector = r.sector || "Other";
+                  if (!sectorData[sector]) sectorData[sector] = [];
+                  sectorData[sector].push(lastVal * 100);
                 }
-                return acc;
-              }, {} as Record<string, number[]>);
-              const chartData = Object.entries(sectorData).map(([sector, vals]: [string, any]) => ({
+              });
+              const chartData = Object.entries(sectorData).map(([sector, vals]) => ({
                 sector: sector.length > 14 ? sector.slice(0, 12) + "…" : sector,
-                value: +(vals.reduce((a: number, b: number) => a + b, 0) / vals.length).toFixed(1),
+                fullSector: sector,
+                value: +(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1),
               })).sort((a, b) => b.value - a.value).slice(0, 8);
               const fallback = [
-                { sector: "Materials",  value: 62.1 }, { sector: "Financials", value: 45.2 },
-                { sector: "Energy",     value: 58.4 }, { sector: "Health Care", value: 52.3 },
-                { sector: "Industrials",value: 67.8 }, { sector: "IT",          value: 38.5 },
-                { sector: "Consumer",   value: 71.2 }, { sector: "Utilities",   value: 55.8 },
+                { sector: "Materials",  fullSector: "Materials",  value: 62.1 },
+                { sector: "Financials", fullSector: "Financials", value: 45.2 },
+                { sector: "Energy",     fullSector: "Energy",     value: 58.4 },
+                { sector: "Health Care",fullSector: "Health Care",value: 52.3 },
+                { sector: "Industrials",fullSector: "Industrials",value: 67.8 },
+                { sector: "IT",         fullSector: "IT",         value: 38.5 },
+                { sector: "Consumer",   fullSector: "Consumer",   value: 71.2 },
+                { sector: "Utilities",  fullSector: "Utilities",  value: 55.8 },
               ];
               const data = chartData.length > 3 ? chartData : fallback;
               return (
                 <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={data} layout="vertical" margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
+                  <BarChart data={data} layout="vertical" margin={{ top: 4, right: 40, bottom: 0, left: 0 }}
+                    onClick={(d) => { if (d?.activePayload?.[0]?.payload?.fullSector) drill.drillIntoSector(d.activePayload[0].payload.fullSector); }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(210 16% 93%)" />
                     <XAxis type="number" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
                     <YAxis type="category" dataKey="sector" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} width={70} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="value" name="Op Cost Margin (%)" fill={GOLD} radius={[0, 4, 4, 0]} maxBarSize={16} />
+                    <Bar dataKey="value" name="Op Cost Margin (%)" fill={GOLD} radius={[0, 4, 4, 0]} maxBarSize={16} cursor="pointer" />
                   </BarChart>
                 </ResponsiveContainer>
               );
             })()}
           </ChartCard>
 
-          <ChartCard title="Effective Tax Rate" subtitle="Actual tax burden vs statutory rate (%)" live={etr.data !== null}>
+          <ChartCard title="Effective Tax Rate" subtitle="Actual tax burden vs statutory rate (%)" live={etrFiltered.length > 0}>
             {loading || etr.loading ? <Skeleton h={200} /> : (() => {
-              const etrAgg = (etr.data?.results || []).reduce((acc: any, t: any) => {
-                (t.time_series || []).forEach((ts: any) => {
-                  if (!acc[ts.year]) acc[ts.year] = [];
-                  if (ts.value !== null) acc[ts.year].push(ts.value * 100);
+              const etrAgg: Record<number, number[]> = {};
+              etrFiltered.forEach(r => {
+                (r.time_series || []).forEach(ts => {
+                  if (!etrAgg[ts.year]) etrAgg[ts.year] = [];
+                  if (ts.value !== null) etrAgg[ts.year].push(ts.value * 100);
                 });
-                return acc;
-              }, {} as Record<number, number[]>);
+              });
               const data = Object.entries(etrAgg).map(([year, vals]: [string, any]) => ({
                 year,
                 value: +(vals.reduce((a: number, b: number) => a + b, 0) / vals.length).toFixed(1),
@@ -398,7 +453,7 @@ export default function PrincipleOnePage() {
         </div>
       )}
 
-      {/* Tabs 1.3–1.5: placeholder with illustrative charts */}
+      {/* Tabs 1.3–1.5: illustrative charts */}
       {tab >= 2 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
           {[
@@ -406,7 +461,7 @@ export default function PrincipleOnePage() {
             { title: "Capital Market Predictor — Regression Analysis", subtitle: "Predictive relationship: EP → Market Value" },
             { title: "Capital Market Assessment — Sector EP Scores", subtitle: "Sector-level economic profitability index" },
             { title: "TSR Composition — Price Return vs Dividend", subtitle: "Decomposition of total shareholder return" },
-          ].slice(0, tab === 2 ? 2 : tab === 3 ? 2 : 2).map((c, i) => (
+          ].slice(0, 2).map((c, i) => (
             <ChartCard key={i} title={c.title} subtitle={c.subtitle} live={false}>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={[

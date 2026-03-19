@@ -1,12 +1,16 @@
 /**
  * useMetrics — Central live-data hook for CISSA dashboard
  *
+ * FIXED: useRatioMetric now returns normalized flat array:
+ *   { ticker, company_name, sector, value, time_series }[]
+ *   where `value` = the most recent non-null value from time_series
+ *
  * Pattern:
  *   1. Always fetch /api/v1/parameters/active first to get dataset_id + param_set_id
  *   2. Use those IDs to query any downstream endpoint
  *   3. Falls back gracefully: if no data, returns null so pages show skeleton states
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   getActiveParameters,
   getStatistics,
@@ -18,6 +22,7 @@ import {
   DatasetStatistics,
   MetricResultItem,
   EconomicProfitabilityResult,
+  RatioTickerData,
 } from "../lib/api";
 
 // ─── Active context ────────────────────────────────────────────────────────────
@@ -43,27 +48,23 @@ export function useActiveContext(): ActiveContext {
     let cancelled = false;
     async function load() {
       try {
-        // 1. Get active params
         const paramResponse = await getActiveParameters();
         if (cancelled) return;
 
         const paramSetId = paramResponse.param_set_id;
 
-        // 2. Get all dataset stats to find a dataset_id
         const statsAll = await getStatistics() as Record<string, DatasetStatistics>;
         if (cancelled) return;
 
         const keys = Object.keys(statsAll);
         if (keys.length === 0) {
-          setCtx(c => ({ ...c, loading: false, params: paramResponse.parameters,
-            paramSetId, error: null }));
+          setCtx(c => ({ ...c, loading: false, params: paramResponse.parameters, paramSetId, error: null }));
           return;
         }
 
         const datasetId = keys[0];
         const stats = statsAll[datasetId];
 
-        // 3. Check if metrics exist
         let hasMetrics = false;
         try {
           const ex = await metricsExist(datasetId, paramSetId);
@@ -71,14 +72,7 @@ export function useActiveContext(): ActiveContext {
         } catch (_) { /* backend might not have data yet */ }
 
         if (!cancelled) {
-          setCtx({
-            datasetId, paramSetId,
-            params: paramResponse.parameters,
-            stats,
-            hasMetrics,
-            loading: false,
-            error: null,
-          });
+          setCtx({ datasetId, paramSetId, params: paramResponse.parameters, stats, hasMetrics, loading: false, error: null });
         }
       } catch (err: any) {
         if (!cancelled) {
@@ -91,6 +85,71 @@ export function useActiveContext(): ActiveContext {
   }, []);
 
   return ctx;
+}
+
+// ─── Normalized ratio item ──────────────────────────────────────────────────────
+
+export interface NormalizedRatioItem {
+  ticker: string;
+  company_name: string;
+  sector: string;
+  /** Most recent non-null value from time_series */
+  value: number | null;
+  /** Full time series [{year, value}] for sparklines/drill-down */
+  time_series: { year: number; value: number | null }[];
+}
+
+function normalizeRatioResults(results: RatioTickerData[]): NormalizedRatioItem[] {
+  return results.map(r => {
+    const ts = r.time_series ?? [];
+    // Most recent non-null value
+    const nonNull = ts.filter(t => t.value !== null);
+    const latest = nonNull.length ? nonNull[nonNull.length - 1].value : null;
+    return {
+      ticker: r.ticker,
+      company_name: r.company_name ?? r.ticker,
+      sector: r.sector ?? "Unknown",
+      value: latest,
+      time_series: ts,
+    };
+  });
+}
+
+// ─── useRatioMetric ─────────────────────────────────────────────────────────────
+
+export interface RatioMetricState {
+  data: NormalizedRatioItem[];
+  raw: RatioTickerData[];
+  loading: boolean;
+  error: string | null;
+}
+
+export function useRatioMetric(
+  datasetId: string | null,
+  paramSetId: string | null,
+  metric: string,
+  temporalWindow?: string
+): RatioMetricState {
+  const [state, setState] = useState<RatioMetricState>({
+    data: [], raw: [], loading: false, error: null,
+  });
+
+  useEffect(() => {
+    if (!datasetId || !paramSetId) return;
+    let cancelled = false;
+    setState(s => ({ ...s, loading: true, error: null }));
+    getRatioMetrics({ dataset_id: datasetId, param_set_id: paramSetId, metric, temporal_window: temporalWindow })
+      .then(r => {
+        if (!cancelled) {
+          const normalized = normalizeRatioResults(r.results ?? []);
+          setState({ data: normalized, raw: r.results ?? [], loading: false, error: null });
+        }
+      })
+      .catch(e => { if (!cancelled) setState({ data: [], raw: [], loading: false, error: e.message }); });
+    return () => { cancelled = true; };
+  }, [datasetId, paramSetId, metric, temporalWindow]);
+
+  return state;
 }
 
 // ─── useMetricSeries — fetch a single named metric over all tickers/years ───
@@ -151,31 +210,6 @@ export function useEPSeries(
   return state;
 }
 
-// ─── useRatioMetric ────────────────────────────────────────────────────────────
-
-export function useRatioMetric(
-  datasetId: string | null,
-  paramSetId: string | null,
-  metric: string,
-  temporalWindow?: string
-) {
-  const [state, setState] = useState<{ data: any; loading: boolean; error: string | null }>({
-    data: null, loading: false, error: null,
-  });
-
-  useEffect(() => {
-    if (!datasetId || !paramSetId) return;
-    let cancelled = false;
-    setState(s => ({ ...s, loading: true, error: null }));
-    getRatioMetrics({ dataset_id: datasetId, param_set_id: paramSetId, metric, temporal_window: temporalWindow })
-      .then(r => { if (!cancelled) setState({ data: r, loading: false, error: null }); })
-      .catch(e => { if (!cancelled) setState({ data: null, loading: false, error: e.message }); });
-    return () => { cancelled = true; };
-  }, [datasetId, paramSetId, metric, temporalWindow]);
-
-  return state;
-}
-
 // ─── useMultipleMetrics — batch fetch several metric names ───────────────────
 
 export function useMultipleMetrics(
@@ -226,7 +260,7 @@ export function aggregateEPToIndex(epData: EconomicProfitabilityResult[]): { yea
     .sort((a, b) => a.year - b.year);
 }
 
-// ─── Helper: group metric results by ticker ───────────────────────────────────
+// ─── Helper: group MetricResultItem[] by ticker ───────────────────────────────
 export function groupByTicker(data: MetricResultItem[]): Record<string, { year: number; value: number }[]> {
   const out: Record<string, { year: number; value: number }[]> = {};
   data.forEach(r => {
@@ -250,7 +284,25 @@ export function aggregateByYear(data: MetricResultItem[]): { year: number; value
   return Object.entries(byYear)
     .map(([y, vals]) => ({
       year: Number(y),
-      value: vals.sort((a, b) => a - b)[Math.floor(vals.length / 2)], // median
+      value: vals.sort((a, b) => a - b)[Math.floor(vals.length / 2)],
     }))
     .sort((a, b) => a.year - b.year);
+}
+
+// ─── Helper: get flat {ticker, value, sector, company_name} from NormalizedRatioItem[] ─
+export function ratioToFlat(data: NormalizedRatioItem[]): { ticker: string; value: number; sector: string; company_name: string }[] {
+  return data
+    .filter(r => r.value !== null && !isNaN(r.value as number))
+    .map(r => ({ ticker: r.ticker, value: r.value as number, sector: r.sector, company_name: r.company_name }));
+}
+
+// ─── Helper: group NormalizedRatioItem[] by sector ───────────────────────────
+export function groupRatioBySector(data: NormalizedRatioItem[]): Record<string, NormalizedRatioItem[]> {
+  const out: Record<string, NormalizedRatioItem[]> = {};
+  data.forEach(r => {
+    const s = r.sector || "Unknown";
+    if (!out[s]) out[s] = [];
+    out[s].push(r);
+  });
+  return out;
 }

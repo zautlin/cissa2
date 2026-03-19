@@ -3,13 +3,15 @@
  * Live data: ep_growth, mb_ratio from ratio-metrics; Calc EP, EP from get_metrics
  * Sections: EEAI Overview | EEAI Heatmap | EP Delivered vs Required | Sector Aggregations | Sector EP Score
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useParams, useLocation } from "wouter";
 import {
   BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell, ReferenceLine,
 } from "recharts";
-import { useActiveContext, useMultipleMetrics, useRatioMetric, groupByTicker } from "../hooks/useMetrics";
+import { useActiveContext, useMultipleMetrics, useRatioMetric, groupByTicker, NormalizedRatioItem } from "../hooks/useMetrics";
+import { useDrillDown, DrillDownBanner, applyDrillFilter } from "../context/DrillDown";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const NAV = "#0E2D5C";
@@ -119,7 +121,15 @@ const STATIC_SECTOR_EP = SECTORS.map(s => ({
 }));
 
 export default function PrincipleFourPage() {
-  const [activeTab, setActiveTab] = useState("4.1");
+  const params = useParams<{ tab?: string }>();
+  const [, navigate] = useLocation();
+  const drill = useDrillDown();
+  const validTabIds = TABS.map(t => t.id);
+  const [activeTab, setActiveTab] = useState(params.tab && validTabIds.includes(params.tab) ? params.tab : "4.1");
+  useEffect(() => {
+    if (params.tab && validTabIds.includes(params.tab)) setActiveTab(params.tab);
+  }, [params.tab]);
+  const handleSetTab = (id: string) => { setActiveTab(id); navigate(`/principles/4/${id}`); };
 
   // Live data context
   const ctx = useActiveContext();
@@ -216,6 +226,7 @@ export default function PrincipleFourPage() {
 
   return (
     <div style={{ padding: "28px 32px", background: LIGHT_BG, minHeight: "100vh" }}>
+      <DrillDownBanner />
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
@@ -250,7 +261,7 @@ export default function PrincipleFourPage() {
         {TABS.map(t => (
           <button
             key={t.id}
-            onClick={() => setActiveTab(t.id)}
+            onClick={() => handleSetTab(t.id)}
             style={{
               padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
               background: activeTab === t.id ? NAV : "transparent",

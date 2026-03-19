@@ -2,13 +2,15 @@
  * Principle 2 — Primary Focus on the Longer Term
  * Live data: Calc EP (bow wave), M:B Ratio, ECF
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useLocation } from "wouter";
 import {
   ComposedChart, AreaChart, BarChart, LineChart,
   Area, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell,
 } from "recharts";
-import { useActiveContext, useEPSeries, useMultipleMetrics, useRatioMetric, aggregateByYear } from "../hooks/useMetrics";
+import { useActiveContext, useEPSeries, useMultipleMetrics, useRatioMetric, aggregateByYear, NormalizedRatioItem } from "../hooks/useMetrics";
+import { useDrillDown, DrillDownBanner, applyDrillFilter } from "../context/DrillDown";
 
 const NAVY  = "hsl(213 75% 22%)";
 const GOLD  = "hsl(38 60% 52%)";
@@ -78,7 +80,17 @@ function bell(x: number, mu: number, sigma: number, peak: number) {
 }
 
 export default function PrincipleTwoPage() {
-  const [tab, setTab] = useState(0);
+  const params = useParams<{ tab?: string }>();
+  const [, navigate] = useLocation();
+  const drill = useDrillDown();
+  const TAB_IDS = ["2.1", "2.2", "2.3", "2.4", "2.5"];
+  const tabFromUrl = params.tab ? TAB_IDS.indexOf(params.tab) : -1;
+  const [tab, setTab] = useState(tabFromUrl >= 0 ? tabFromUrl : 0);
+  useEffect(() => {
+    const idx = params.tab ? TAB_IDS.indexOf(params.tab) : -1;
+    if (idx >= 0) setTab(idx);
+  }, [params.tab]);
+  const handleTabClick = (i: number) => { setTab(i); navigate(`/principles/2/${TAB_IDS[i]}`); };
   const ctx = useActiveContext();
 
   const ep1Y  = useEPSeries(ctx.datasetId, ctx.paramSetId, "1Y");
@@ -126,22 +138,24 @@ export default function PrincipleTwoPage() {
   }).slice(-15);
 
   // M:B ratio time series
-  const mbData = (mbRatio.data?.results || []).reduce((acc: any, t: any) => {
-    (t.time_series || []).forEach((ts: any) => {
-      if (!acc[ts.year]) acc[ts.year] = [];
-      if (ts.value !== null) acc[ts.year].push(ts.value);
+  const mbFiltered: NormalizedRatioItem[] = applyDrillFilter(mbRatio.data || [], drill);
+  const mbData = mbFiltered.reduce((acc: Record<string, number[]>, r) => {
+    (r.time_series || []).forEach(ts => {
+      if (!acc[String(ts.year)]) acc[String(ts.year)] = [];
+      if (ts.value !== null) acc[String(ts.year)].push(ts.value!);
     });
     return acc;
-  }, {} as Record<number, number[]>);
-  const mbByYear = Object.entries(mbData).map(([yr, vals]: [string, any]) => ({
+  }, {} as Record<string, number[]>);
+  const mbByYear = Object.entries(mbData).map(([yr, vals]) => ({
     year: yr,
-    median: +(vals.sort((a: number, b: number) => a - b)[Math.floor(vals.length / 2)]).toFixed(2),
+    median: +(vals.sort((a, b) => a - b)[Math.floor(vals.length / 2)]).toFixed(2),
   })).sort((a, b) => a.year.localeCompare(b.year)).slice(-15);
 
   const tabs = ["2.1  Market Value & EP", "2.2  Bow Wave Concept", "2.3  Pair of EP Bow Waves", "2.4  Long-Term Proof", "2.5  Wealth Reconciliation"];
 
   return (
     <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 1600 }}>
+      <DrillDownBanner />
       <div>
         <h1 style={{ fontSize: "1.125rem", fontWeight: 800, color: "hsl(220 35% 12%)", margin: 0, letterSpacing: "-0.02em" }}>
           Principle 2 — Primary Focus on the Longer Term
@@ -152,7 +166,7 @@ export default function PrincipleTwoPage() {
       </div>
 
       <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
-        {tabs.map((t, i) => <Chip key={i} label={t} active={tab === i} onClick={() => setTab(i)} />)}
+        {tabs.map((t, i) => <Chip key={i} label={t} active={tab === i} onClick={() => handleTabClick(i)} />)}
       </div>
 
       {/* Tab 2.1: Market Value & EP */}
@@ -192,6 +206,7 @@ export default function PrincipleTwoPage() {
                 { year: "2022", median: 3.5 }, { year: "2024", median: 3.7 },
               ];
               const data = mbByYear.length > 3 ? mbByYear : fallback;
+              // drill filter applied via mbFiltered above
               return (
                 <ResponsiveContainer width="100%" height={240}>
                   <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>

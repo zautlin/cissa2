@@ -5,14 +5,16 @@
  *   asset_intensity, econ_eq_mult
  * Sections: Cost Structure | Revenue & EE Growth | ROA & Profit Margin | Asset Intensity | ESG
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useParams, useLocation } from "wouter";
 import {
   BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell, ReferenceLine, RadarChart,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
 } from "recharts";
-import { useActiveContext, useRatioMetric } from "../hooks/useMetrics";
+import { useActiveContext, useRatioMetric, NormalizedRatioItem } from "../hooks/useMetrics";
+import { useDrillDown, DrillDownBanner, applyDrillFilter } from "../context/DrillDown";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const NAV = "#0E2D5C";
@@ -120,7 +122,15 @@ function buildMultiIntervalData(datasets: Record<string, any[] | null>): any[] {
 }
 
 export default function PrincipleFivePage() {
-  const [activeTab, setActiveTab] = useState("5.1");
+  const params = useParams<{ tab?: string }>();
+  const [, navigate] = useLocation();
+  const drill = useDrillDown();
+  const validTabIds5 = TABS.map(t => t.id);
+  const [activeTab, setActiveTab] = useState(params.tab && validTabIds5.includes(params.tab) ? params.tab : "5.1");
+  useEffect(() => {
+    if (params.tab && validTabIds5.includes(params.tab)) setActiveTab(params.tab);
+  }, [params.tab]);
+  const handleSetTab5 = (id: string) => { setActiveTab(id); navigate(`/principles/5/${id}`); };
   const [costInterval, setCostInterval] = useState("1Y");
   const [growthInterval, setGrowthInterval] = useState("1Y");
 
@@ -266,6 +276,7 @@ export default function PrincipleFivePage() {
 
   return (
     <div style={{ padding: "28px 32px", background: LIGHT_BG, minHeight: "100vh" }}>
+      <DrillDownBanner />
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
@@ -297,7 +308,7 @@ export default function PrincipleFivePage() {
         {TABS.map(t => (
           <button
             key={t.id}
-            onClick={() => setActiveTab(t.id)}
+            onClick={() => handleSetTab5(t.id)}
             style={{
               padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
               background: activeTab === t.id ? NAV : "transparent",
