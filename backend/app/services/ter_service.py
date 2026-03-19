@@ -435,7 +435,7 @@ class TERService:
                 null_row_breakdown['1Y_TER-KE'] += 1
             
             # For 3Y: first 3 years should have NULL
-            for year_offset in range(1, 3):
+            for year_offset in range(0, 3):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
                     # Add NULL for TER
@@ -456,7 +456,7 @@ class TERService:
                     null_row_breakdown['3Y_TER-KE'] += 1
             
             # For 5Y: first 5 years should have NULL
-            for year_offset in range(1, 5):
+            for year_offset in range(0, 5):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
                     # Add NULL for TER
@@ -477,7 +477,7 @@ class TERService:
                     null_row_breakdown['5Y_TER-KE'] += 1
             
             # For 10Y: first 10 years should have NULL
-            for year_offset in range(1, 10):
+            for year_offset in range(0, 10):
                 target_year = min_year + year_offset
                 if target_year <= max_year:
                     # Add NULL for TER
