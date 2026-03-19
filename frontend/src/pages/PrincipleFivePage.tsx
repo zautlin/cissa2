@@ -27,11 +27,11 @@ const TEAL = "#0891b2";
 const PURPLE = "#7c3aed";
 
 const TABS = [
-  { id: "5.1", label: "Cost Structure" },
-  { id: "5.2", label: "Rev & EE Growth" },
-  { id: "5.3", label: "ROA & Profit Margin" },
-  { id: "5.4", label: "Asset Intensity" },
-  { id: "5.5", label: "ESG & Sustainability" },
+  { id: "5.1", label: "5.1  Cost Structure" },
+  { id: "5.2", label: "5.2  Rev & EE Growth" },
+  { id: "5.3", label: "5.3  ROA & Profit Margin" },
+  { id: "5.4", label: "5.4  Asset Intensity" },
+  { id: "5.5", label: "5.5  ESG & Sustainability" },
 ];
 
 const HELP: Record<string, string> = {

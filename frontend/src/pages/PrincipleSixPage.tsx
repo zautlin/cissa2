@@ -26,11 +26,11 @@ const TEAL = "#0891b2";
 const PURPLE = "#7c3aed";
 
 const TABS = [
-  { id: "6.1", label: "Beta Analysis" },
-  { id: "6.2", label: "Ke Decomposition" },
-  { id: "6.3", label: "Risk-Free Rate" },
-  { id: "6.4", label: "FV-ECF / Valuation" },
-  { id: "6.5", label: "TER Decomposition" },
+  { id: "6.1", label: "6.1  Beta Analysis" },
+  { id: "6.2", label: "6.2  Ke Decomposition" },
+  { id: "6.3", label: "6.3  Risk-Free Rate" },
+  { id: "6.4", label: "6.4  FV-ECF / Valuation" },
+  { id: "6.5", label: "6.5  TER Decomposition" },
 ];
 
 const HELP: Record<string, string> = {

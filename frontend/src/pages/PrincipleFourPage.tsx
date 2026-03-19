@@ -22,11 +22,11 @@ const SLATE = "#6B7894";
 const LIGHT_BG = "#F4F7FE";
 
 const TABS = [
-  { id: "4.1", label: "EEAI Overview" },
-  { id: "4.2", label: "EEAI Heatmap" },
-  { id: "4.3", label: "EP Delivered vs Required" },
-  { id: "4.4", label: "Sector Aggregations" },
-  { id: "4.5", label: "Sector EP Score" },
+  { id: "4.1", label: "4.1  EEAI Overview" },
+  { id: "4.2", label: "4.2  EEAI Heatmap" },
+  { id: "4.3", label: "4.3  EP Delivered vs Required" },
+  { id: "4.4", label: "4.4  Sector Aggregations" },
+  { id: "4.5", label: "4.5  Sector EP Score" },
 ];
 
 const HELP: Record<string, string> = {
