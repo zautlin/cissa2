@@ -11,8 +11,13 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import {
   getStatistics, getActiveParameters, runRuntimeMetrics,
   getEconomicProfitability, updateParameterSet, metricsExist,
-  DatasetStatistics, ParameterSetResponse,
+  getMetrics,
+  DatasetStatistics, ParameterSetResponse, MetricResultItem,
 } from "../lib/api";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip as ReTooltip, ResponsiveContainer, Legend,
+} from "recharts";
 import { Link } from "wouter";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -46,6 +51,20 @@ const GOLD  = "hsl(38 60% 52%)";
 const GREEN = "hsl(152 60% 40%)";
 const RED   = "hsl(0 65% 50%)";
 const SLATE = "hsl(215 15% 46%)";
+
+// ── Runtime metric options ────────────────────────────────────────────────────
+const RUNTIME_METRICS = [
+  { key: "beta",        label: "Beta" },
+  { key: "risk_free_rate", label: "Risk-Free Rate (Rf)" },
+  { key: "cost_of_equity", label: "Cost of Equity (Ke)" },
+  { key: "fv_ecf_1y",  label: "FV-ECF 1Y" },
+  { key: "fv_ecf_3y",  label: "FV-ECF 3Y" },
+  { key: "fv_ecf_5y",  label: "FV-ECF 5Y" },
+  { key: "fv_ecf_10y", label: "FV-ECF 10Y" },
+  { key: "ter",        label: "TER" },
+  { key: "ter_ke",     label: "TER-Ke" },
+  { key: "ter_alpha",  label: "TER Alpha" },
+];
 
 // ── Parameter metadata ───────────────────────────────────────────────────────
 const PARAM_META: Record<string, { label: string; type: "number" | "boolean" | "select"; options?: string[] }> = {
@@ -243,6 +262,10 @@ export default function PipelinePage() {
     { window: "5Y",  status: "pending", count: 0, seconds: 0 },
     { window: "10Y", status: "pending", count: 0, seconds: 0 },
   ]);
+  // Stage 3 chart state
+  const [s3Metric, setS3Metric] = useState("cost_of_equity");
+  const [s3Ticker, setS3Ticker] = useState("BHP AU Equity");
+  const [s3Data,   setS3Data]   = useState<MetricResultItem[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // ── Auto-init on mount ────────────────────────────────────────────────────
@@ -283,6 +306,19 @@ export default function PipelinePage() {
     };
     autoInit();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Stage 3 chart auto-fetch ──────────────────────────────────────────────
+  useEffect(() => {
+    if (stageResults[2].status !== "done" || !dataset || !params) return;
+    getMetrics({
+      dataset_id: dataset.dataset_id,
+      parameter_set_id: params.param_set_id,
+      metric_name: s3Metric,
+      ticker: s3Ticker,
+    })
+      .then(r => setS3Data(r.results ?? []))
+      .catch(() => setS3Data([]));
+  }, [stageResults[2].status, s3Metric, s3Ticker, dataset, params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addLog = useCallback((text: string, type: "info" | "success" | "error" | "warn" = "info") => {
     setLogs(l => [...l, { text, type }]);
@@ -889,6 +925,56 @@ export default function PipelinePage() {
                   <div style={{ fontSize: "0.6875rem", color: "hsl(220 15% 45%)" }}>{name}</div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── Metric time-series chart (shown after stage completes) ─────── */}
+          {stageResults[2].status === "done" && (
+            <div style={{ marginTop: "1.25rem", padding: "1rem", background: "hsl(210 20% 98%)", borderRadius: 10, border: "1px solid hsl(210 16% 90%)" }}>
+              {/* Controls row */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+                <select
+                  value={s3Metric}
+                  onChange={e => setS3Metric(e.target.value)}
+                  style={{ fontSize: "0.75rem", padding: "0.3rem 0.5rem", borderRadius: 6, border: "1px solid hsl(210 16% 85%)", background: "#fff", color: "hsl(220 25% 15%)", fontWeight: 600, cursor: "pointer" }}
+                >
+                  {RUNTIME_METRICS.map(m => (
+                    <option key={m.key} value={m.key}>{m.label}</option>
+                  ))}
+                </select>
+                <span style={{ fontSize: "0.6875rem", color: SLATE }}>Ticker:</span>
+                <input
+                  value={s3Ticker}
+                  onChange={e => setS3Ticker(e.target.value)}
+                  placeholder="e.g. BHP AU Equity"
+                  style={{ fontSize: "0.75rem", padding: "0.3rem 0.5rem", borderRadius: 6, border: "1px solid hsl(210 16% 85%)", background: "#fff", color: "hsl(220 25% 15%)", width: 160 }}
+                />
+                <span style={{ fontSize: "0.5625rem", color: SLATE, marginLeft: "auto" }}>
+                  {s3Data.length > 0 ? `${s3Data.length} years` : "no data"}
+                </span>
+              </div>
+              {/* Chart */}
+              {s3Data.length > 0 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={s3Data.map(d => ({ year: d.fiscal_year, value: d.value }))} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                    <XAxis dataKey="year" tick={{ fill: "#94a3b8", fontSize: 9 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: "#94a3b8", fontSize: 9 }} axisLine={false} tickLine={false} width={48}
+                      tickFormatter={(v: number) => v == null ? "—" : v > 100 ? v.toLocaleString() : v.toFixed(2)} />
+                    <ReTooltip
+                      contentStyle={{ fontSize: "0.75rem", borderRadius: 6, border: "1px solid hsl(210 16% 88%)" }}
+                      formatter={(v: number) => [v == null ? "—" : v.toFixed(4), RUNTIME_METRICS.find(m => m.key === s3Metric)?.label ?? s3Metric]}
+                      labelFormatter={(l: number) => `FY ${l}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "0.65rem" }} formatter={() => RUNTIME_METRICS.find(m => m.key === s3Metric)?.label ?? s3Metric} />
+                    <Line type="monotone" dataKey="value" stroke={NAVY} strokeWidth={2} dot={{ r: 3, fill: NAVY }} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: SLATE, fontSize: "0.8125rem" }}>
+                  No data — run Runtime Metrics first or try a different ticker
+                </div>
+              )}
             </div>
           )}
         </div>
