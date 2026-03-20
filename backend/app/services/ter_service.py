@@ -286,15 +286,11 @@ class TERService:
         For 3Y, 5Y, 10Y (n>1): Cannot be algebraically simplified; full formula required
         
         Shared components (calculated once):
-        - Load TRTE = Calc {interval}Y FV ECF + (Calc MC(year) - Calc MC(year - interval))
+        - Load TRTE = Calc {interval}Y FV ECF + (Calc MC - LAG(Calc MC, 1))
         - Load TER = (Load TRTE / Open MC) - 1
-        - WC = Open MC × (1 + Load TER)^interval - Open MC × (1 + Calc KE)^interval
-        - WP = Open MC × (1 + Calc KE)^interval
-        - Open MC = Calc MC(year - interval)
-        
-        KEY FIX: LAG uses the interval, not fixed 1-year lag
-        For 5Y TER: looks back 5 years to get Calc MC from 5 years ago
-        For 10Y TER: looks back 10 years to get Calc MC from 10 years ago
+        - WC = Open MC × (1 + Load TER) - Open MC × (1 + Ke)
+        - WP = Open MC × (1 + Ke)
+        - Open MC = LAG(Calc MC, 1)
         """
         
         # Rename columns for clarity
@@ -302,42 +298,37 @@ class TERService:
         calc_ke = calc_ke.rename(columns={'value': 'calc_ke'}).copy()
         fv_ecf = fv_ecf.rename(columns={'value': 'fv_ecf'}).copy()
         
-        # CRITICAL: Start with calc_mc (all available years for this ticker)
-        # Then merge with calc_ke and fv_ecf (they might not have all years)
-        # We use LEFT merge to preserve calc_mc rows where KE or FV ECF are missing
-        # Then we'll filter at the end to require the actual dependencies exist
-        df = calc_mc.merge(calc_ke, on=['ticker', 'fiscal_year'], how='left')
-        df = df.merge(fv_ecf, on=['ticker', 'fiscal_year'], how='left')
+        # Merge all data by ticker and fiscal_year
+        df = calc_mc.merge(calc_ke, on=['ticker', 'fiscal_year'], how='inner')
+        df = df.merge(fv_ecf, on=['ticker', 'fiscal_year'], how='inner')
         
         # Sort by ticker and fiscal_year to enable lag calculation
         df = df.sort_values(['ticker', 'fiscal_year']).reset_index(drop=True)
         
-        # CRITICAL FIX: Calculate LAG(Calc MC, interval) instead of LAG(Calc MC, 1)
-        # This uses interval-based lookback: 5Y TER looks back 5 years, 10Y looks back 10, etc.
-        df['calc_mc_lag'] = df.groupby('ticker')['calc_mc'].shift(interval)
+        # Calculate LAG(Calc MC, 1) within each ticker
+        df['calc_mc_lag'] = df.groupby('ticker')['calc_mc'].shift(1)
         
         # Calculate Open MC
         df['open_mc'] = df['calc_mc_lag']
         
         # Step 1: Calculate Load TRTE
-        # Load TRTE = Calc {interval}Y FV ECF + (Calc MC(year) - Calc MC(year - interval))
+        # Load TRTE = Calc {interval}Y FV ECF + (Calc MC - LAG(Calc MC, 1))
         df['load_trte'] = df['fv_ecf'] + (df['calc_mc'] - df['calc_mc_lag'])
         
         # Step 2: Calculate Load TER
-        # Load TER = (1 + Load TRTE / Open MC)^(1/interval) - 1
+        # Load TER = (Load TRTE / Open MC) - 1
         # Guard against division by zero
-        exponent_ter = 1.0 / interval
         df['load_ter'] = np.where(
             df['open_mc'].notna() & (df['open_mc'] != 0),
-            np.power(1 + (df['load_trte'] / df['open_mc']), exponent_ter) - 1,
+            (df['load_trte'] / df['open_mc']) - 1,
             np.nan
         )
         
         # Step 3: Calculate WC and WP
-        # WC = Open MC × (1 + Load TER)^interval - Open MC × (1 + Ke)^interval
-        # WP = Open MC × (1 + Ke)^interval
-        df['wc'] = df['open_mc'] * np.power(1 + df['load_ter'], interval) - df['open_mc'] * np.power(1 + df['calc_ke'], interval)
-        df['wp'] = df['open_mc'] * np.power(1 + df['calc_ke'], interval)
+        # WC = Open MC × (1 + Load TER) - Open MC × (1 + Ke)
+        # WP = Open MC × (1 + Ke)
+        df['wc'] = df['open_mc'] * (1 + df['load_ter']) - df['open_mc'] * (1 + df['calc_ke'])
+        df['wp'] = df['open_mc'] * (1 + df['calc_ke'])
         
         # Step 4: Calculate TER (final)
         # TER = ((WC + WP) / Open MC)^(1/interval) - 1
@@ -357,10 +348,6 @@ class TERService:
             np.power(ratio_wc_wp, exponent) - np.power(ratio_wp, exponent),
             np.nan
         )
-        
-        # IMPORTANT: Filter to only include rows where we have BOTH calc_ke AND fv_ecf
-        # These are the required dependencies for calculating TER
-        df = df[df['calc_ke'].notna() & df['fv_ecf'].notna()].copy()
         
         # Build result dataframe with BOTH TER and TER-KE
         ter_results = pd.DataFrame({
@@ -403,7 +390,6 @@ class TERService:
             Tuple of (DataFrame with NULL rows added, null_row_breakdown dict)
         """
         # Get unique tickers and their min/max fiscal years from fundamentals
-        # This ensures we have a complete list of all tickers and their year ranges
         ticker_year_info = fundamentals_df.groupby('ticker')['fiscal_year'].agg(['min', 'max']).reset_index()
         
         null_rows = []
@@ -420,27 +406,15 @@ class TERService:
         
         for _, row in ticker_year_info.iterrows():
             ticker = row['ticker']
-            fundamental_min_year = int(row['min'])
-            fundamental_max_year = int(row['max'])
+            min_year = int(row['min'])
+            max_year = int(row['max'])
             
-            # Find the ACTUAL min/max years for this ticker in the calculated TER data
-            # This is important because calculated data might start later than fundamentals
-            # (e.g., if Calc MC data starts in 2000 but fundamentals start in 1994)
-            ticker_ter_data = ter_df[ter_df['ticker'] == ticker]
-            
-            if len(ticker_ter_data) > 0:
-                calculated_min_year = ticker_ter_data['fiscal_year'].min()
-                calculated_max_year = ticker_ter_data['fiscal_year'].max()
-            else:
-                # If no calculated data, skip NULL row generation for this ticker
-                continue
-            
-            # For 1Y: first year should have NULL
-            if fundamental_min_year <= fundamental_max_year:
+            # For 1Y: first year (min_year) should have NULL
+            if min_year <= max_year:
                 # Add NULL for TER
                 null_rows.append({
                     'ticker': ticker,
-                    'fiscal_year': fundamental_min_year,
+                    'fiscal_year': min_year,
                     'TER_Y': np.nan,
                     'TER_TYPE': 'Calc 1Y TER'
                 })
@@ -448,16 +422,16 @@ class TERService:
                 # Add NULL for TER-KE
                 null_rows.append({
                     'ticker': ticker,
-                    'fiscal_year': fundamental_min_year,
+                    'fiscal_year': min_year,
                     'TER_Y': np.nan,
                     'TER_TYPE': 'Calc 1Y TER-KE'
                 })
                 null_row_breakdown['1Y_TER-KE'] += 1
             
             # For 3Y: first 3 years should have NULL
-            for year_offset in range(0, 3):
-                target_year = fundamental_min_year + year_offset
-                if target_year <= fundamental_max_year:
+            for year_offset in range(1, 3):
+                target_year = min_year + year_offset
+                if target_year <= max_year:
                     # Add NULL for TER
                     null_rows.append({
                         'ticker': ticker,
@@ -476,9 +450,9 @@ class TERService:
                     null_row_breakdown['3Y_TER-KE'] += 1
             
             # For 5Y: first 5 years should have NULL
-            for year_offset in range(0, 5):
-                target_year = fundamental_min_year + year_offset
-                if target_year <= fundamental_max_year:
+            for year_offset in range(1, 5):
+                target_year = min_year + year_offset
+                if target_year <= max_year:
                     # Add NULL for TER
                     null_rows.append({
                         'ticker': ticker,
@@ -497,9 +471,9 @@ class TERService:
                     null_row_breakdown['5Y_TER-KE'] += 1
             
             # For 10Y: first 10 years should have NULL
-            for year_offset in range(0, 10):
-                target_year = fundamental_min_year + year_offset
-                if target_year <= fundamental_max_year:
+            for year_offset in range(1, 10):
+                target_year = min_year + year_offset
+                if target_year <= max_year:
                     # Add NULL for TER
                     null_rows.append({
                         'ticker': ticker,

@@ -7,7 +7,7 @@
  *   Stage 4: Runtime Metrics (beta → rf → ke → fv-ecf → ter → ter-alpha)
  *   Stage 5: Results Dashboard
  */
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   getStatistics, getActiveParameters, orchestrateL1Metrics,
   runRuntimeMetrics, calculateBetaFromPrecomputed,
@@ -52,6 +52,48 @@ const PARAM_META: Record<string, { label: string; type: "number" | "boolean" | "
   beta_relative_error_tolerance:          { label: "Beta Relative Error Tolerance (%)", type: "number" },
   terminal_year:                          { label: "Terminal Year",             type: "number" },
 };
+
+// ── Parameter groups ────────────────────────────────────────────────────────
+const PARAM_GROUPS: { label: string; icon: string; keys: string[] }[] = [
+  {
+    label: "Market Configuration",
+    icon: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z",
+    keys: ["country", "currency_notation", "cost_of_equity_approach", "equity_risk_premium", "fixed_benchmark_return_wealth_preservation"],
+  },
+  {
+    label: "Franking Credits",
+    icon: "M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z",
+    keys: ["include_franking_credits_tsr", "tax_rate_franking_credits", "value_of_franking_credits"],
+  },
+  {
+    label: "Technical Parameters",
+    icon: "M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z",
+    keys: ["beta_rounding", "risk_free_rate_rounding", "beta_relative_error_tolerance", "last_calendar_year", "terminal_year"],
+  },
+];
+
+// ── Toggle switch ────────────────────────────────────────────────────────────
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!on)}
+      style={{
+        width: 36, height: 20, borderRadius: 10, flexShrink: 0,
+        background: on ? GREEN : "hsl(210 15% 78%)",
+        border: "none", cursor: "pointer", padding: 2,
+        transition: "background 0.2s", display: "flex", alignItems: "center",
+      }}
+    >
+      <div style={{
+        width: 16, height: 16, borderRadius: "50%", background: "#fff",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+        transition: "transform 0.2s",
+        transform: on ? "translateX(16px)" : "translateX(0)",
+      }} />
+    </button>
+  );
+}
 
 // ── Spinner ────────────────────────────────────────────────────────────────
 function Spinner({ size = 16 }: { size?: number }) {
@@ -132,8 +174,56 @@ export default function PipelinePage() {
   const [dataset, setDataset] = useState<DatasetStatistics | null>(null);
   const [params, setParams]   = useState<ParameterSetResponse | null>(null);
   const [paramEdits, setParamEdits] = useState<Record<string, unknown>>({});
+  const [originalParams, setOriginalParams] = useState<Record<string, unknown>>({});
   const [allDatasets, setAllDatasets] = useState<Record<string, DatasetStatistics>>({});
   const logEndRef    = useRef<HTMLDivElement>(null);
+
+  // Auto-load dataset + params + metrics status on mount
+  useEffect(() => {
+    const autoInit = async () => {
+      try {
+        const statsRaw = await getStatistics() as any;
+        const statsMap: Record<string, DatasetStatistics> = statsRaw?.datasets ?? statsRaw;
+        const entries = Object.entries(statsMap).filter(
+          ([, v]) => v && typeof v === "object" && "dataset_id" in v
+        );
+        if (entries.length > 0) {
+          const dsMap = Object.fromEntries(entries) as Record<string, DatasetStatistics>;
+          setAllDatasets(dsMap);
+          const ds = entries[0][1] as DatasetStatistics;
+          setDataset(ds);
+          const companiesCount = ds.companies?.count;
+          setStage(0, {
+            status: "done",
+            message: `${entries.length} dataset${entries.length > 1 ? "s" : ""} available${companiesCount ? ` · ${companiesCount} companies` : ""}`,
+            detail: ds.data_coverage?.min_year
+              ? `FY ${ds.data_coverage.min_year}–${ds.data_coverage.max_year} · Country: ${ds.country || "AU"}`
+              : `Dataset: ${ds.dataset_id.slice(0, 8)}…`,
+          });
+
+          const p = await getActiveParameters();
+          setParams(p);
+          setParamEdits({ ...p.parameters });
+          setOriginalParams({ ...p.parameters });
+          setStage(1, {
+            status: "done",
+            message: `Active: ${p.param_set_name}`,
+            detail: `Ke: ${p.parameters.cost_of_equity_approach} · ERP: ${p.parameters.equity_risk_premium}%`,
+          });
+
+          try {
+            const ex = await metricsExist(ds.dataset_id, p.param_set_id);
+            if (ex.exists) {
+              setStage(2, { status: "done", message: "L1 metrics already computed", detail: "Re-run to recompute" });
+              setStage(3, { status: "done", message: "Runtime metrics already computed", detail: "Re-run to recompute" });
+              setStage(4, { status: "done", message: "Metrics verified — Dashboard ready", detail: "All principle pages show live data" });
+            }
+          } catch (_) { /* metrics may not exist yet */ }
+        }
+      } catch (_) { /* user can manually run stages */ }
+    };
+    autoInit();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addLog = useCallback((text: string, type: "info" | "success" | "error" | "warn" = "info") => {
     setLogs(l => [...l, { text, type }]);
@@ -155,28 +245,36 @@ export default function PipelinePage() {
     addLog("Stage 1: Data Selection — fetching datasets from backend…");
     const t0 = Date.now();
     try {
-      const statsAll = await getStatistics() as Record<string, DatasetStatistics>;
-      const keys = Object.keys(statsAll);
-      if (keys.length === 0) {
+      const statsRaw = await getStatistics() as any;
+      const statsMap: Record<string, DatasetStatistics> = statsRaw?.datasets ?? statsRaw;
+      const entries = Object.entries(statsMap).filter(
+        ([, v]) => v && typeof v === "object" && "dataset_id" in v
+      );
+      if (entries.length === 0) {
         setStage(0, { status: "error", message: "No datasets found in database" });
         addLog("No datasets found in backend. Please ingest Bloomberg data first.", "error");
         return;
       }
-      setAllDatasets(statsAll);
+      const dsMap = Object.fromEntries(entries) as Record<string, DatasetStatistics>;
+      setAllDatasets(dsMap);
       // Auto-select the first (most recent) dataset
-      const ds = statsAll[keys[0]];
+      const ds = entries[0][1] as DatasetStatistics;
       setDataset(ds);
       const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      const companiesCount = ds.companies?.count;
+      const rawCount = ds.raw_metrics?.count;
       setStage(0, {
         status: "done",
-        message: `${keys.length} dataset${keys.length > 1 ? "s" : ""} available · ${ds.companies.count} companies selected`,
-        detail: `FY ${ds.data_coverage.min_year}–${ds.data_coverage.max_year} · ${ds.raw_metrics.count.toLocaleString()} raw records`,
-        records: ds.raw_metrics.count,
+        message: `${entries.length} dataset${entries.length > 1 ? "s" : ""} available${companiesCount ? ` · ${companiesCount} companies` : ""}`,
+        detail: ds.data_coverage?.min_year
+          ? `FY ${ds.data_coverage.min_year}–${ds.data_coverage.max_year} · ${rawCount?.toLocaleString() ?? "—"} raw records`
+          : `Dataset ID: ${ds.dataset_id.slice(0, 8)}…`,
+        records: rawCount ?? undefined,
         seconds: Number(elapsed),
       });
-      addLog(`Found ${keys.length} dataset(s) in backend`, "success");
-      addLog(`Auto-selected: ${ds.dataset_id} — ${ds.companies.count} companies, ${ds.sectors.count} sectors`, "success");
-      addLog(`Coverage: FY ${ds.data_coverage.min_year} → FY ${ds.data_coverage.max_year} · Country: ${ds.country || "AU"}`, "info");
+      addLog(`Found ${entries.length} dataset(s) in backend`, "success");
+      addLog(`Auto-selected: ${ds.dataset_id} — ${companiesCount ?? "?"} companies, ${ds.sectors?.count ?? "?"} sectors`, "success");
+      addLog(`Coverage: FY ${ds.data_coverage?.min_year ?? "?"} → FY ${ds.data_coverage?.max_year ?? "?"} · Country: ${ds.country || "AU"}`, "info");
       addLog(`Elapsed: ${elapsed}s`, "info");
       setActiveStage(1);
     } catch (err: any) {
@@ -194,6 +292,7 @@ export default function PipelinePage() {
       const p = await getActiveParameters();
       setParams(p);
       setParamEdits({ ...p.parameters });
+      setOriginalParams({ ...p.parameters });
       setStage(1, {
         status: "done",
         message: `Active: ${p.param_set_name}`,
@@ -529,10 +628,10 @@ export default function PipelinePage() {
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "0.375rem" }}>
                         {[
-                          { label: "Companies", value: ds.companies.count },
-                          { label: "Sectors",   value: ds.sectors.count },
-                          { label: "Min Year",  value: ds.data_coverage.min_year },
-                          { label: "Max Year",  value: ds.data_coverage.max_year },
+                          { label: "Companies", value: ds.companies?.count ?? "—" },
+                          { label: "Sectors",   value: ds.sectors?.count ?? "—" },
+                          { label: "Min Year",  value: ds.data_coverage?.min_year ?? "—" },
+                          { label: "Max Year",  value: ds.data_coverage?.max_year ?? "—" },
                         ].map(kv => (
                           <div key={kv.label} style={{ padding: "0.3rem 0.4rem", background: "hsl(213 40% 97%)", borderRadius: 5 }}>
                             <div style={{ fontSize: "0.5rem", color: SLATE, textTransform: "uppercase", fontWeight: 700 }}>{kv.label}</div>
@@ -541,7 +640,7 @@ export default function PipelinePage() {
                         ))}
                       </div>
                       <div style={{ fontSize: "0.5625rem", color: SLATE, marginTop: "0.3rem" }}>
-                        {ds.raw_metrics.count.toLocaleString()} raw records · Country: {ds.country || "AU"} · Created: {new Date(ds.dataset_created_at).toLocaleDateString()}
+                        {ds.raw_metrics?.count != null ? ds.raw_metrics.count.toLocaleString() : "—"} raw records · Country: {ds.country || "AU"} · Created: {ds.dataset_created_at ? new Date(ds.dataset_created_at).toLocaleDateString() : "—"}
                       </div>
                     </div>
                   );
@@ -565,51 +664,219 @@ export default function PipelinePage() {
             num={2} title="Parameter Configuration" status={stageResults[1].status}
             onRun={loadParams} active={activeStage === 1}
           >
-            {params ? (
-              <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.625rem" }}>
-                  <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: NAVY }}>{params.param_set_name}</span>
-                  <span style={{ fontSize: "0.5625rem", color: SLATE, background: "hsl(213 30% 95%)", padding: "0.15rem 0.5rem", borderRadius: 999 }}>
-                    {params.is_active ? "ACTIVE" : "INACTIVE"}
-                  </span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem", maxHeight: 280, overflowY: "auto" }}>
-                  {Object.entries(PARAM_META).map(([key, meta]) => {
-                    const val = paramEdits[key] ?? (params.parameters as any)[key];
-                    if (val === undefined) return null;
-                    return (
-                      <div key={key} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <label style={{ fontSize: "0.625rem", fontWeight: 600, color: SLATE, flex: 1, lineHeight: 1.3 }}>{meta.label}</label>
-                        {meta.type === "boolean" ? (
-                          <input type="checkbox" checked={!!val} style={{ cursor: "pointer" }}
-                            onChange={e => setParamEdits(p => ({ ...p, [key]: e.target.checked }))} />
-                        ) : meta.type === "select" ? (
-                          <select value={String(val)} style={{ fontSize: "0.6875rem", padding: "0.2rem 0.375rem", borderRadius: 5, border: "1px solid hsl(210 16% 86%)", background: "#fff" }}
-                            onChange={e => setParamEdits(p => ({ ...p, [key]: e.target.value }))}>
-                            {meta.options?.map(o => <option key={o} value={o}>{o}</option>)}
-                          </select>
-                        ) : (
-                          <input type="number" value={Number(val)} style={{ width: 80, fontSize: "0.6875rem", padding: "0.2rem 0.375rem", borderRadius: 5, border: "1px solid hsl(210 16% 86%)", textAlign: "right" }}
-                            onChange={e => setParamEdits(p => ({ ...p, [key]: Number(e.target.value) }))} />
-                        )}
+            {params ? (() => {
+              // Compute which keys have changed from original
+              const changedKeys = new Set(
+                Object.entries(paramEdits).filter(([key, val]) => {
+                  const orig = originalParams[key];
+                  const meta = PARAM_META[key];
+                  const coerce = (v: unknown) => meta?.type === "number" ? Number(v) : meta?.type === "boolean" ? Boolean(v) : v;
+                  return String(coerce(val)) !== String(coerce(orig));
+                }).map(([key]) => key)
+              );
+
+              const handleSave = async () => {
+                try {
+                  const coerced: Record<string, unknown> = {};
+                  for (const [key, val] of Object.entries(paramEdits)) {
+                    const meta = PARAM_META[key];
+                    if (meta?.type === "number") coerced[key] = Number(val);
+                    else if (meta?.type === "boolean") coerced[key] = Boolean(val);
+                    else coerced[key] = val;
+                  }
+                  const changed: Record<string, unknown> = {};
+                  for (const [key, val] of Object.entries(coerced)) {
+                    const orig = originalParams[key];
+                    const origCoerced = PARAM_META[key]?.type === "number" ? Number(orig)
+                      : PARAM_META[key]?.type === "boolean" ? Boolean(orig) : orig;
+                    if (String(val) !== String(origCoerced)) changed[key] = val;
+                  }
+                  if (Object.keys(changed).length === 0) {
+                    addLog("No parameters changed — nothing to save", "warn");
+                    return;
+                  }
+                  addLog(`Saving ${Object.keys(changed).length} changed parameter(s): ${Object.keys(changed).join(", ")}…`, "info");
+                  const result = await updateParameterSet(params.param_set_id, changed, true);
+                  setParams(result);
+                  setParamEdits({ ...result.parameters });
+                  setOriginalParams({ ...result.parameters });
+                  addLog(`Parameters saved ✓ — new param set: ${result.param_set_id}`, "success");
+                } catch (e: any) { addLog(`Save failed: ${e.message}`, "error"); }
+              };
+
+              return (
+                <div>
+                  {/* Header */}
+                  <div style={{
+                    display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                    paddingBottom: "0.75rem", marginBottom: "0.75rem",
+                    borderBottom: "1px solid hsl(210 16% 92%)",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: "0.5625rem", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, marginBottom: "0.2rem" }}>
+                        Active Parameter Set
                       </div>
-                    );
-                  })}
+                      <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "hsl(220 35% 15%)", fontFamily: "ui-monospace, monospace", letterSpacing: "-0.01em" }}>
+                        {params.param_set_name}
+                      </div>
+                      <div style={{ fontSize: "0.5rem", color: SLATE, marginTop: "0.15rem" }}>
+                        ID: {params.param_set_id.slice(0, 8)}…
+                        {params.is_default ? " · Default" : ""}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem" }}>
+                      <span style={{
+                        fontSize: "0.5rem", fontWeight: 800, letterSpacing: "0.07em",
+                        background: "hsl(152 60% 40% / 0.1)", color: "hsl(152 42% 28%)",
+                        padding: "0.25rem 0.6rem", borderRadius: 999,
+                        border: "1px solid hsl(152 60% 40% / 0.25)",
+                      }}>
+                        ● ACTIVE
+                      </span>
+                      {changedKeys.size > 0 && (
+                        <span style={{
+                          fontSize: "0.5rem", fontWeight: 700,
+                          background: "hsl(38 60% 52% / 0.12)", color: "hsl(38 50% 32%)",
+                          padding: "0.2rem 0.5rem", borderRadius: 999,
+                          border: "1px solid hsl(38 60% 52% / 0.3)",
+                        }}>
+                          {changedKeys.size} unsaved
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Grouped parameters */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxHeight: 340, overflowY: "auto", paddingRight: "2px" }}>
+                    {PARAM_GROUPS.map(group => {
+                      const groupKeys = group.keys.filter(k => {
+                        const v = paramEdits[k] ?? (params.parameters as any)[k];
+                        return v !== undefined;
+                      });
+                      if (groupKeys.length === 0) return null;
+                      return (
+                        <div key={group.label}>
+                          {/* Group header */}
+                          <div style={{
+                            display: "flex", alignItems: "center", gap: "0.375rem",
+                            marginBottom: "0.375rem",
+                          }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" style={{ flexShrink: 0, opacity: 0.5 }}>
+                              <path d={group.icon} fill={NAVY} />
+                            </svg>
+                            <div style={{
+                              fontSize: "0.5625rem", fontWeight: 800, color: NAVY,
+                              textTransform: "uppercase", letterSpacing: "0.08em", opacity: 0.65,
+                            }}>
+                              {group.label}
+                            </div>
+                          </div>
+
+                          {/* Rows */}
+                          <div style={{ borderRadius: 8, border: "1px solid hsl(210 16% 91%)", overflow: "hidden" }}>
+                            {groupKeys.map((key, idx) => {
+                              const meta = PARAM_META[key];
+                              if (!meta) return null;
+                              const val = paramEdits[key] ?? (params.parameters as any)[key];
+                              const isChanged = changedKeys.has(key);
+                              const isLast = idx === groupKeys.length - 1;
+                              return (
+                                <div
+                                  key={key}
+                                  style={{
+                                    display: "flex", alignItems: "center", gap: "0.625rem",
+                                    padding: "0.5rem 0.625rem",
+                                    background: isChanged ? "hsl(213 75% 22% / 0.04)" : idx % 2 === 0 ? "#fff" : "hsl(210 20% 99%)",
+                                    borderLeft: `3px solid ${isChanged ? NAVY : "transparent"}`,
+                                    borderBottom: isLast ? "none" : "1px solid hsl(210 16% 93%)",
+                                    transition: "background 0.15s",
+                                  }}
+                                >
+                                  <label style={{
+                                    fontSize: "0.6875rem", flex: 1, lineHeight: 1.3,
+                                    color: isChanged ? "hsl(220 40% 14%)" : "hsl(220 15% 40%)",
+                                    fontWeight: isChanged ? 600 : 400,
+                                  }}>
+                                    {meta.label}
+                                  </label>
+                                  {meta.type === "boolean" ? (
+                                    <Toggle on={!!val} onChange={v => setParamEdits(p => ({ ...p, [key]: v }))} />
+                                  ) : meta.type === "select" ? (
+                                    <select
+                                      value={String(val)}
+                                      onChange={e => setParamEdits(p => ({ ...p, [key]: e.target.value }))}
+                                      style={{
+                                        fontSize: "0.6875rem", padding: "0.3rem 0.4rem",
+                                        borderRadius: 6,
+                                        border: `1px solid ${isChanged ? "hsl(213 75% 22% / 0.45)" : "hsl(210 16% 85%)"}`,
+                                        background: "#fff", color: "hsl(220 35% 15%)",
+                                        fontWeight: 500, cursor: "pointer", minWidth: 100,
+                                      }}
+                                    >
+                                      {meta.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      value={Number(val)}
+                                      onChange={e => setParamEdits(p => ({ ...p, [key]: Number(e.target.value) }))}
+                                      style={{
+                                        width: 72, fontSize: "0.6875rem",
+                                        padding: "0.3rem 0.5rem", borderRadius: 6,
+                                        border: `1px solid ${isChanged ? "hsl(213 75% 22% / 0.45)" : "hsl(210 16% 85%)"}`,
+                                        textAlign: "right", color: "hsl(220 35% 15%)",
+                                        fontWeight: isChanged ? 700 : 400,
+                                        background: isChanged ? "hsl(213 75% 22% / 0.03)" : "#fff",
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Save footer */}
+                  <div style={{
+                    marginTop: "0.875rem", paddingTop: "0.75rem",
+                    borderTop: "1px solid hsl(210 16% 92%)",
+                    display: "flex", alignItems: "center", gap: "0.5rem",
+                  }}>
+                    {changedKeys.size > 0 ? (
+                      <div style={{ fontSize: "0.5625rem", color: "hsl(38 50% 32%)", fontWeight: 600 }}>
+                        {changedKeys.size} unsaved change{changedKeys.size > 1 ? "s" : ""}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "0.5625rem", color: SLATE }}>No changes</div>
+                    )}
+                    <button
+                      onClick={handleSave}
+                      style={{
+                        marginLeft: "auto",
+                        display: "flex", alignItems: "center", gap: "0.375rem",
+                        padding: "0.45rem 1rem", borderRadius: 7,
+                        background: changedKeys.size > 0 ? NAVY : "hsl(210 16% 93%)",
+                        color: changedKeys.size > 0 ? "#fff" : SLATE,
+                        border: "none", fontWeight: 700, fontSize: "0.6875rem",
+                        cursor: changedKeys.size > 0 ? "pointer" : "default",
+                        transition: "all 0.2s",
+                        boxShadow: changedKeys.size > 0 ? "0 2px 6px hsl(213 75% 22% / 0.25)" : "none",
+                      }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                      </svg>
+                      Save Parameters
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={async () => {
-                    try {
-                      addLog("Saving parameter overrides…", "info");
-                      await updateParameterSet(params.param_set_id, paramEdits);
-                      addLog("Parameters saved ✓", "success");
-                    } catch (e: any) { addLog(`Save failed: ${e.message}`, "error"); }
-                  }}
-                  style={{ marginTop: "0.75rem", width: "100%", padding: "0.45rem", borderRadius: 7, background: NAVY, color: "#fff", border: "none", fontWeight: 700, fontSize: "0.75rem", cursor: "pointer" }}
-                >
-                  Save Parameters
-                </button>
-              </div>
-            ) : (
+              );
+            })() : (
               <div style={{ textAlign: "center", padding: "1.25rem 1rem" }}>
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={SLATE} strokeWidth="1.5" style={{ margin: "0 auto 0.5rem", display: "block" }}>
                   <circle cx="12" cy="12" r="3"/>

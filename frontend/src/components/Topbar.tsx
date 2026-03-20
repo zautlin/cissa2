@@ -152,7 +152,7 @@ export default function Topbar({
             color: "hsl(213 75% 22%)",
             fontWeight: 600,
           }}>
-            ERP {(ctx.params.equity_risk_premium as number).toFixed(1)}%
+            ERP {Number(ctx.params.equity_risk_premium).toFixed(1)}%
           </div>
         )}
 

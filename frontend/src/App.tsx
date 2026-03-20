@@ -1,23 +1,25 @@
-import { Router, Route, Switch, useLocation } from "wouter";
+import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
-import DashboardHome from "./pages/DashboardHome";
-import PrincipleOnePage from "./pages/PrincipleOnePage";
-import PrincipleTwoPage from "./pages/PrincipleTwoPage";
-import PrincipleThreePage from "./pages/PrincipleThreePage";
-import PrincipleFourPage from "./pages/PrincipleFourPage";
-import PrincipleFivePage from "./pages/PrincipleFivePage";
-import PrincipleSixPage from "./pages/PrincipleSixPage";
-import OutputsPage from "./pages/OutputsPage";
-import UnderlyingDataPage from "./pages/UnderlyingDataPage";
-import ReportsPage from "./pages/ReportsPage";
-import MetricsDownloadPage from "./pages/MetricsDownloadPage";
-import PipelinePage from "./pages/PipelinePage";
-import ExecutiveDashboard from "./pages/ExecutiveDashboard";
-import NotFound from "./pages/not-found";
 import { DrillDownProvider } from "./context/DrillDown";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+
+const DashboardHome      = lazy(() => import("./pages/DashboardHome"));
+const PrincipleOnePage   = lazy(() => import("./pages/PrincipleOnePage"));
+const PrincipleTwoPage   = lazy(() => import("./pages/PrincipleTwoPage"));
+const PrincipleThreePage = lazy(() => import("./pages/PrincipleThreePage"));
+const PrincipleFourPage  = lazy(() => import("./pages/PrincipleFourPage"));
+const PrincipleFivePage  = lazy(() => import("./pages/PrincipleFivePage"));
+const PrincipleSixPage   = lazy(() => import("./pages/PrincipleSixPage"));
+const OutputsPage        = lazy(() => import("./pages/OutputsPage"));
+const UnderlyingDataPage = lazy(() => import("./pages/UnderlyingDataPage"));
+const ReportsPage        = lazy(() => import("./pages/ReportsPage"));
+const MetricsDownloadPage = lazy(() => import("./pages/MetricsDownloadPage"));
+const PipelinePage       = lazy(() => import("./pages/PipelinePage"));
+const ExecutiveDashboard = lazy(() => import("./pages/ExecutiveDashboard"));
+const NotFound           = lazy(() => import("./pages/not-found"));
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -27,12 +29,18 @@ export default function App() {
       <Router hook={useHashLocation}>
         <div className="dashboard-layout" style={{ gridTemplateColumns: sidebarOpen ? "260px 1fr" : "0px 1fr" }}>
           <div className="dashboard-sidebar" style={{ display: sidebarOpen ? undefined : "none" }}>
-            <Sidebar />
+            <ErrorBoundary fallback={<div style={{ padding: "1rem", color: "#ef4444" }}>Sidebar error</div>}>
+              <Sidebar />
+            </ErrorBoundary>
           </div>
           <div className="dashboard-topbar">
-            <Topbar onToggleSidebar={() => setSidebarOpen(v => !v)} sidebarOpen={sidebarOpen} />
+            <ErrorBoundary fallback={<div style={{ padding: "0.5rem", color: "#ef4444" }}>Topbar error</div>}>
+              <Topbar onToggleSidebar={() => setSidebarOpen(v => !v)} sidebarOpen={sidebarOpen} />
+            </ErrorBoundary>
           </div>
           <main className="dashboard-main">
+            <ErrorBoundary>
+            <Suspense fallback={<div style={{ padding: "2rem", color: "hsl(var(--muted-foreground))", fontSize: "0.875rem" }}>Loading…</div>}>
             <Switch>
               <Route path="/" component={DashboardHome} />
               <Route path="/principles/1" component={PrincipleOnePage} />
@@ -55,6 +63,8 @@ export default function App() {
               <Route path="/executive" component={ExecutiveDashboard} />
               <Route component={NotFound} />
             </Switch>
+            </Suspense>
+            </ErrorBoundary>
           </main>
         </div>
       </Router>

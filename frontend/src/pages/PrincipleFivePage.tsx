@@ -13,8 +13,11 @@ import {
   ResponsiveContainer, Cell, ReferenceLine, RadarChart,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
 } from "recharts";
-import { useActiveContext, useRatioMetric, NormalizedRatioItem } from "../hooks/useMetrics";
+import { useActiveContext, useRatioMetric, NormalizedRatioItem, ratioToFlat } from "../hooks/useMetrics";
 import { useDrillDown, DrillDownBanner, applyDrillFilter } from "../context/DrillDown";
+import { RollingTimeSeries } from "../components/RollingTimeSeries";
+import { MetricHistogram } from "../components/MetricHistogram";
+import { computeRollingAverages } from "../lib/rollingAverage";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const NAV = "#0E2D5C";
@@ -266,6 +269,84 @@ export default function PrincipleFivePage() {
     { subject: "Diversity", A: 78, B: 65, fullMark: 100 },
   ];
 
+  // ── Rolling averages: Tab 5.4 FA Intensity + Econ Eq Mult ────────────────
+  const faIntensityRollingRows = computeRollingAverages(
+    (faIntensity.data ?? []).flatMap((item: NormalizedRatioItem) =>
+      (item.time_series ?? []).map(ts => ({
+        ticker: item.ticker,
+        year: ts.year,
+        value: ts.value !== null ? ts.value * 100 : null,
+      }))
+    )
+  );
+  const econEqMultRollingRows = computeRollingAverages(
+    (econEqMult.data ?? []).flatMap((item: NormalizedRatioItem) =>
+      (item.time_series ?? []).map(ts => ({
+        ticker: item.ticker,
+        year: ts.year,
+        value: ts.value,
+      }))
+    )
+  );
+  const faIntensityHistData = ratioToFlat(faIntensity.data ?? []).map(r => ({ name: r.ticker, value: r.value * 100 }));
+  const econEqMultHistData = ratioToFlat(econEqMult.data ?? []).map(r => ({ name: r.ticker, value: r.value }));
+
+  // ── Rolling averages: Tab 5.3 ROA + Profit Margin ────────────────────────
+  const roaRollingRows = computeRollingAverages(
+    (roa1Y.data ?? []).flatMap((item: NormalizedRatioItem) =>
+      (item.time_series ?? []).map(ts => ({
+        ticker: item.ticker,
+        year: ts.year,
+        value: ts.value !== null ? ts.value * 100 : null,
+      }))
+    )
+  );
+  const profitMarginRollingRows = computeRollingAverages(
+    (profitMargin1Y.data ?? []).flatMap((item: NormalizedRatioItem) =>
+      (item.time_series ?? []).map(ts => ({
+        ticker: item.ticker,
+        year: ts.year,
+        value: ts.value !== null ? ts.value * 100 : null,
+      }))
+    )
+  );
+  const roaHistData = ratioToFlat(roa1Y.data ?? []).map(r => ({ name: r.ticker, value: r.value * 100 }));
+  const profitMarginHistData = ratioToFlat(profitMargin1Y.data ?? []).map(r => ({ name: r.ticker, value: r.value * 100 }));
+
+  // ── Rolling averages: Tab 5.2 Revenue Growth + EE Growth ─────────────────
+  const revGrowthRollingRows = computeRollingAverages(
+    (revGrowth1Y.data ?? []).flatMap((item: NormalizedRatioItem) =>
+      (item.time_series ?? []).map(ts => ({
+        ticker: item.ticker,
+        year: ts.year,
+        value: ts.value !== null ? ts.value * 100 : null,
+      }))
+    )
+  );
+  const eeGrowthRollingRows = computeRollingAverages(
+    (eeGrowth1Y.data ?? []).flatMap((item: NormalizedRatioItem) =>
+      (item.time_series ?? []).map(ts => ({
+        ticker: item.ticker,
+        year: ts.year,
+        value: ts.value !== null ? ts.value * 100 : null,
+      }))
+    )
+  );
+  const revGrowthHistData = ratioToFlat(revGrowth1Y.data ?? []).map(r => ({ name: r.ticker, value: r.value * 100 }));
+  const eeGrowthHistData = ratioToFlat(eeGrowth1Y.data ?? []).map(r => ({ name: r.ticker, value: r.value * 100 }));
+
+  // ── Rolling averages: Tab 5.1 Op Cost Margin ─────────────────────────────
+  const opCostRollingRows = computeRollingAverages(
+    (opCost1Y.data ?? []).flatMap((item: NormalizedRatioItem) =>
+      (item.time_series ?? []).map(ts => ({
+        ticker: item.ticker,
+        year: ts.year,
+        value: ts.value !== null ? ts.value * 100 : null,
+      }))
+    )
+  );
+  const opCostHistData = ratioToFlat(opCost1Y.data ?? []).map(r => ({ name: r.ticker, value: r.value * 100 }));
+
   // KPI tiles
   const kpis = [
     { label: "Avg Op Cost Margin (1Y)", value: avgMetric(opCost1Y.data), suffix: "%", scale: 100 },
@@ -355,6 +436,30 @@ export default function PrincipleFivePage() {
               </ResponsiveContainer>
             )}
           </Card>
+
+          <Card title="Op Cost Margin Rolling Averages" badge={opCostRollingRows.length > 0} help={HELP["5.1"]}>
+            <RollingTimeSeries
+              title=""
+              subtitle="Cross-sectional 1Y/3Y/5Y/10Y/LT rolling average (%)"
+              rows={opCostRollingRows}
+              valueFormat="pct"
+              bare
+            />
+          </Card>
+
+          <Card title="Op Cost Margin Distribution (most recent 1Y)" badge={opCostHistData.length > 0} help={HELP["5.1"]}>
+            <MetricHistogram
+              title=""
+              data={opCostHistData}
+              xAxisLabel="Op Cost Margin (%)"
+              valueFormat="pct"
+              minBucket={0}
+              maxBucket={100}
+              bucketWidth={5}
+              zeroCrossing={false}
+              bare
+            />
+          </Card>
         </>
       )}
 
@@ -423,6 +528,52 @@ export default function PrincipleFivePage() {
               );
             })()}
           </Card>
+
+          <Card title="Revenue Growth Rolling Averages" badge={revGrowthRollingRows.length > 0} help={HELP["5.2"]}>
+            <RollingTimeSeries
+              title=""
+              subtitle="Cross-sectional 1Y/3Y/5Y/10Y/LT rolling average (%)"
+              rows={revGrowthRollingRows}
+              valueFormat="pct"
+              bare
+            />
+          </Card>
+
+          <Card title="Revenue Growth Distribution (most recent 1Y)" badge={revGrowthHistData.length > 0} help={HELP["5.2"]}>
+            <MetricHistogram
+              title=""
+              data={revGrowthHistData}
+              xAxisLabel="Revenue Growth (%)"
+              valueFormat="pct"
+              minBucket={-30}
+              maxBucket={30}
+              bucketWidth={2}
+              bare
+            />
+          </Card>
+
+          <Card title="EE Growth Rolling Averages" badge={eeGrowthRollingRows.length > 0} help={HELP["5.2"]}>
+            <RollingTimeSeries
+              title=""
+              subtitle="Cross-sectional 1Y/3Y/5Y/10Y/LT rolling average (%)"
+              rows={eeGrowthRollingRows}
+              valueFormat="pct"
+              bare
+            />
+          </Card>
+
+          <Card title="EE Growth Distribution (most recent 1Y)" badge={eeGrowthHistData.length > 0} help={HELP["5.2"]}>
+            <MetricHistogram
+              title=""
+              data={eeGrowthHistData}
+              xAxisLabel="EE Growth (%)"
+              valueFormat="pct"
+              minBucket={-30}
+              maxBucket={30}
+              bucketWidth={2}
+              bare
+            />
+          </Card>
         </>
       )}
 
@@ -472,6 +623,52 @@ export default function PrincipleFivePage() {
               );
             })()}
           </Card>
+
+          <Card title="ROA Rolling Averages" badge={roaRollingRows.length > 0} help={HELP["5.3"]}>
+            <RollingTimeSeries
+              title=""
+              subtitle="Cross-sectional 1Y/3Y/5Y/10Y/LT rolling average (%)"
+              rows={roaRollingRows}
+              valueFormat="pct"
+              bare
+            />
+          </Card>
+
+          <Card title="ROA Distribution (most recent 1Y)" badge={roaHistData.length > 0} help={HELP["5.3"]}>
+            <MetricHistogram
+              title=""
+              data={roaHistData}
+              xAxisLabel="ROA (%)"
+              valueFormat="pct"
+              minBucket={-20}
+              maxBucket={20}
+              bucketWidth={2}
+              bare
+            />
+          </Card>
+
+          <Card title="Profit Margin Rolling Averages" badge={profitMarginRollingRows.length > 0} help={HELP["5.3"]}>
+            <RollingTimeSeries
+              title=""
+              subtitle="Cross-sectional 1Y/3Y/5Y/10Y/LT rolling average (%)"
+              rows={profitMarginRollingRows}
+              valueFormat="pct"
+              bare
+            />
+          </Card>
+
+          <Card title="Profit Margin Distribution (most recent 1Y)" badge={profitMarginHistData.length > 0} help={HELP["5.3"]}>
+            <MetricHistogram
+              title=""
+              data={profitMarginHistData}
+              xAxisLabel="Profit Margin (%)"
+              valueFormat="pct"
+              minBucket={-20}
+              maxBucket={40}
+              bucketWidth={2}
+              bare
+            />
+          </Card>
         </>
       )}
 
@@ -515,6 +712,54 @@ export default function PrincipleFivePage() {
                 </BarChart>
               </ResponsiveContainer>
             )}
+          </Card>
+
+          <Card title="FA Intensity Rolling Averages" badge={faIntensityRollingRows.length > 0} help={HELP["5.4"]}>
+            <RollingTimeSeries
+              title=""
+              subtitle="Fixed Assets/Revenue — cross-sectional 1Y/3Y/5Y/10Y/LT rolling average (%)"
+              rows={faIntensityRollingRows}
+              valueFormat="pct"
+              bare
+            />
+          </Card>
+
+          <Card title="FA Intensity Distribution (most recent 1Y)" badge={faIntensityHistData.length > 0} help={HELP["5.4"]}>
+            <MetricHistogram
+              title=""
+              data={faIntensityHistData}
+              xAxisLabel="FA Intensity (%)"
+              valueFormat="pct"
+              minBucket={0}
+              maxBucket={100}
+              bucketWidth={5}
+              zeroCrossing={false}
+              bare
+            />
+          </Card>
+
+          <Card title="Econ Equity Multiplier Rolling Averages" badge={econEqMultRollingRows.length > 0} help={HELP["5.4"]}>
+            <RollingTimeSeries
+              title=""
+              subtitle="Assets/|EE| — cross-sectional 1Y/3Y/5Y/10Y/LT rolling average (×)"
+              rows={econEqMultRollingRows}
+              valueFormat="ratio"
+              bare
+            />
+          </Card>
+
+          <Card title="Econ Equity Multiplier Distribution (most recent 1Y)" badge={econEqMultHistData.length > 0} help={HELP["5.4"]}>
+            <MetricHistogram
+              title=""
+              data={econEqMultHistData}
+              xAxisLabel="Econ Equity Multiplier (×)"
+              valueFormat="ratio"
+              minBucket={0}
+              maxBucket={10}
+              bucketWidth={0.5}
+              zeroCrossing={false}
+              bare
+            />
           </Card>
         </>
       )}

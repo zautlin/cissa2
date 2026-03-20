@@ -1,12 +1,42 @@
-import { useState } from "react";
-import { Bar, Doughnut } from "react-chartjs-2";
+import { useState, useMemo } from "react";
+import { Bar, Doughnut, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
-  ArcElement, Tooltip, Legend,
+  ArcElement, Tooltip, Legend, LineElement, PointElement, Filler,
 } from "chart.js";
 import { wealthCreationDecomp, epVsEpsCohorts } from "../data/chartData";
+import { useActiveContext, aggregateByYear } from "../hooks/useMetrics";
+import { getOptimizationMetrics, MetricResultItem } from "../lib/api";
+import { useEffect } from "react";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, LineElement, PointElement, Filler);
+
+// ─── Local types for optimization metrics data layer ─────────────────────────
+
+interface WealthPoint { year: number; value: number; }
+
+function mapToWealthSeries(items: MetricResultItem[]): WealthPoint[] {
+  return aggregateByYear(items).map(d => ({ year: d.year, value: d.value }));
+}
+
+// ─── Seeded random fallback — stable across renders ──────────────────────────
+// Used only when optimization_metrics endpoint returns no data.
+
+function seededRandom(seed: number) {
+  let s = seed;
+  return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
+}
+
+const YEARS = Array.from({ length: 15 }, (_, i) => 2009 + i);
+
+function makePlaceholderSeries(seed: number, base: number, volatility: number): WealthPoint[] {
+  const rand = seededRandom(seed);
+  let v = base;
+  return YEARS.map(year => {
+    v += (rand() - 0.48) * volatility;
+    return { year, value: +v.toFixed(2) };
+  });
+}
 
 const tabs = [
   "Wealth Creation Overview",
@@ -25,6 +55,34 @@ const decompositionRows = [
 
 export default function OutputsPage() {
   const [activeTab, setActiveTab] = useState(0);
+
+  // ─── Live data ──────────────────────────────────────────────────────────
+  const ctx = useActiveContext();
+
+  // Intrinsic + Sustainable Wealth via optimization_metrics (future endpoint)
+  const [intrinsicRaw, setIntrinsicRaw] = useState<MetricResultItem[]>([]);
+  const [sustainableRaw, setSustainableRaw] = useState<MetricResultItem[]>([]);
+
+  useEffect(() => {
+    if (!ctx.datasetId || !ctx.paramSetId) return;
+    getOptimizationMetrics({ dataset_id: ctx.datasetId, parameter_set_id: ctx.paramSetId, metric_name: "Intrinsic Wealth" })
+      .then(r => setIntrinsicRaw(r.results));
+    getOptimizationMetrics({ dataset_id: ctx.datasetId, parameter_set_id: ctx.paramSetId, metric_name: "Sustainable Wealth" })
+      .then(r => setSustainableRaw(r.results));
+  }, [ctx.datasetId, ctx.paramSetId]);
+
+  // Map through data layer; fall back to seeded placeholder when empty
+  const intrinsicSeries  = useMemo(() => {
+    const mapped = mapToWealthSeries(intrinsicRaw);
+    return mapped.length ? mapped : makePlaceholderSeries(42,  5.4, 1.2);
+  }, [intrinsicRaw]);
+
+  const sustainableSeries = useMemo(() => {
+    const mapped = mapToWealthSeries(sustainableRaw);
+    return mapped.length ? mapped : makePlaceholderSeries(99,  3.8, 0.9);
+  }, [sustainableRaw]);
+
+  const isPlaceholder = intrinsicRaw.length === 0;
 
   return (
     <div style={{ padding: "1.5rem", maxWidth: "1400px" }}>
@@ -214,16 +272,120 @@ export default function OutputsPage() {
         </div>
       )}
 
-      {/* Placeholder tabs */}
-      {(activeTab === 2 || activeTab === 3) && (
-        <div className="help-panel" style={{ textAlign: "center", padding: "3rem" }}>
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5"
-            style={{ margin: "0 auto 1rem" }}>
-            <path d="M3 3h18v18H3zM3 9h18M9 21V9"/>
-          </svg>
-          <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>{tabs[activeTab]}</div>
-          <div style={{ color: "hsl(var(--muted-foreground))", fontSize: "0.875rem" }}>
-            This analytical screen is under construction. Navigate to Principle 1 for related analysis.
+      {/* Intrinsic Wealth */}
+      {activeTab === 2 && (
+        <div>
+          {isPlaceholder && (
+            <div className="help-panel" style={{ marginBottom: "1rem", fontSize: "0.8125rem" }}>
+              <strong>Preview data</strong> — Intrinsic Wealth Creation will be sourced from the
+              <code style={{ marginLeft: 4 }}>optimization_metrics</code> endpoint once available.
+              Chart below uses illustrative values.
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <div className="chart-card">
+              <div className="chart-card-title">Intrinsic Wealth Creation — Trend</div>
+              <div className="chart-card-subtitle">TER-Ke component attributable to EP-driven innovation (%)</div>
+              <div style={{ height: 260 }}>
+                <Line
+                  data={{
+                    labels: intrinsicSeries.map(d => d.year),
+                    datasets: [{
+                      label: "Intrinsic Wealth (%)",
+                      data: intrinsicSeries.map(d => d.value),
+                      borderColor: "hsl(38 60% 52%)",
+                      backgroundColor: "hsl(38 60% 52% / 0.1)",
+                      fill: true,
+                      tension: 0.4,
+                      pointRadius: 3,
+                    }],
+                  }}
+                  options={{
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                      x: { ticks: { font: { size: 9 } }, grid: { display: false } },
+                      y: { ticks: { font: { size: 9 }, callback: (v: any) => `${Number(v).toFixed(1)}%` }, grid: { color: "rgba(0,0,0,0.04)" } },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+            <div className="chart-card">
+              <div className="chart-card-title">What is Intrinsic Wealth?</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.5rem" }}>
+                {[
+                  { label: "Definition", text: "Wealth created by engaging in innovation, new capability creation and other positive activities during a measurement period." },
+                  { label: "Source", text: "Creates new and higher EP expectations to be delivered beyond the measurement period." },
+                  { label: "Stability", text: "More stable than TSR-Ke — converges over 5–10 year periods." },
+                  { label: "Metric", text: "Sourced from optimization_metrics endpoint (Intrinsic Wealth)." },
+                ].map(item => (
+                  <div key={item.label}>
+                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "hsl(38 60% 35%)" }}>{item.label}</div>
+                    <div style={{ fontSize: "0.8125rem", color: "hsl(var(--muted-foreground))", lineHeight: 1.5 }}>{item.text}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sustainable Wealth */}
+      {activeTab === 3 && (
+        <div>
+          {isPlaceholder && (
+            <div className="help-panel" style={{ marginBottom: "1rem", fontSize: "0.8125rem" }}>
+              <strong>Preview data</strong> — Sustainable Wealth Creation will be sourced from the
+              <code style={{ marginLeft: 4 }}>optimization_metrics</code> endpoint once available.
+              Chart below uses illustrative values.
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <div className="chart-card">
+              <div className="chart-card-title">Sustainable Wealth Creation — Trend</div>
+              <div className="chart-card-subtitle">EP-driven component of Intrinsic Wealth arising from core business operations (%)</div>
+              <div style={{ height: 260 }}>
+                <Line
+                  data={{
+                    labels: sustainableSeries.map(d => d.year),
+                    datasets: [{
+                      label: "Sustainable Wealth (%)",
+                      data: sustainableSeries.map(d => d.value),
+                      borderColor: "hsl(152 60% 40%)",
+                      backgroundColor: "hsl(152 60% 40% / 0.1)",
+                      fill: true,
+                      tension: 0.4,
+                      pointRadius: 3,
+                    }],
+                  }}
+                  options={{
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                      x: { ticks: { font: { size: 9 } }, grid: { display: false } },
+                      y: { ticks: { font: { size: 9 }, callback: (v: any) => `${Number(v).toFixed(1)}%` }, grid: { color: "rgba(0,0,0,0.04)" } },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+            <div className="chart-card">
+              <div className="chart-card-title">What is Sustainable Wealth?</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.5rem" }}>
+                {[
+                  { label: "Definition", text: "Arising from sound and sustainable economic endeavour in the product and service market." },
+                  { label: "Relationship", text: "A sub-component of Intrinsic Wealth — represents the EP-grounded, recurring portion." },
+                  { label: "Stability", text: "Most stable wealth component — least sensitive to market sentiment shifts." },
+                  { label: "Metric", text: "Sourced from optimization_metrics endpoint (Sustainable Wealth)." },
+                ].map(item => (
+                  <div key={item.label}>
+                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "hsl(152 60% 30%)" }}>{item.label}</div>
+                    <div style={{ fontSize: "0.8125rem", color: "hsl(var(--muted-foreground))", lineHeight: 1.5 }}>{item.text}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -1,8 +1,7 @@
 /**
  * Executive Dashboard — CISSA Financial Platform
  * Logical flow: Market Context → Wealth Creation → EP Bow Wave → Valuation → Cost Structure
- * Highlights: MC, TSR, EE, ECF, EP% Delivered vs Expected, EEAI Heatmap
- * Uses dummy/static data — replace with live hooks once metrics are computed
+ * Highlights: Beta, TSR, EE, ECF, Ke, M:B — live data from API
  */
 import { useState } from "react";
 import {
@@ -13,6 +12,7 @@ import {
   PolarAngleAxis, PolarRadiusAxis, Radar,
 } from "recharts";
 import { useDrillDown, DrillDownBanner } from "../context/DrillDown";
+import { useActiveContext, useMultipleMetrics, useRatioMetric, aggregateByYear } from "../hooks/useMetrics";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const NAV   = "#0E2D5C";
@@ -26,24 +26,6 @@ const LIGHT = "#F4F7FE";
 
 // ─── Dummy Data ───────────────────────────────────────────────────────────────
 
-// Market cap, TSR, EE, ECF — 2010-2024
-const MC_TSR_DATA = [
-  { year:"2010", mc:920, tsr:12.4, ee:640, ecf:85 },
-  { year:"2011", mc:870, tsr:-8.2, ee:620, ecf:72 },
-  { year:"2012", mc:950, tsr:14.1, ee:660, ecf:91 },
-  { year:"2013", mc:1040,tsr:19.8, ee:690, ecf:112 },
-  { year:"2014", mc:1100,tsr:5.2,  ee:710, ecf:98 },
-  { year:"2015", mc:1080,tsr:-2.1, ee:720, ecf:88 },
-  { year:"2016", mc:1150,tsr:11.7, ee:750, ecf:105 },
-  { year:"2017", mc:1280,tsr:12.9, ee:780, ecf:118 },
-  { year:"2018", mc:1200,tsr:-6.3, ee:790, ecf:95 },
-  { year:"2019", mc:1350,tsr:23.4, ee:810, ecf:132 },
-  { year:"2020", mc:1180,tsr:-8.9, ee:800, ecf:78 },
-  { year:"2021", mc:1520,tsr:28.7, ee:840, ecf:148 },
-  { year:"2022", mc:1380,tsr:-9.1, ee:855, ecf:112 },
-  { year:"2023", mc:1490,tsr:12.2, ee:870, ecf:128 },
-  { year:"2024", mc:1610,tsr:15.8, ee:890, ecf:145 },
-];
 
 // EP Bow Wave — multiple T0 years (like the Excel charts)
 const BOW_WAVE_YEARS = ["2015","2016","2017","2018","2019","2020"];
@@ -88,25 +70,6 @@ const EEAI_DATA = EEAI_COMPANIES.map(co => {
   return row;
 });
 
-// TER vs TSR over time
-const TER_TSR = MC_TSR_DATA.map(d => ({
-  year: d.year,
-  tsr: d.tsr,
-  ter: +(d.tsr + (Math.random() - 0.4) * 4).toFixed(1),
-  ke:  +(8.5 + Math.random() * 2).toFixed(1),
-}));
-
-// Ke decomposition (Rf + Beta×ERP)
-const KE_DECOMP = [
-  { year:"2010", rf:5.1, erp:5.0, ke:10.1 },
-  { year:"2012", rf:4.2, erp:5.0, ke:9.2  },
-  { year:"2014", rf:3.5, erp:5.3, ke:8.8  },
-  { year:"2016", rf:2.8, erp:5.2, ke:8.0  },
-  { year:"2018", rf:2.1, erp:5.5, ke:7.6  },
-  { year:"2020", rf:0.8, erp:5.8, ke:6.6  },
-  { year:"2022", rf:2.8, erp:5.3, ke:8.1  },
-  { year:"2024", rf:4.2, erp:5.0, ke:9.2  },
-];
 
 // Wealth creation bridge (waterfall-style)
 const WEALTH_BRIDGE = [
@@ -134,13 +97,6 @@ const MB_RATIO = [
   { year:"2022", mb:3.5 }, { year:"2024", mb:3.7 },
 ];
 
-// FV-ECF intervals
-const FV_ECF = [
-  { interval:"1Y", fv:145, tsr:15.8 },
-  { interval:"3Y", fv:428, tsr:12.3 },
-  { interval:"5Y", fv:712, tsr:10.9 },
-  { interval:"10Y",fv:1333,tsr:9.2  },
-];
 
 // Radar: top company profile
 const RADAR_DATA = [
@@ -256,6 +212,274 @@ export default function ExecutiveDashboard() {
   const drill = useDrillDown();
   const [bowYear, setBowYear] = useState<string | null>(null);
 
+  // ─── Live data ─────────────────────────────────────────────────────────────
+  const ctx = useActiveContext();
+  const coreMetrics = useMultipleMetrics(ctx.datasetId, ctx.paramSetId, [
+    "Calc Beta", "Calc Ke", "Calc Rf", "Calc ECF", "Calc FY TSR", "Calc EE",
+    "Calc 1Y FV ECF", "Calc 3Y FV ECF", "Calc 5Y FV ECF", "Calc 10Y FV ECF",
+    "Calc 1Y TER", "Calc EP",
+  ]);
+  const mbData        = useRatioMetric(ctx.datasetId, ctx.paramSetId, "mb_ratio");
+  const opCostData    = useRatioMetric(ctx.datasetId, ctx.paramSetId, "op_cost_margin",    "1Y");
+  const nonOpCostData = useRatioMetric(ctx.datasetId, ctx.paramSetId, "non_op_cost_margin", "1Y");
+  const xoCostData    = useRatioMetric(ctx.datasetId, ctx.paramSetId, "xo_cost_margin",     "1Y");
+  const profitData    = useRatioMetric(ctx.datasetId, ctx.paramSetId, "profit_margin",       "1Y");
+
+  // ─── KPI computed values ───────────────────────────────────────────────────
+  const keByYear   = aggregateByYear(coreMetrics.data["Calc Ke"]     ?? []);
+  const betaByYear = aggregateByYear(coreMetrics.data["Calc Beta"]   ?? []);
+  const tsrByYear  = aggregateByYear(coreMetrics.data["Calc FY TSR"] ?? []);
+  const ecfByYear  = aggregateByYear(coreMetrics.data["Calc ECF"]    ?? []);
+  const eeByYear   = aggregateByYear(coreMetrics.data["Calc EE"]     ?? []);
+
+  const latestKe   = keByYear.length   ? keByYear[keByYear.length - 1].value     : null;
+  const prevKe     = keByYear.length   > 1 ? keByYear[keByYear.length - 2].value : null;
+  const latestBeta = betaByYear.length ? betaByYear[betaByYear.length - 1].value : null;
+  const prevBeta   = betaByYear.length > 1 ? betaByYear[betaByYear.length - 2].value : null;
+  const latestTSR  = tsrByYear.length  ? tsrByYear[tsrByYear.length - 1].value   : null;
+  const prevTSR    = tsrByYear.length  > 1 ? tsrByYear[tsrByYear.length - 2].value : null;
+  const latestECF  = ecfByYear.length  ? ecfByYear[ecfByYear.length - 1].value   : null;
+  const prevECF    = ecfByYear.length  > 1 ? ecfByYear[ecfByYear.length - 2].value : null;
+  const latestEE   = eeByYear.length   ? eeByYear[eeByYear.length - 1].value     : null;
+  const prevEE     = eeByYear.length   > 1 ? eeByYear[eeByYear.length - 2].value : null;
+
+  const mbVals   = mbData.data.filter(r => r.value !== null);
+  const latestMB = mbVals.length
+    ? mbVals.reduce((s, r) => s + (r.value as number), 0) / mbVals.length
+    : null;
+
+  // ─── Section 4: TER/TSR/Ke + Ke Decomposition ────────────────────────────
+  const rfByYear  = aggregateByYear(coreMetrics.data["Calc Rf"]     ?? []);
+  const terByYear = aggregateByYear(coreMetrics.data["Calc 1Y TER"] ?? []);
+
+  interface TerTsrPoint { year: string; tsr: number | null; ter: number | null; ke: number | null; }
+  const terTsrChart: TerTsrPoint[] = tsrByYear.map(d => ({
+    year: String(d.year),
+    tsr: d.value !== null ? +(d.value * 100).toFixed(1) : null,
+    ter: +((terByYear.find(x => x.year === d.year)?.value ?? 0) * 100).toFixed(1),
+    ke:  +((keByYear.find(x => x.year === d.year)?.value  ?? 0) * 100).toFixed(1),
+  })).slice(-15);
+
+  interface KeDecompPoint { year: string; rf: number | null; erp: number | null; }
+  const keDecompChart: KeDecompPoint[] = keByYear.map(d => {
+    const rf  = rfByYear.find(x => x.year === d.year)?.value ?? null;
+    const erp = d.value !== null && rf !== null ? d.value - rf : null;
+    return {
+      year: String(d.year),
+      rf:  rf  !== null ? +(rf  * 100).toFixed(1) : null,
+      erp: erp !== null ? +(erp * 100).toFixed(1) : null,
+    };
+  }).slice(-15);
+
+  // ─── Section 3: FV-ECF bar chart data structure ───────────────────────────
+  const fv1yByYear  = aggregateByYear(coreMetrics.data["Calc 1Y FV ECF"]  ?? []);
+  const fv3yByYear  = aggregateByYear(coreMetrics.data["Calc 3Y FV ECF"]  ?? []);
+  const fv5yByYear  = aggregateByYear(coreMetrics.data["Calc 5Y FV ECF"]  ?? []);
+  const fv10yByYear = aggregateByYear(coreMetrics.data["Calc 10Y FV ECF"] ?? []);
+
+  interface FvEcfPoint { interval: string; fv: number | null; }
+  const fvEcfChart: FvEcfPoint[] = [
+    { interval: "1Y",  fv: fv1yByYear.length  ? +(( fv1yByYear[fv1yByYear.length - 1].value   ?? 0) / 1e9).toFixed(1) : null },
+    { interval: "3Y",  fv: fv3yByYear.length  ? +(( fv3yByYear[fv3yByYear.length - 1].value   ?? 0) / 1e9).toFixed(1) : null },
+    { interval: "5Y",  fv: fv5yByYear.length  ? +(( fv5yByYear[fv5yByYear.length - 1].value   ?? 0) / 1e9).toFixed(1) : null },
+    { interval: "10Y", fv: fv10yByYear.length ? +((fv10yByYear[fv10yByYear.length - 1].value  ?? 0) / 1e9).toFixed(1) : null },
+  ];
+
+  // ─── Section 5: M:B Ratio trend (live from ratio-metrics) ───────────────
+  interface MbPoint { year: string; mb: number | null; }
+  const mbTrendData: MbPoint[] = (() => {
+    const byYear: Record<number, number[]> = {};
+    (mbData.data ?? []).forEach(item => {
+      (item.time_series ?? []).forEach(ts => {
+        if (ts.value !== null) {
+          if (!byYear[ts.year]) byYear[ts.year] = [];
+          byYear[ts.year].push(ts.value);
+        }
+      });
+    });
+    return Object.entries(byYear)
+      .map(([y, vals]) => ({ year: String(y), mb: +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) }))
+      .sort((a, b) => Number(a.year) - Number(b.year))
+      .slice(-15);
+  })();
+
+  // ─── Section 9: Cost Structure Waterfall (live from ratio-metrics) ─────────
+  interface WaterfallBar { label: string; value: number; color: string; }
+  const costWaterfallData: WaterfallBar[] | null = (() => {
+    const med = (items: typeof opCostData.data) => {
+      const vals = items.filter(r => r.value !== null).map(r => r.value as number * 100).sort((a, b) => a - b);
+      return vals.length ? vals[Math.floor(vals.length / 2)] : null;
+    };
+    const opCost    = med(opCostData.data);
+    const nonOpCost = med(nonOpCostData.data);
+    const xoCost    = med(xoCostData.data);
+    const profit    = med(profitData.data);
+    if (opCost === null && profit === null) return null;
+    return [
+      { label: "Revenue",   value: 100,                                                color: NAV    },
+      { label: "Op Cost",   value: opCost    !== null ? -Math.abs(+opCost.toFixed(1))    : 0, color: GOLD   },
+      { label: "Non-Op",    value: nonOpCost !== null ? -Math.abs(+nonOpCost.toFixed(1)) : 0, color: SLATE  },
+      { label: "XO Cost",   value: xoCost    !== null ? -Math.abs(+xoCost.toFixed(1))    : 0, color: PURPLE },
+      { label: "EP Margin", value: profit    !== null ? +profit.toFixed(1)                : 0, color: GREEN  },
+    ];
+  })();
+
+  // ─── Section 6: Sector Aggregations (live) ──────────────────────────────
+  interface SectorRow {
+    sector: string;
+    epDelivered: number | null;
+    epExpected:  number | null;
+    eeai:        number | null;
+    mb:          number | null;
+    tsr:         number | null;
+    ke:          number | null;
+    eeGrowth:    number | null;
+    epTrend:     "positive" | "declining" | null;
+  }
+  const sectorAggRows: SectorRow[] | null = (() => {
+    if (!mbData.data.length) return null;
+
+    // Ticker → sector from enriched mbData
+    const tickerSector = new Map<string, string>();
+    mbData.data.forEach(r => tickerSector.set(r.ticker, r.sector));
+
+    // Per-ticker latest non-null value from MetricResultItem[]
+    const latestMap = (data: { ticker: string; fiscal_year: number; value: number | null }[]): Map<string, number> => {
+      const m = new Map<string, { year: number; val: number }>();
+      data.forEach(r => {
+        if (r.value !== null) {
+          const e = m.get(r.ticker);
+          if (!e || r.fiscal_year > e.year) m.set(r.ticker, { year: r.fiscal_year, val: r.value });
+        }
+      });
+      const out = new Map<string, number>();
+      m.forEach(({ val }, k) => out.set(k, val));
+      return out;
+    };
+
+    const median = (vals: number[]): number | null => {
+      if (!vals.length) return null;
+      const s = [...vals].sort((a, b) => a - b);
+      return s[Math.floor(s.length / 2)];
+    };
+
+    const epLatest  = latestMap(coreMetrics.data["Calc EP"]     ?? []);
+    const eeLatest  = latestMap(coreMetrics.data["Calc EE"]     ?? []);
+    const keLatest  = latestMap(coreMetrics.data["Calc Ke"]     ?? []);
+    const tsrLatest = latestMap(coreMetrics.data["Calc FY TSR"] ?? []);
+    const mbLatest  = new Map<string, number>();
+    mbData.data.forEach(r => { if (r.value !== null) mbLatest.set(r.ticker, r.value as number); });
+
+    // EE YoY growth per ticker
+    const eeGrowthMap = (() => {
+      const byTicker: Record<string, { year: number; val: number }[]> = {};
+      (coreMetrics.data["Calc EE"] ?? []).forEach(r => {
+        if (r.value !== null) {
+          if (!byTicker[r.ticker]) byTicker[r.ticker] = [];
+          byTicker[r.ticker].push({ year: r.fiscal_year, val: r.value });
+        }
+      });
+      const m = new Map<string, number>();
+      Object.entries(byTicker).forEach(([ticker, series]) => {
+        series.sort((a, b) => a.year - b.year);
+        if (series.length >= 2) {
+          const prev = series[series.length - 2].val;
+          const curr = series[series.length - 1].val;
+          if (prev !== 0) m.set(ticker, (curr - prev) / Math.abs(prev) * 100);
+        }
+      });
+      return m;
+    })();
+
+    // Group tickers by sector
+    const sectorTickers: Record<string, string[]> = {};
+    tickerSector.forEach((sector, ticker) => {
+      if (!sectorTickers[sector]) sectorTickers[sector] = [];
+      sectorTickers[sector].push(ticker);
+    });
+
+    const collect = (m: Map<string, number>, tickers: string[]) =>
+      tickers.flatMap(t => { const v = m.get(t); return v !== undefined ? [v] : []; });
+
+    const rows = Object.entries(sectorTickers).map(([sector, tickers]) => {
+      const keVals  = collect(keLatest, tickers);
+      const tsrVals = collect(tsrLatest, tickers);
+      const mbValsS = collect(mbLatest, tickers);
+      const eeGVals = collect(eeGrowthMap, tickers);
+      const epVals  = collect(epLatest, tickers);
+
+      // EP% = EP / EE per ticker, then sector median
+      const epPctVals = tickers.flatMap(t => {
+        const ep = epLatest.get(t); const ee = eeLatest.get(t);
+        return ep !== undefined && ee !== undefined && ee !== 0 ? [ep / ee * 100] : [];
+      });
+
+      const keMedian = median(keVals);
+      const epPct    = median(epPctVals);
+      // EEAI = (EP/EE) / Ke * 100 — 100 = exactly meeting cost of equity
+      const eeai = epPct !== null && keMedian !== null && keMedian !== 0
+        ? Math.round(epPct / (keMedian * 100) * 100) : null;
+      const epMedian = median(epVals);
+
+      return {
+        sector,
+        epDelivered: epPct    !== null ? +epPct.toFixed(1)            : null,
+        epExpected:  keMedian !== null ? +(keMedian * 100).toFixed(1)  : null,
+        eeai,
+        mb:          median(mbValsS),
+        tsr:         median(tsrVals) !== null ? +(median(tsrVals)! * 100).toFixed(1) : null,
+        ke:          keMedian !== null ? +(keMedian * 100).toFixed(1) : null,
+        eeGrowth:    median(eeGVals) !== null ? +median(eeGVals)!.toFixed(1) : null,
+        epTrend:     epMedian !== null ? (epMedian > 0 ? "positive" : "declining") as "positive" | "declining" : null,
+      } as SectorRow;
+    });
+
+    return rows.length ? rows.sort((a, b) => a.sector.localeCompare(b.sector)) : null;
+  })();
+
+  // ─── Section 2: trend chart data structure ────────────────────────────────
+  interface TrendPoint { year: string; ee: number | null; ecf: number | null; tsr: number | null; }
+  const trendChart: TrendPoint[] = eeByYear.map(d => ({
+    year: String(d.year),
+    ee:  d.value,
+    ecf: ecfByYear.find(x => x.year === d.year)?.value ?? null,
+    tsr: tsrByYear.find(x => x.year === d.year)?.value ?? null,
+  })).slice(-15);
+
+  // ─── Formatters ────────────────────────────────────────────────────────────
+  const fmtPct   = (v: number | null, d = 1) => v !== null ? `${v.toFixed(d)}%` : "—";
+  const fmtVal   = (v: number | null, d = 2) => v !== null ? v.toFixed(d) : "—";
+  const fmtX     = (v: number | null, d = 2) => v !== null ? `${v.toFixed(d)}×` : "—";
+  const fmtDelta = (curr: number | null, prev: number | null, suffix = "%") => {
+    if (curr === null || prev === null) return undefined;
+    const d = curr - prev;
+    return `${d >= 0 ? "+" : ""}${d.toFixed(1)}${suffix}`;
+  };
+
+  // ─── Loading / no-data guards ──────────────────────────────────────────────
+  if (ctx.loading || coreMetrics.loading || mbData.loading) {
+    return (
+      <div style={{ padding: 48, textAlign: "center", color: SLATE, fontSize: 14 }}>
+        Loading metrics…
+      </div>
+    );
+  }
+  if (!ctx.hasMetrics) {
+    return (
+      <div style={{ padding: 48, textAlign: "center" }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: NAV, marginBottom: 8 }}>
+          No data available
+        </div>
+        <div style={{ color: SLATE, fontSize: 13, marginBottom: 16 }}>
+          Run the ETL pipeline first to populate metrics.
+        </div>
+        <a href="#/pipeline" style={{ color: TEAL, fontWeight: 600, fontSize: 13 }}>
+          Go to Pipeline →
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding:"28px 32px", background:LIGHT, minHeight:"100vh" }}>
       <DrillDownBanner />
@@ -269,11 +493,8 @@ export default function ExecutiveDashboard() {
               Executive Dashboard
             </h1>
             <p style={{ color:SLATE, fontSize:13, margin:"4px 0 0" }}>
-              Capital Intelligence · Shareholder Alignment · Wealth Creation Overview — dummy data, replace with live pipeline
+              Capital Intelligence · Shareholder Alignment · Wealth Creation Overview
             </p>
-          </div>
-          <div style={{ marginLeft:"auto", padding:"6px 16px", borderRadius:8, background:"hsl(38 60% 52% / 0.12)", border:"1px solid hsl(38 60% 52% / 0.3)", fontSize:11, fontWeight:800, color:"hsl(38 60% 28%)", textTransform:"uppercase" }}>
-            Illustrative
           </div>
         </div>
       </div>
@@ -285,28 +506,27 @@ export default function ExecutiveDashboard() {
           <span style={{ fontSize:12, fontWeight:800, color:NAV, textTransform:"uppercase", letterSpacing:1 }}>§1 Market Context</span>
           <span style={{ fontSize:11, color:SLATE }}>— Market Cap · TSR · Economic Equity · ECF</span>
         </div>
-        <KPICard label="Market Cap (avg $B)" value="$1,610" sub="ASX-100 index avg" delta="+8.1%" color={NAV} />
-        <KPICard label="TSR 1Y" value="15.8%" sub="Total Shareholder Return" delta="+3.6%" color={GREEN} />
-        <KPICard label="Econ. Equity (EE $B)" value="$890" sub="Opening Book EE" delta="+2.3%" color={TEAL} />
-        <KPICard label="Equity Cash Flow (ECF)" value="$145B" sub="Cash to shareholders" delta="+13.3%" color={GOLD} />
-        <KPICard label="Cost of Equity (Ke)" value="9.2%" sub="CAPM: Rf + β×ERP" delta="-0.3%" color={SLATE} />
-        <KPICard label="M:B Ratio" value="3.7×" sub="Market Cap / Econ. Equity" delta="+0.2×" color={PURPLE} />
+        <KPICard label="Avg Beta" value={fmtVal(latestBeta)} sub="Median market beta" delta={fmtDelta(latestBeta, prevBeta, "")} color={NAV} />
+        <KPICard label="TSR 1Y" value={fmtPct(latestTSR)} sub="Total Shareholder Return" delta={fmtDelta(latestTSR, prevTSR)} color={GREEN} />
+        <KPICard label="Econ. Equity (EE)" value={fmtVal(latestEE, 0)} sub="Median Economic Equity" delta={fmtDelta(latestEE, prevEE, "")} color={TEAL} />
+        <KPICard label="Equity Cash Flow (ECF)" value={fmtVal(latestECF, 0)} sub="Median ECF" delta={fmtDelta(latestECF, prevECF, "")} color={GOLD} />
+        <KPICard label="Cost of Equity (Ke)" value={fmtPct(latestKe)} sub="CAPM: Rf + β×ERP" delta={fmtDelta(latestKe, prevKe)} color={SLATE} />
+        <KPICard label="M:B Ratio" value={fmtX(latestMB)} sub="Market Cap / Econ. Equity" color={PURPLE} />
       </div>
 
       {/* ── MC + TSR + EE + ECF chart ─────────────────────────────────── */}
       <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:16, marginBottom:16 }}>
-        <Card title="Market Cap, EE & ECF — 15-Year Trend" subtitle="A$m index aggregate — MC (bars), EE (area), ECF (line)" badge="illus.">
+        <Card title="EE, ECF & TSR — Year-on-Year Trend" subtitle="EE (area, left axis) · ECF & TSR (lines, right axis)">
           <ResponsiveContainer width="100%" height={240}>
-            <ComposedChart data={MC_TSR_DATA} margin={{ top:4, right:8, bottom:0, left:0 }}>
+            <ComposedChart data={trendChart} margin={{ top:4, right:8, bottom:0, left:0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef0f5" />
               <XAxis dataKey="year" tick={{ fontSize:9 }} tickLine={false} axisLine={false} />
-              <YAxis yAxisId="left" tick={{ fontSize:9 }} tickLine={false} axisLine={false} width={44} tickFormatter={v=>`$${v}`} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize:9 }} tickLine={false} axisLine={false} width={36} tickFormatter={v=>`${v}%`} />
+              <YAxis yAxisId="left" tick={{ fontSize:9 }} tickLine={false} axisLine={false} width={44} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize:9 }} tickLine={false} axisLine={false} width={36} tickFormatter={(v: number) => v.toFixed(1)} />
               <Tooltip content={<TT />} />
               <Legend wrapperStyle={{ fontSize:9, paddingTop:6 }} />
-              <Bar yAxisId="left" dataKey="mc" name="Mkt Cap ($B)" fill={`${NAV}22`} stroke={NAV} strokeWidth={1} maxBarSize={22} radius={[3,3,0,0]}/>
               <Area yAxisId="left" type="monotone" dataKey="ee" name="Econ. Equity" stroke={TEAL} fill={`${TEAL}18`} strokeWidth={2} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="ecf" name="ECF ($B)" stroke={GOLD} strokeWidth={2.5} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="ecf" name="ECF" stroke={GOLD} strokeWidth={2.5} dot={false} />
               <Line yAxisId="right" type="monotone" dataKey="tsr" name="TSR (%)" stroke={GREEN} strokeWidth={2} strokeDasharray="5 3" dot={false} />
               <ReferenceLine yAxisId="right" y={0} stroke={RED} strokeDasharray="3 2" strokeWidth={1} />
             </ComposedChart>
@@ -315,14 +535,14 @@ export default function ExecutiveDashboard() {
 
         <Card title="FV-ECF Valuation Intervals" subtitle="Future value of ECF at 1Y/3Y/5Y/10Y horizons (A$B)">
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={FV_ECF} margin={{ top:4, right:4, bottom:0, left:0 }}>
+            <BarChart data={fvEcfChart} margin={{ top:4, right:4, bottom:0, left:0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f5" />
               <XAxis dataKey="interval" tick={{ fontSize:10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize:9 }} tickLine={false} axisLine={false} width={40} tickFormatter={v=>`$${v}B`} />
               <Tooltip content={<TT />} />
               <Bar dataKey="fv" name="FV-ECF ($B)" radius={[6,6,0,0]}
                 label={{ position:"top", fontSize:9, formatter:(v: number)=>`$${v}B` }}>
-                {FV_ECF.map((_, i) => <Cell key={i} fill={[NAV,TEAL,GREEN,GOLD][i]} />)}
+                {fvEcfChart.map((_, i) => <Cell key={i} fill={[NAV,TEAL,GREEN,GOLD][i]} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -435,7 +655,7 @@ export default function ExecutiveDashboard() {
 
         <Card title="TER vs TSR vs Ke" subtitle="Total Equity Return · Shareholder Return · Cost of Equity hurdle (%)" span={2}>
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={TER_TSR} margin={{ top:4, right:8, bottom:0, left:0 }}>
+            <ComposedChart data={terTsrChart} margin={{ top:4, right:8, bottom:0, left:0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef0f5" />
               <XAxis dataKey="year" tick={{ fontSize:9 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize:9 }} tickLine={false} axisLine={false} width={36} tickFormatter={v=>`${v}%`} />
@@ -451,7 +671,7 @@ export default function ExecutiveDashboard() {
 
         <Card title="Ke Decomposition" subtitle="CAPM: Rf (risk-free) + β×ERP (equity risk premium) → Ke">
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={KE_DECOMP} margin={{ top:4, right:4, bottom:0, left:0 }}>
+            <ComposedChart data={keDecompChart} margin={{ top:4, right:4, bottom:0, left:0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef0f5" />
               <XAxis dataKey="year" tick={{ fontSize:8 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize:8 }} tickLine={false} axisLine={false} width={32} tickFormatter={v=>`${v}%`} />
@@ -486,9 +706,9 @@ export default function ExecutiveDashboard() {
           </ResponsiveContainer>
         </Card>
 
-        <Card title="M:B Ratio Trend" subtitle="Market Cap / Economic Equity — a premium above 1× = wealth creation">
+        <Card title="M:B Ratio Trend" subtitle="Market Cap / Economic Equity — a premium above 1× = wealth creation" badge={mbTrendData.length > 0 ? "● LIVE" : "ILLUS."}>
           <ResponsiveContainer width="100%" height={200}>
-            <ComposedChart data={MB_RATIO} margin={{ top:4, right:4, bottom:0, left:0 }}>
+            <ComposedChart data={mbTrendData.length > 0 ? mbTrendData : MB_RATIO} margin={{ top:4, right:4, bottom:0, left:0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef0f5" />
               <XAxis dataKey="year" tick={{ fontSize:9 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize:9 }} tickLine={false} axisLine={false} width={28} tickFormatter={v=>`${v}×`} />
@@ -499,16 +719,16 @@ export default function ExecutiveDashboard() {
           </ResponsiveContainer>
         </Card>
 
-        <Card title="Cost Structure Waterfall" subtitle="Revenue → EP Margin decomposition (% of revenue)">
+        <Card title="Cost Structure Waterfall" subtitle="Revenue → EP Margin decomposition — cross-sectional median (% of revenue)" badge={costWaterfallData ? "● LIVE" : "ILLUS."}>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={COST_WATERFALL} margin={{ top:4, right:8, bottom:0, left:0 }}>
+            <BarChart data={costWaterfallData ?? COST_WATERFALL} margin={{ top:4, right:8, bottom:0, left:0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f5" />
               <XAxis dataKey="label" tick={{ fontSize:8 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize:8 }} tickLine={false} axisLine={false} width={28} tickFormatter={v=>`${v}%`} />
               <Tooltip content={<TT />} />
               <Bar dataKey="value" name="% of Revenue" radius={[4,4,0,0]} maxBarSize={26}
                 label={{ position:"top", fontSize:9, formatter:(v:number)=>`${v>0?"+":""}${v}%` }}>
-                {COST_WATERFALL.map((d, i) => <Cell key={i} fill={d.color} />)}
+                {(costWaterfallData ?? COST_WATERFALL).map((d, i) => <Cell key={i} fill={d.color} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -535,7 +755,7 @@ export default function ExecutiveDashboard() {
           <div style={{ width:3, height:20, background:RED, borderRadius:2 }} />
           <span style={{ fontSize:12, fontWeight:800, color:NAV, textTransform:"uppercase", letterSpacing:1 }}>§6 Sector Aggregations</span>
           <span style={{ fontSize:11, color:SLATE }}>— EP%, M:B, EEAI, TSR, Ke, EE Growth by Sector</span>
-          <span style={{ marginLeft:"auto", fontSize:9, fontWeight:800, padding:"2px 8px", borderRadius:999, background:`${RED}18`, color:RED, border:`1px solid ${RED}33`, textTransform:"uppercase" }}>illus.</span>
+          <span style={{ marginLeft:"auto", fontSize:9, fontWeight:800, padding:"2px 8px", borderRadius:999, background:sectorAggRows?`${GREEN}18`:`${RED}18`, color:sectorAggRows?GREEN:RED, border:`1px solid ${sectorAggRows?GREEN:RED}33`, textTransform:"uppercase" }}>{sectorAggRows ? "● LIVE" : "illus."}</span>
         </div>
         <div style={{ overflowX:"auto" }}>
           <table style={{ borderCollapse:"collapse", width:"100%", fontSize:11 }}>
@@ -547,7 +767,12 @@ export default function ExecutiveDashboard() {
               </tr>
             </thead>
             <tbody>
-              {EP_DEL_EXP.map((row, i) => (
+              {(sectorAggRows ?? EP_DEL_EXP.map(r => ({
+                sector: r.sector,
+                epDelivered: r.delivered, epExpected: r.expected, eeai: r.eeai,
+                mb: null, tsr: null, ke: null, eeGrowth: null,
+                epTrend: r.eeai >= 100 ? "positive" : "declining",
+              } as SectorRow))).map((row, i) => (
                 <tr key={row.sector}
                   onClick={() => drill.drillIntoSector(row.sector)}
                   style={{ background:i%2===0?"#fafbfe":"#fff", cursor:"pointer", transition:"background 0.1s" }}
@@ -555,22 +780,24 @@ export default function ExecutiveDashboard() {
                   onMouseLeave={e => (e.currentTarget.style.background=i%2===0?"#fafbfe":"#fff")}
                 >
                   <td style={{ padding:"8px 12px", fontWeight:700, color:NAV }}>{row.sector}</td>
-                  <td style={{ padding:"8px 12px", color:row.delivered>=row.expected?GREEN:RED, fontWeight:700 }}>{row.delivered.toFixed(1)}%</td>
-                  <td style={{ padding:"8px 12px", color:SLATE }}>{row.expected.toFixed(1)}%</td>
+                  <td style={{ padding:"8px 12px", color:row.epDelivered !== null && row.epExpected !== null && row.epDelivered >= row.epExpected ? GREEN : RED, fontWeight:700 }}>{row.epDelivered !== null ? `${row.epDelivered}%` : "—"}</td>
+                  <td style={{ padding:"8px 12px", color:SLATE }}>{row.epExpected !== null ? `${row.epExpected}%` : "—"}</td>
                   <td style={{ padding:"8px 12px" }}>
-                    <span style={{
-                      padding:"2px 8px", borderRadius:999, fontSize:10, fontWeight:800,
-                      background:row.eeai>=100?`${GREEN}18`:`${RED}18`,
-                      color:row.eeai>=100?GREEN:RED,
-                    }}>{row.eeai}</span>
+                    {row.eeai !== null ? (
+                      <span style={{
+                        padding:"2px 8px", borderRadius:999, fontSize:10, fontWeight:800,
+                        background:row.eeai >= 100 ? `${GREEN}18` : `${RED}18`,
+                        color:row.eeai >= 100 ? GREEN : RED,
+                      }}>{row.eeai}</span>
+                    ) : <span style={{ color:SLATE }}>—</span>}
                   </td>
-                  <td style={{ padding:"8px 12px", color:NAV, fontWeight:600 }}>{(2.5 + Math.random()).toFixed(1)}×</td>
-                  <td style={{ padding:"8px 12px", color:MC_TSR_DATA.slice(-1)[0].tsr>0?GREEN:RED, fontWeight:600 }}>{(8+Math.random()*18-4).toFixed(1)}%</td>
-                  <td style={{ padding:"8px 12px", color:SLATE }}>{(8.2+Math.random()*2).toFixed(1)}%</td>
-                  <td style={{ padding:"8px 12px", color:GREEN }}>{(1+Math.random()*5).toFixed(1)}%</td>
+                  <td style={{ padding:"8px 12px", color:NAV, fontWeight:600 }}>{row.mb !== null ? `${(row.mb as number).toFixed(2)}×` : "—"}</td>
+                  <td style={{ padding:"8px 12px", color:row.tsr !== null && (row.tsr as number) > 0 ? GREEN : RED, fontWeight:600 }}>{row.tsr !== null ? `${row.tsr}%` : "—"}</td>
+                  <td style={{ padding:"8px 12px", color:SLATE }}>{row.ke !== null ? `${row.ke}%` : "—"}</td>
+                  <td style={{ padding:"8px 12px", color:row.eeGrowth !== null && (row.eeGrowth as number) > 0 ? GREEN : RED }}>{row.eeGrowth !== null ? `${row.eeGrowth}%` : "—"}</td>
                   <td style={{ padding:"8px 12px" }}>
-                    <span style={{ fontSize:11, color:row.eeai>=100?GREEN:RED }}>
-                      {row.eeai>=100?"▲ Positive":"▼ Declining"}
+                    <span style={{ fontSize:11, color:row.epTrend === "positive" ? GREEN : row.epTrend === "declining" ? RED : SLATE }}>
+                      {row.epTrend === "positive" ? "▲ Positive" : row.epTrend === "declining" ? "▼ Declining" : "—"}
                     </span>
                   </td>
                 </tr>
@@ -581,11 +808,6 @@ export default function ExecutiveDashboard() {
         <div style={{ fontSize:10, color:SLATE, marginTop:8 }}>▶ Click a row to drill all charts to that sector</div>
       </div>
 
-      {/* ── Footer note ────────────────────────────────────────────────── */}
-      <div style={{ fontSize:10, color:SLATE, textAlign:"center", padding:"12px 0" }}>
-        All values are illustrative dummy data. Run the ETL pipeline and compute metrics to replace with live figures.
-        <br />Created with <a href="https://www.perplexity.ai/computer" style={{ color:TEAL }}>Perplexity Computer</a>
-      </div>
     </div>
   );
 }

@@ -4,7 +4,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from uuid import UUID
-from typing import Optional
+from typing import Optional, List
 
 from app.core.config import get_logger
 
@@ -95,13 +95,7 @@ class StatisticsRepository:
             return None, None
     
     async def get_parent_index(self, dataset_id: UUID) -> Optional[str]:
-        """
-        Get the distinct parent_index value for a dataset.
-        
-        Returns the first (and should be only) parent_index value from the companies table
-        for tickers that appear in the dataset.
-        Uses LIMIT 1 to ensure only one value is returned.
-        """
+        """Get parent index for the dataset from companies table."""
         try:
             query = text("""
                 SELECT DISTINCT c.parent_index
@@ -109,17 +103,17 @@ class StatisticsRepository:
                 WHERE c.ticker IN (
                     SELECT DISTINCT ticker
                     FROM cissa.fundamentals
-                    WHERE dataset_id = :dataset_id and period_type = 'FISCAL'
+                    WHERE dataset_id = :dataset_id AND period_type = 'FISCAL'
                 )
+                AND c.parent_index IS NOT NULL
                 LIMIT 1
             """)
             result = await self.db.execute(query, {"dataset_id": str(dataset_id)})
-            parent_index = result.scalar()
-            return parent_index if parent_index is not None else None
+            return result.scalar()
         except Exception as e:
-            logger.error(f"Error getting parent_index: {str(e)}")
+            logger.error(f"Error getting parent index: {str(e)}")
             return None
-    
+
     async def get_dataset_info(self, dataset_id: UUID) -> tuple[Optional[str], Optional[str]]:
         """
         Get dataset creation date and country.

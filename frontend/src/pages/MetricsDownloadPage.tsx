@@ -21,16 +21,16 @@ const ALL_METRICS = [
   "Calc Tax Cost", "Calc XO Cost", "Calc ECF", "Non Div ECF", "Calc EE",
   "Calc FY TSR", "Calc FY TSR PREL",
   // Runtime
-  "Calc Beta", "Calc Rf", "Calc KE",
+  "Calc Beta", "Calc Rf", "Calc Ke",
   // L2 Core
-  "EP", "PAT_EX", "XO_COST_EX", "FC", "Calc EP",
+  "Calc EP", "Calc PAT_Ex", "Calc XO_Cost_Ex", "Calc FC",
   // FV-ECF
   "Calc 1Y FV ECF", "Calc 3Y FV ECF", "Calc 5Y FV ECF", "Calc 10Y FV ECF",
   // TER
-  "TER_1Y", "TER_3Y", "TER_5Y", "TER_10Y",
-  "TER-KE_1Y", "TER-KE_3Y", "TER-KE_5Y", "TER-KE_10Y",
+  "Calc 1Y TER", "Calc 3Y TER", "Calc 5Y TER", "Calc 10Y TER",
+  "Calc 1Y TER-KE", "Calc 3Y TER-KE", "Calc 5Y TER-KE", "Calc 10Y TER-KE",
   // TER Alpha
-  "TER Alpha_1Y", "TER Alpha_3Y", "TER Alpha_5Y", "TER Alpha_10Y",
+  "Calc 1Y TER Alpha", "Calc 3Y TER Alpha", "Calc 5Y TER Alpha", "Calc 10Y TER Alpha",
 ];
 
 const RATIO_METRICS = [
@@ -196,10 +196,10 @@ export default function MetricsDownloadPage() {
       if (selectedCategory !== "ratio") {
         const metricsToExport = selectedCategory === "all"
           ? ALL_METRICS
-          : selectedCategory === "core" ? ["Calc MC", "Calc Assets", "Calc OA", "Calc Op Cost", "Calc Non Op Cost", "Calc Tax Cost", "Calc XO Cost", "Calc ECF", "Non Div ECF", "Calc EE", "Calc FY TSR", "Calc Beta", "Calc Rf", "Calc KE", "EP", "PAT_EX", "XO_COST_EX", "FC", "Calc EP"]
+          : selectedCategory === "core" ? ["Calc MC", "Calc Assets", "Calc OA", "Calc Op Cost", "Calc Non Op Cost", "Calc Tax Cost", "Calc XO Cost", "Calc ECF", "Non Div ECF", "Calc EE", "Calc FY TSR", "Calc Beta", "Calc Rf", "Calc Ke", "Calc EP", "Calc PAT_Ex", "Calc XO_Cost_Ex", "Calc FC"]
           : selectedCategory === "fv_ecf" ? ["Calc 1Y FV ECF", "Calc 3Y FV ECF", "Calc 5Y FV ECF", "Calc 10Y FV ECF"]
-          : selectedCategory === "ter" ? ["TER_1Y", "TER_3Y", "TER_5Y", "TER_10Y", "TER-KE_1Y", "TER-KE_3Y", "TER-KE_5Y", "TER-KE_10Y"]
-          : ["TER Alpha_1Y", "TER Alpha_3Y", "TER Alpha_5Y", "TER Alpha_10Y"];
+          : selectedCategory === "ter" ? ["Calc 1Y TER", "Calc 3Y TER", "Calc 5Y TER", "Calc 10Y TER", "Calc 1Y TER-KE", "Calc 3Y TER-KE", "Calc 5Y TER-KE", "Calc 10Y TER-KE"]
+          : ["Calc 1Y TER Alpha", "Calc 3Y TER Alpha", "Calc 5Y TER Alpha", "Calc 10Y TER Alpha"];
 
         const metricRows: any[] = [];
         metricsToExport.forEach(metric => {
@@ -247,8 +247,8 @@ export default function MetricsDownloadPage() {
     { id: "all", label: "All Metrics", count: totalCoreRows + totalRatioRows, desc: "Every computed metric in one export" },
     { id: "core", label: "Core L1 + Runtime", count: totalCoreRows, desc: "L1 metrics, Beta, Rf, Ke, EP core" },
     { id: "fv_ecf", label: "FV-ECF Valuation", count: (coreData.data["Calc 1Y FV ECF"]?.length ?? 0) * 4, desc: "Future value ECF at 1Y/3Y/5Y/10Y horizons" },
-    { id: "ter", label: "TER & TER-Ke", count: (coreData.data["TER_1Y"]?.length ?? 0) * 8, desc: "Total equity return and excess over Ke" },
-    { id: "ter_alpha", label: "TER Alpha", count: (coreData.data["TER Alpha_1Y"]?.length ?? 0) * 4, desc: "Risk-adjusted alpha at all intervals" },
+    { id: "ter", label: "TER & TER-Ke", count: (coreData.data["Calc 1Y TER"]?.length ?? 0) * 8, desc: "Total equity return and excess over Ke" },
+    { id: "ter_alpha", label: "TER Alpha", count: (coreData.data["Calc 1Y TER Alpha"]?.length ?? 0) * 4, desc: "Risk-adjusted alpha at all intervals" },
     { id: "ratio", label: "Ratio Metrics", count: totalRatioRows, desc: "All 16 ratio metrics for chosen interval" },
   ];
 
@@ -440,10 +440,10 @@ export default function MetricsDownloadPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 8 }}>
           {[
             { group: "L1 Computed", metrics: ["Calc MC", "Calc Assets", "Calc OA", "Calc Op Cost", "Calc Non Op Cost", "Calc Tax Cost", "Calc XO Cost", "Calc ECF", "Non Div ECF", "Calc EE", "Calc FY TSR", "Calc FY TSR PREL"], color: NAV },
-            { group: "Runtime (Beta/Ke/Rf)", metrics: ["Calc Beta", "Calc Rf", "Calc KE"], color: TEAL },
-            { group: "L2 Core EP", metrics: ["EP", "PAT_EX", "XO_COST_EX", "FC", "Calc EP"], color: GREEN },
+            { group: "Runtime (Beta/Ke/Rf)", metrics: ["Calc Beta", "Calc Rf", "Calc Ke"], color: TEAL },
+            { group: "L2 Core EP", metrics: ["Calc EP", "Calc PAT_Ex", "Calc XO_Cost_Ex", "Calc FC"], color: GREEN },
             { group: "FV-ECF Valuation", metrics: ["Calc 1Y FV ECF", "Calc 3Y FV ECF", "Calc 5Y FV ECF", "Calc 10Y FV ECF"], color: GOLD },
-            { group: "TER / TER-Ke / Alpha", metrics: ["TER_1Y", "TER_3Y", "TER_5Y", "TER_10Y", "TER-KE_1Y", "TER Alpha_1Y", "TER Alpha_3Y"], color: PURPLE },
+            { group: "TER / TER-Ke / Alpha", metrics: ["Calc 1Y TER", "Calc 3Y TER", "Calc 5Y TER", "Calc 10Y TER", "Calc 1Y TER-KE", "Calc 1Y TER Alpha", "Calc 3Y TER Alpha"], color: PURPLE },
             { group: "Ratio Metrics (16 total)", metrics: ["mb_ratio", "roee", "roa", "profit_margin", "op_cost_margin", "etr", "revenue_growth", "ee_growth", "ep_growth", "fa_intensity", "asset_intensity", "econ_eq_mult"], color: RED },
           ].map(group => (
             <div key={group.group} style={{ padding: "14px", background: "#f8fafc", borderRadius: 10 }}>

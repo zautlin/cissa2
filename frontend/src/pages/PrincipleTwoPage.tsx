@@ -150,10 +150,12 @@ export default function PrincipleTwoPage() {
     });
     return acc;
   }, {} as Record<string, number[]>);
-  const mbByYear = Object.entries(mbData).map(([yr, vals]) => ({
-    year: yr,
-    median: +(vals.sort((a, b) => a - b)[Math.floor(vals.length / 2)]).toFixed(2),
-  })).sort((a, b) => a.year.localeCompare(b.year)).slice(-15);
+  const mbByYear = Object.entries(mbData)
+    .filter(([, vals]) => vals.length > 0)
+    .map(([yr, vals]) => ({
+      year: yr,
+      median: +(vals.sort((a, b) => a - b)[Math.floor(vals.length / 2)]).toFixed(2),
+    })).sort((a, b) => a.year.localeCompare(b.year)).slice(-15);
 
   const tabs = ["2.1  Market Value & EP", "2.2  Bow Wave Concept", "2.3  Pair of EP Bow Waves", "2.4  Long-Term Proof", "2.5  Wealth Reconciliation"];
 

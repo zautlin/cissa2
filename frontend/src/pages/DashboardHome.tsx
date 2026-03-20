@@ -133,7 +133,7 @@ export default function DashboardHome() {
   // Live metrics: Beta, Ke, ECF
   const multiMetrics = useMultipleMetrics(
     ctx.datasetId, ctx.paramSetId,
-    ["Calc Beta", "Calc KE", "Calc ECF", "Calc FY TSR", "Calc EE", "TER_1Y"]
+    ["Calc Beta", "Calc Ke", "Calc ECF", "Calc FY TSR", "Calc EE", "Calc 1Y TER"]
   );
 
   // Build EP bow-wave data
@@ -164,16 +164,16 @@ export default function DashboardHome() {
 
   // KPI computations from live data
   const betaValues = aggregateByYear(multiMetrics.data["Calc Beta"] || []);
-  const keValues   = aggregateByYear(multiMetrics.data["Calc KE"]   || []);
+  const keValues   = aggregateByYear(multiMetrics.data["Calc Ke"]   || []);
   const ecfValues  = aggregateByYear(multiMetrics.data["Calc ECF"]  || []);
   const tsrValues  = aggregateByYear(multiMetrics.data["Calc FY TSR"] || []);
-  const terValues  = aggregateByYear(multiMetrics.data["TER_1Y"]    || []);
+  const terValues  = aggregateByYear(multiMetrics.data["Calc 1Y TER"] || []);
 
   const latestBeta = betaValues.length ? betaValues[betaValues.length - 1].value : null;
   const latestKe   = keValues.length   ? keValues[keValues.length - 1].value     : null;
   const latestTSR  = tsrValues.length  ? tsrValues[tsrValues.length - 1].value   : null;
   const latestTER  = terValues.length  ? terValues[terValues.length - 1].value   : null;
-  const latestERP  = ctx.params?.equity_risk_premium as number | undefined;
+  const latestERP  = ctx.params?.equity_risk_premium != null ? Number(ctx.params.equity_risk_premium) : undefined;
 
   const hasLiveKPIs = !!(latestBeta || latestKe);
 

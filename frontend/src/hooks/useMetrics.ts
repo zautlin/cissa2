@@ -17,13 +17,16 @@ import {
   getMetrics,
   getEconomicProfitability,
   getRatioMetrics,
+  getCompanies,
   metricsExist,
   ParameterSetResponse,
   DatasetStatistics,
   MetricResultItem,
   EconomicProfitabilityResult,
   RatioTickerData,
+  ApiCompany,
 } from "../lib/api";
+import { useDrillDown } from "../context/DrillDown";
 
 // ─── Active context ────────────────────────────────────────────────────────────
 
@@ -53,17 +56,26 @@ export function useActiveContext(): ActiveContext {
 
         const paramSetId = paramResponse.param_set_id;
 
-        const statsAll = await getStatistics() as Record<string, DatasetStatistics>;
+        const statsRaw = await getStatistics() as any;
         if (cancelled) return;
 
-        const keys = Object.keys(statsAll);
-        if (keys.length === 0) {
+        // AllDatasetsStatistics wraps entries under a `datasets` key
+        const statsMap: Record<string, DatasetStatistics> = statsRaw?.datasets ?? statsRaw;
+
+        // Filter to valid DatasetStatistics entries, pick most recent by dataset_created_at
+        const entries = Object.entries(statsMap)
+          .filter(([, v]) => v && typeof v === "object" && "companies" in v)
+          .sort(([, a], [, b]) =>
+            new Date((b as DatasetStatistics).dataset_created_at ?? 0).getTime() -
+            new Date((a as DatasetStatistics).dataset_created_at ?? 0).getTime()
+          );
+
+        if (entries.length === 0) {
           setCtx(c => ({ ...c, loading: false, params: paramResponse.parameters, paramSetId, error: null }));
           return;
         }
 
-        const datasetId = keys[0];
-        const stats = statsAll[datasetId];
+        const [datasetId, stats] = entries[0] as [string, DatasetStatistics];
 
         let hasMetrics = false;
         try {
@@ -99,20 +111,45 @@ export interface NormalizedRatioItem {
   time_series: { year: number; value: number | null }[];
 }
 
-function normalizeRatioResults(results: RatioTickerData[]): NormalizedRatioItem[] {
+function normalizeRatioResults(results: RatioTickerData[], companies: ApiCompany[] = []): NormalizedRatioItem[] {
+  const companyMap = new Map(companies.map(c => [c.ticker, c]));
   return results.map(r => {
     const ts = r.time_series ?? [];
-    // Most recent non-null value
     const nonNull = ts.filter(t => t.value !== null);
     const latest = nonNull.length ? nonNull[nonNull.length - 1].value : null;
+    const company = companyMap.get(r.ticker);
     return {
       ticker: r.ticker,
-      company_name: r.company_name ?? r.ticker,
-      sector: r.sector ?? "Unknown",
+      company_name: r.company_name ?? company?.company_name ?? r.ticker,
+      sector: r.sector ?? company?.sector ?? "Unknown",
       value: latest,
       time_series: ts,
     };
   });
+}
+
+// ─── useCompanies — fetch full company list for a dataset ────────────────────
+
+interface CompaniesState {
+  companies: ApiCompany[];
+  loading: boolean;
+  error: string | null;
+}
+
+function useCompanies(datasetId: string | null): CompaniesState {
+  const [state, setState] = useState<CompaniesState>({ companies: [], loading: false, error: null });
+
+  useEffect(() => {
+    if (!datasetId) return;
+    let cancelled = false;
+    setState(s => ({ ...s, loading: true, error: null }));
+    getCompanies(datasetId)
+      .then(list => { if (!cancelled) setState({ companies: list ?? [], loading: false, error: null }); })
+      .catch(e => { if (!cancelled) setState({ companies: [], loading: false, error: e.message }); });
+    return () => { cancelled = true; };
+  }, [datasetId]);
+
+  return state;
 }
 
 // ─── useRatioMetric ─────────────────────────────────────────────────────────────
@@ -134,20 +171,50 @@ export function useRatioMetric(
     data: [], raw: [], loading: false, error: null,
   });
 
+  const { drillMode, selectedTicker, selectedSector } = useDrillDown();
+  const { companies, loading: companiesLoading, error: companiesError } = useCompanies(datasetId);
+
   useEffect(() => {
     if (!datasetId || !paramSetId) return;
+    if (companiesLoading) return; // wait for companies to load
+
+    let tickersCsv: string;
+
+    if (drillMode === "ticker" && selectedTicker) {
+      // Single company drill-down
+      tickersCsv = selectedTicker;
+    } else if (drillMode === "sector" && selectedSector) {
+      // Sector drill-down — filter companies by sector
+      const sectorTickers = companies
+        .filter(c => c.sector === selectedSector)
+        .map(c => c.ticker);
+      if (sectorTickers.length === 0) {
+        setState({ data: [], raw: [], loading: false, error: `No companies found for sector: ${selectedSector}` });
+        return;
+      }
+      tickersCsv = sectorTickers.join(",");
+    } else {
+      // No drill filter — use all tickers
+      if (companiesError || companies.length === 0) {
+        setState({ data: [], raw: [], loading: false, error: "Unable to load company list. Please select a company or sector filter to view data." });
+        return;
+      }
+      tickersCsv = companies.map(c => c.ticker).join(",");
+    }
+
     let cancelled = false;
     setState(s => ({ ...s, loading: true, error: null }));
-    getRatioMetrics({ dataset_id: datasetId, param_set_id: paramSetId, metric, temporal_window: temporalWindow })
+    getRatioMetrics({ dataset_id: datasetId, param_set_id: paramSetId, metric, temporal_window: temporalWindow, tickers: tickersCsv })
       .then(r => {
         if (!cancelled) {
-          const normalized = normalizeRatioResults(r.results ?? []);
-          setState({ data: normalized, raw: r.results ?? [], loading: false, error: null });
+          const raw = r.data ?? r.results ?? [];
+          const normalized = normalizeRatioResults(raw, companies);
+          setState({ data: normalized, raw, loading: false, error: null });
         }
       })
       .catch(e => { if (!cancelled) setState({ data: [], raw: [], loading: false, error: e.message }); });
     return () => { cancelled = true; };
-  }, [datasetId, paramSetId, metric, temporalWindow]);
+  }, [datasetId, paramSetId, metric, temporalWindow, drillMode, selectedTicker, selectedSector, companies, companiesLoading, companiesError]);
 
   return state;
 }

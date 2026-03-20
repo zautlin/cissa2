@@ -1,6 +1,6 @@
 /**
  * Principle 6 — Cost of Capital & Valuation
- * Live data: Calc Beta, Calc Rf, Calc KE via useMultipleMetrics (get_metrics)
+ * Live data: Calc Beta, Calc Rf, Calc Ke via useMultipleMetrics (get_metrics)
  *            Calc 1Y FV ECF, Calc 3Y FV ECF, Calc 5Y FV ECF, Calc 10Y FV ECF
  * Sections: Beta Analysis | Ke Decomposition | Risk-Free Rate | FV-ECF / Valuation | TER Decomposition
  */
@@ -122,7 +122,7 @@ export default function PrincipleSixPage() {
   const loading = ctx.loading;
 
   // Core metrics — Beta, Rf, Ke
-  const coreMetrics = useMultipleMetrics(ctx.datasetId, ctx.paramSetId, ["Calc Beta", "Calc Rf", "Calc KE"]);
+  const coreMetrics = useMultipleMetrics(ctx.datasetId, ctx.paramSetId, ["Calc Beta", "Calc Rf", "Calc Ke"]);
 
   // FV-ECF metrics
   const fvEcfMetrics = useMultipleMetrics(ctx.datasetId, ctx.paramSetId, [
@@ -162,7 +162,7 @@ export default function PrincipleSixPage() {
   // ── Ke decomposition: Rf + Beta×MRP stacked by ticker ──────────────────
   const MRP: number = (ctx.params as any)?.mrp ?? 0.062; // Market risk premium from params
   const keDecomp = useMemo(() => {
-    const keItems = coreMetrics.data["Calc KE"];
+    const keItems = coreMetrics.data["Calc Ke"];
     const rfItems = coreMetrics.data["Calc Rf"];
     const betaItems = coreMetrics.data["Calc Beta"];
     if (!live || !keItems?.length) {
@@ -263,7 +263,7 @@ export default function PrincipleSixPage() {
   }, [coreMetrics.data]);
 
   const avgKe = useMemo(() => {
-    const items = coreMetrics.data["Calc KE"];
+    const items = coreMetrics.data["Calc Ke"];
     if (!items?.length) return null;
     const vals = items.map(r => r.value).filter(v => v !== null) as number[];
     return vals.length ? (avg(vals) * 100).toFixed(1) : null;
@@ -405,7 +405,7 @@ export default function PrincipleSixPage() {
 
           <Card title="Ke Distribution — Cross-Sectional" badge={live} help={HELP["6.2"]}>
             {allLoading ? <Skel h={240} /> : (() => {
-              const keItems = coreMetrics.data["Calc KE"];
+              const keItems = coreMetrics.data["Calc Ke"];
               const keBuckets = live && keItems?.length
                 ? buildHistogram(keItems.map(r => r.value).filter(v => v !== null) as number[], 10).map(b => ({ ...b, bucket: `${(parseFloat(b.bucket) * 100).toFixed(1)}%` }))
                 : buildHistogram(Array.from({ length: 50 }, () => 0.05 + Math.random() * 0.12), 10).map(b => ({ ...b, bucket: `${(parseFloat(b.bucket) * 100).toFixed(1)}%` }));

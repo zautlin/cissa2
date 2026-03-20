@@ -1,6 +1,6 @@
 /**
  * Principle 3 — Capital Market Returns
- * Live data: TER_1Y/3Y/5Y/10Y, TER-KE, TER Alpha, ECF, FY TSR
+ * Live data: Calc 1Y/3Y/5Y/10Y TER, Calc 1Y/3Y/5Y/10Y TER-KE, Calc 1Y/3Y/5Y/10Y TER Alpha, ECF, FY TSR
  */
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
@@ -11,6 +11,8 @@ import {
 } from "recharts";
 import { useActiveContext, useMultipleMetrics, aggregateByYear } from "../hooks/useMetrics";
 import { useDrillDown, DrillDownBanner } from "../context/DrillDown";
+import { RollingTimeSeries } from "../components/RollingTimeSeries";
+import { buildRollingFromWindowed } from "../lib/rollingAverage";
 
 const NAVY = "hsl(213 75% 22%)"; const GOLD = "hsl(38 60% 52%)";
 const GREEN = "hsl(152 60% 40%)"; const SLATE = "hsl(215 15% 46%)";
@@ -68,23 +70,52 @@ export default function PrincipleThreePage() {
   const handleTabClick = (i: number) => { setTab(i); navigate(`/principles/3/${TAB_IDS_P3[i]}`); };
   const ctx = useActiveContext();
   const metrics = useMultipleMetrics(ctx.datasetId, ctx.paramSetId, [
-    "TER_1Y", "TER_3Y", "TER_5Y", "TER_10Y",
-    "TER-KE_1Y", "TER-KE_3Y", "TER-KE_5Y", "TER-KE_10Y",
-    "TER Alpha_1Y", "TER Alpha_3Y", "TER Alpha_5Y", "TER Alpha_10Y",
+    "Calc 1Y TER", "Calc 3Y TER", "Calc 5Y TER", "Calc 10Y TER",
+    "Calc 1Y TER-KE", "Calc 3Y TER-KE", "Calc 5Y TER-KE", "Calc 10Y TER-KE",
+    "Calc 1Y TER Alpha", "Calc 3Y TER Alpha", "Calc 5Y TER Alpha", "Calc 10Y TER Alpha",
     "Calc ECF", "Non Div ECF", "Calc FY TSR",
   ]);
   const loading = ctx.loading || metrics.loading;
 
-  const ter1   = aggregateByYear(metrics.data["TER_1Y"]        || []);
-  const ter3   = aggregateByYear(metrics.data["TER_3Y"]        || []);
-  const ter5   = aggregateByYear(metrics.data["TER_5Y"]        || []);
-  const ter10  = aggregateByYear(metrics.data["TER_10Y"]       || []);
-  const terKe1 = aggregateByYear(metrics.data["TER-KE_1Y"]     || []);
-  const terKe3 = aggregateByYear(metrics.data["TER-KE_3Y"]     || []);
-  const terKe5 = aggregateByYear(metrics.data["TER-KE_5Y"]     || []);
-  const terKe10= aggregateByYear(metrics.data["TER-KE_10Y"]    || []);
-  const alpha1 = aggregateByYear(metrics.data["TER Alpha_1Y"]  || []);
-  const alpha3 = aggregateByYear(metrics.data["TER Alpha_3Y"]  || []);
+  const ter1   = aggregateByYear(metrics.data["Calc 1Y TER"]     || []);
+  const ter3   = aggregateByYear(metrics.data["Calc 3Y TER"]     || []);
+  const ter5   = aggregateByYear(metrics.data["Calc 5Y TER"]     || []);
+  const ter10  = aggregateByYear(metrics.data["Calc 10Y TER"]    || []);
+  const terKe1 = aggregateByYear(metrics.data["Calc 1Y TER-KE"]  || []);
+  const terKe3 = aggregateByYear(metrics.data["Calc 3Y TER-KE"]  || []);
+  const terKe5 = aggregateByYear(metrics.data["Calc 5Y TER-KE"]  || []);
+  const terKe10= aggregateByYear(metrics.data["Calc 10Y TER-KE"] || []);
+  const alpha1 = aggregateByYear(metrics.data["Calc 1Y TER Alpha"]  || []);
+  const alpha3 = aggregateByYear(metrics.data["Calc 3Y TER Alpha"]  || []);
+
+  // Build RollingRow[] for TER-Ke rolling time series
+  const terKeRollingRows = buildRollingFromWindowed(
+    terKe1.map(d => ({ year: d.year, value: d.value })),
+    terKe3.map(d => ({ year: d.year, value: d.value })),
+    terKe5.map(d => ({ year: d.year, value: d.value })),
+    terKe10.map(d => ({ year: d.year, value: d.value })),
+    100, // values stored as decimals, ×100 for %
+  );
+
+  // Build RollingRow[] for TER Alpha rolling time series
+  const alpha5  = aggregateByYear(metrics.data["Calc 5Y TER Alpha"]  || []);
+  const alpha10 = aggregateByYear(metrics.data["Calc 10Y TER Alpha"] || []);
+  const alphaRollingRows = buildRollingFromWindowed(
+    alpha1.map(d => ({ year: d.year, value: d.value })),
+    alpha3.map(d => ({ year: d.year, value: d.value })),
+    alpha5.map(d => ({ year: d.year, value: d.value })),
+    alpha10.map(d => ({ year: d.year, value: d.value })),
+    100,
+  );
+
+  // Build RollingRow[] for TER rolling time series
+  const terRollingRows = buildRollingFromWindowed(
+    ter1.map(d => ({ year: d.year, value: d.value })),
+    ter3.map(d => ({ year: d.year, value: d.value })),
+    ter5.map(d => ({ year: d.year, value: d.value })),
+    ter10.map(d => ({ year: d.year, value: d.value })),
+    100,
+  );
   const ecf    = aggregateByYear(metrics.data["Calc ECF"]      || []);
   const nonDiv = aggregateByYear(metrics.data["Non Div ECF"]   || []);
   const tsr    = aggregateByYear(metrics.data["Calc FY TSR"]   || []);
@@ -154,60 +185,73 @@ export default function PrincipleThreePage() {
 
       {/* Tab 3.1: TER & TSR */}
       {tab === 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          <Card title="TER by Annualisation Window" sub="1Y · 3Y · 5Y · 10Y annualised total equity return (%)" live={isLiveTER}>
-            {loading ? <Skel /> : (
-              <ResponsiveContainer width="100%" height={230}>
-                <ComposedChart data={isLiveTER ? terMultiWindow : fallbackTER} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
-                  <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} width={36} />
-                  <Tooltip content={<T />} />
-                  <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
-                  <ReferenceLine y={10} stroke={SLATE} strokeDasharray="3 3" strokeWidth={1} label={{ value: "Ke~10%", fill: SLATE, fontSize: 8 }} />
-                  <Line type="monotone" dataKey="1Y"  name="TER 1Y"  stroke={NAVY} strokeWidth={2.5} dot={false} />
-                  <Line type="monotone" dataKey="3Y"  name="TER 3Y"  stroke={GOLD} strokeWidth={2}   dot={false} />
-                  <Line type="monotone" dataKey="5Y"  name="TER 5Y"  stroke={GREEN} strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
-                  <Line type="monotone" dataKey="10Y" name="TER 10Y" stroke="hsl(280 55% 50%)" strokeWidth={1.8} dot={false} strokeDasharray="2 2" />
-                </ComposedChart>
-              </ResponsiveContainer>
-            )}
-          </Card>
-
-          <Card title="TER-Ke — Wealth Creation Component" sub="TER minus Cost of Equity: positive = wealth created (%)" live={terKeChart.length > 3}>
-            {loading ? <Skel /> : (() => {
-              const fallback = [
-                { year: "2010", terKe1Y: 1.8, terKe3Y: 2.1, terKe10Y: 2.8 },
-                { year: "2013", terKe1Y: 3.2, terKe3Y: 3.4, terKe10Y: 2.4 },
-                { year: "2016", terKe1Y: -0.4, terKe3Y: 1.2, terKe10Y: 1.5 },
-                { year: "2019", terKe1Y: -1.2, terKe3Y: 0.8, terKe10Y: 1.0 },
-                { year: "2022", terKe1Y: 3.8, terKe3Y: 2.6, terKe10Y: 1.2 },
-                { year: "2024", terKe1Y: 1.2, terKe3Y: 1.8, terKe10Y: 0.8 },
-              ];
-              const data = terKeChart.length > 3 ? terKeChart : fallback;
-              return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <Card title="TER by Annualisation Window" sub="1Y · 3Y · 5Y · 10Y annualised total equity return (%)" live={isLiveTER}>
+              {loading ? <Skel /> : (
                 <ResponsiveContainer width="100%" height={230}>
-                  <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                  <ComposedChart data={isLiveTER ? terMultiWindow : fallbackTER} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
                     <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} width={36} />
                     <Tooltip content={<T />} />
                     <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
-                    <ReferenceLine y={0} stroke={RED} strokeDasharray="4 3" strokeWidth={1.5} />
-                    <Area type="monotone" dataKey="terKe1Y"  name="TER-Ke 1Y"  stroke={NAVY} fill="hsl(213 75% 22% / 0.1)" strokeWidth={2.5} dot={false} />
-                    <Line  type="monotone" dataKey="terKe3Y"  name="TER-Ke 3Y"  stroke={GOLD} strokeWidth={2} dot={false} strokeDasharray="5 3" />
-                    <Line  type="monotone" dataKey="terKe10Y" name="TER-Ke 10Y" stroke={GREEN} strokeWidth={1.8} dot={false} strokeDasharray="2 2" />
+                    <ReferenceLine y={10} stroke={SLATE} strokeDasharray="3 3" strokeWidth={1} label={{ value: "Ke~10%", fill: SLATE, fontSize: 8 }} />
+                    <Line type="monotone" dataKey="1Y"  name="TER 1Y"  stroke={NAVY} strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="3Y"  name="TER 3Y"  stroke={GOLD} strokeWidth={2}   dot={false} />
+                    <Line type="monotone" dataKey="5Y"  name="TER 5Y"  stroke={GREEN} strokeWidth={1.8} dot={false} strokeDasharray="4 3" />
+                    <Line type="monotone" dataKey="10Y" name="TER 10Y" stroke="hsl(280 55% 50%)" strokeWidth={1.8} dot={false} strokeDasharray="2 2" />
                   </ComposedChart>
                 </ResponsiveContainer>
-              );
-            })()}
-          </Card>
+              )}
+            </Card>
+
+            <Card title="TER-Ke — Wealth Creation Component" sub="TER minus Cost of Equity: positive = wealth created (%)" live={terKeChart.length > 3}>
+              {loading ? <Skel /> : (() => {
+                const fallback = [
+                  { year: "2010", terKe1Y: 1.8, terKe3Y: 2.1, terKe10Y: 2.8 },
+                  { year: "2013", terKe1Y: 3.2, terKe3Y: 3.4, terKe10Y: 2.4 },
+                  { year: "2016", terKe1Y: -0.4, terKe3Y: 1.2, terKe10Y: 1.5 },
+                  { year: "2019", terKe1Y: -1.2, terKe3Y: 0.8, terKe10Y: 1.0 },
+                  { year: "2022", terKe1Y: 3.8, terKe3Y: 2.6, terKe10Y: 1.2 },
+                  { year: "2024", terKe1Y: 1.2, terKe3Y: 1.8, terKe10Y: 0.8 },
+                ];
+                const data = terKeChart.length > 3 ? terKeChart : fallback;
+                return (
+                  <ResponsiveContainer width="100%" height={230}>
+                    <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                      <XAxis dataKey="year" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} width={36} />
+                      <Tooltip content={<T />} />
+                      <Legend wrapperStyle={{ fontSize: 9, paddingTop: 6 }} />
+                      <ReferenceLine y={0} stroke={RED} strokeDasharray="4 3" strokeWidth={1.5} />
+                      <Area type="monotone" dataKey="terKe1Y"  name="TER-Ke 1Y"  stroke={NAVY} fill="hsl(213 75% 22% / 0.1)" strokeWidth={2.5} dot={false} />
+                      <Line  type="monotone" dataKey="terKe3Y"  name="TER-Ke 3Y"  stroke={GOLD} strokeWidth={2} dot={false} strokeDasharray="5 3" />
+                      <Line  type="monotone" dataKey="terKe10Y" name="TER-Ke 10Y" stroke={GREEN} strokeWidth={1.8} dot={false} strokeDasharray="2 2" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                );
+              })()}
+            </Card>
+          </div>
+
+          {/* Rolling averages row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <Card title="TER Rolling Averages" sub="1Y/3Y/5Y/10Y/LT cross-sectional rolling average (%)" live={terRollingRows.length > 0}>
+              <RollingTimeSeries title="" rows={terRollingRows} valueFormat="pct" bare />
+            </Card>
+            <Card title="TER-Ke Rolling Averages" sub="Wealth creation spread — rolling average (%)" live={terKeRollingRows.length > 0}>
+              <RollingTimeSeries title="" rows={terKeRollingRows} valueFormat="pct" bare />
+            </Card>
+          </div>
         </div>
       )}
 
       {/* Tab 3.2: TER Alpha */}
       {tab === 1 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
           <Card title="TER Alpha — Risk-Adjusted Outperformance" sub="TER-Ke minus Risk-Adjusted Market Movement (RA_MM)" live={alphaChart.length > 3}>
             {loading ? <Skel h={240} /> : (() => {
               const fallback = [
@@ -236,7 +280,7 @@ export default function PrincipleThreePage() {
 
           <Card title="TER Alpha Distribution (1Y)" sub="Frequency of positive vs negative alpha outcomes" live={alpha1.length > 10}>
             {loading ? <Skel h={240} /> : (() => {
-              const rawAlpha = metrics.data["TER Alpha_1Y"] || [];
+              const rawAlpha = metrics.data["Calc 1Y TER Alpha"] || [];
               const bins: Record<string, number> = {};
               rawAlpha.filter(r => r.value !== null).forEach(r => {
                 const v = r.value! * 100;
@@ -263,6 +307,12 @@ export default function PrincipleThreePage() {
                 </ResponsiveContainer>
               );
             })()}
+          </Card>
+          </div>
+
+          {/* TER Alpha rolling averages */}
+          <Card title="TER Alpha Rolling Averages" sub="Risk-adjusted outperformance — 1Y/3Y/5Y/10Y/LT rolling average (%)" live={alphaRollingRows.length > 0}>
+            <RollingTimeSeries title="" rows={alphaRollingRows} valueFormat="pct" bare />
           </Card>
         </div>
       )}

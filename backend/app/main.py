@@ -9,6 +9,7 @@ import logging
 from .core.config import get_settings, get_logger
 from .core.database import get_db_manager
 from .api.v1 import router
+from .api.v2 import router as router_v2
 
 # Configure root logger
 logging.basicConfig(
@@ -62,6 +63,8 @@ app.add_middleware(
 
 # Include v1 router
 app.include_router(router.router)
+# Include v2 router
+app.include_router(router_v2.router)
 
 
 @app.get("/")

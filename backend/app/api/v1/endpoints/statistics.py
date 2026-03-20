@@ -115,7 +115,6 @@ async def get_dataset_statistics(
     try:
         service = StatisticsService(db)
         
-        # If dataset_id provided, get single dataset stats
         if dataset_id:
             logger.info(f"Fetching statistics for dataset {dataset_id}")
             stats = await service.get_statistics(
@@ -127,7 +126,6 @@ async def get_dataset_statistics(
             logger.info(f"Successfully retrieved statistics for dataset {dataset_id}")
             return stats
         
-        # Otherwise, get stats for all datasets
         logger.info("Fetching statistics for all datasets")
         all_stats = await service.get_all_statistics()
         logger.info(f"Successfully retrieved statistics for all datasets")

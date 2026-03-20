@@ -253,7 +253,13 @@ class RiskFreeRateCalculationService:
             rf_monthly_df = self._calculate_rolling_geometric_mean(monthly_rf_df)
             
             # Get the most recent value (latest fiscal year end)
-            rf_monthly_calc_df = self._calculate_calc_rf(rf_monthly_df, params)
+            rf_monthly_calc_df = self._calculate_calc_rf(
+                rf_monthly_df,
+                params.get('cost_of_equity_approach', 'FLOATING'),
+                params.get('benchmark', 0.0),
+                params.get('risk_premium', 0.0),
+                params.get('beta_rounding', 0.005),
+            )
             
             if rf_monthly_calc_df.empty:
                 raise ValueError("No risk-free rate values calculated")

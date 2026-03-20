@@ -4,7 +4,8 @@
  * All endpoints verified against backend/app/api/v1/endpoints/
  */
 
-const BASE = "/api/v1";
+const BASE    = "/api/v1";
+const BASE_V2 = "/api/v2";
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -17,6 +18,23 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+// ─── Companies ───────────────────────────────────────────────────────────────
+
+/** Raw API shape — do not use directly in UI. Map via companyData.ts */
+export interface ApiCompany {
+  ticker:       string;
+  company_name: string;
+  sector:       string;
+  exchange:     string;
+}
+
+export const getCompanies = (datasetId?: string) => {
+  const url = datasetId
+    ? `${BASE_V2}/companies?dataset_id=${encodeURIComponent(datasetId)}`
+    : `${BASE_V2}/companies`;
+  return fetchJSON<ApiCompany[]>(url);
+};
 
 // ─── Health ──────────────────────────────────────────────────────────────────
 
@@ -90,11 +108,12 @@ export const getParameterSet = (paramSetId: string) =>
 
 export const updateParameterSet = (
   paramSetId: string,
-  overrides: Record<string, unknown>
+  overrides: Record<string, unknown>,
+  setAsActive = true,
 ) =>
   fetchJSON<ParameterSetResponse>(`${BASE}/parameters/${paramSetId}/update`, {
     method: "POST",
-    body: JSON.stringify({ param_overrides: overrides }),
+    body: JSON.stringify({ parameters: overrides, set_as_active: setAsActive }),
   });
 
 export const setActiveParameterSet = (paramSetId: string) =>
@@ -177,17 +196,18 @@ export const getEconomicProfitability = (params: {
 
 export interface RatioTickerData {
   ticker: string;
-  company_name: string;
-  sector: string;
+  company_name?: string;
+  sector?: string;
   time_series: { year: number; value: number | null }[];
 }
 export interface RatioMetricsResponse {
-  dataset_id: string;
-  param_set_id: string;
   metric: string;
-  window: string;
-  results: RatioTickerData[];
-  status: string;
+  display_name?: string;
+  temporal_window?: string;
+  /** Backend returns results under "data" key */
+  data?: RatioTickerData[];
+  /** Legacy alias — may be absent */
+  results?: RatioTickerData[];
 }
 
 export const getRatioMetrics = (params: {
@@ -204,6 +224,23 @@ export const getRatioMetrics = (params: {
   if (params.tickers)         qs.set("tickers", params.tickers);
   if (params.temporal_window) qs.set("temporal_window", params.temporal_window);
   return fetchJSON<RatioMetricsResponse>(`${BASE}/metrics/ratio-metrics?${qs}`);
+};
+
+// ─── Optimization Metrics ─────────────────────────────────────────────────────
+// Same response shape as get_metrics. Endpoint is not yet live — returns empty
+// results until the backend optimization_metrics endpoint is deployed.
+
+export const getOptimizationMetrics = (params: GetMetricsParams) => {
+  const qs = new URLSearchParams();
+  qs.set("dataset_id", params.dataset_id);
+  qs.set("parameter_set_id", params.parameter_set_id);
+  if (params.ticker)      qs.set("ticker", params.ticker);
+  if (params.metric_name) qs.set("metric_name", params.metric_name);
+  if (params.fiscal_year) qs.set("fiscal_year", String(params.fiscal_year));
+  return fetchJSON<MetricsResponse>(`${BASE}/metrics/optimization_metrics?${qs}`).catch(
+    // Endpoint not yet live — return empty results gracefully
+    () => ({ dataset_id: params.dataset_id, parameter_set_id: params.parameter_set_id, metric_name: params.metric_name ?? "", results_count: 0, results: [], status: "pending", message: "optimization_metrics endpoint not yet available" } as MetricsResponse)
+  );
 };
 
 // ─── Calculate (POST) ──────────────────────────────────────────────────────────

@@ -151,7 +151,8 @@ class MetricsService:
             await self._insert_metric_results(
                 dataset_id=dataset_id,
                 metric_name=metric_name,
-                results=results
+                results=results,
+                param_set_id=param_set_id
             )
             
             logger.info(f"Successfully calculated {metric_name} for {len(results)} records")
@@ -178,35 +179,19 @@ class MetricsService:
         self,
         dataset_id: UUID,
         metric_name: str,
-        results: List[MetricResultItem]
+        results: List[MetricResultItem],
+        param_set_id: Optional[UUID] = None
     ) -> None:
         """Insert calculated metric results into metrics_outputs table"""
-        
+
         if not results:
             return
-        
-        # Get the default parameter set (base_case)
-        param_set_query = text("""
-            SELECT param_set_id FROM cissa.parameter_sets 
-            WHERE param_set_name = 'base_case' LIMIT 1
-        """)
-        param_result = await self.session.execute(param_set_query)
-        param_row = param_result.fetchone()
-        
-        if not param_row:
-            logger.error("No base_case parameter set found in database")
+
+        if not param_set_id:
+            logger.error("No param_set_id provided to _insert_metric_results")
             return
-        
-        param_set_id = str(param_row[0])
-        
-        # Prepare parameterized insert statement (handles NULL values properly)
-        insert_query = text("""
-            INSERT INTO cissa.metrics_outputs 
-            (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
-            VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata, now())
-            ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
-            DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
-        """)
+
+        param_set_id_str = str(param_set_id)
         
         # Batch insert using parameterized queries
         batch_size = 1000
@@ -214,28 +199,30 @@ class MetricsService:
         
         for i in range(0, len(results), batch_size):
             batch = results[i:i + batch_size]
-            
-            # Execute parameterized query for each result (properly handles NULL values)
-            for item in batch:
-                await self.session.execute(
-                    insert_query,
-                    {
-                        "dataset_id": str(dataset_id),
-                        "param_set_id": param_set_id,
-                        "ticker": item.ticker,
-                        "fiscal_year": item.fiscal_year,
-                        "output_metric_name": metric_name,
-                        "output_metric_value": item.value,  # NULL will be handled properly by SQLAlchemy
-                        "metadata": metadata_json
-                    }
-                )
-            
-            logger.info(f"Inserted batch of {len(batch)} metric results")
-        
+
+            # Build multi-row VALUES clause: (val1, val2, ...), (val1, val2, ...), ...
+            metadata_json = json.dumps({"metric_level": "L1"})
+            rows_sql = ", ".join([
+                f"('{str(dataset_id)}', '{param_set_id_str}', '{item.ticker}', {item.fiscal_year}, '{metric_name}', {item.value}, '{metadata_json}', now())"
+                for item in batch
+            ])
+
+            # Execute multi-row INSERT with ON CONFLICT UPSERT (all rows in single statement)
+            multi_row_insert = text(f"""
+                INSERT INTO cissa.metrics_outputs
+                (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
+                VALUES {rows_sql}
+                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
+                DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
+            """)
+
+            await self.session.execute(multi_row_insert)
+            logger.info(f"Inserted batch of {len(batch)} metric results (multi-row INSERT)")
+
         # Commit the transaction
         await self.session.commit()
         logger.info(f"Committed {len(results)} metric results for {metric_name}")
-    
+
     async def _execute_sql_function(
         self,
         metric_name: str,
@@ -257,27 +244,28 @@ class MetricsService:
             return 0
         
         function_name, column_name, needs_param_set = METRIC_FUNCTIONS[metric_name]
-        
+
         try:
+            # Resolve param_set_id (needed for insert regardless of metric type)
+            param_set_id = await self._get_default_param_set_id()
+            if not param_set_id:
+                error_msg = f"No default param_set_id found; cannot insert results for {metric_name}"
+                logger.error(error_msg)
+                return 0
+
             # Call the SQL function to get calculated results
             logger.info(f"Executing L1 metric: {metric_name} (via {function_name})")
-            
+
             # Handle parameter-sensitive metrics
             if needs_param_set:
-                param_set_id = await self._get_default_param_set_id()
-                if not param_set_id:
-                    error_msg = f"Metric {metric_name} requires param_set_id, but no default found"
-                    logger.error(error_msg)
-                    return 0
-                
                 query = text(f"""
                     SELECT ticker, fiscal_year, {column_name} AS value
                     FROM cissa.{function_name}(:dataset_id, :param_set_id)
                 """)
-                
+
                 logger.info(f"Query: {query}")
                 logger.info(f"Dataset ID param: {dataset_id}, Param Set ID: {param_set_id}")
-                
+
                 result = await self.session.execute(query, {
                     "dataset_id": str(dataset_id),
                     "param_set_id": str(param_set_id)
@@ -287,19 +275,19 @@ class MetricsService:
                     SELECT ticker, fiscal_year, {column_name} AS value
                     FROM cissa.{function_name}(:dataset_id)
                 """)
-                
+
                 logger.info(f"Query: {query}")
                 logger.info(f"Dataset ID param: {dataset_id}")
-                
+
                 result = await self.session.execute(query, {"dataset_id": str(dataset_id)})
-            
+
             rows = result.fetchall()
-            
+
             logger.info(f"Function {function_name} returned {len(rows)} rows")
-            
+
             if len(rows) == 0:
                 logger.warning(f"No rows returned from {function_name} for dataset {dataset_id}")
-            
+
             # Convert rows to MetricResultItem objects
             # Keep NULL values as NULL (don't convert to 0.0) - important for metrics like ECF at begin_year
             results = [
@@ -310,13 +298,14 @@ class MetricsService:
                 )
                 for row in rows
             ]
-            
+
             # Insert results into metrics_outputs table with L1 metadata
             await self._insert_metric_results_with_metadata(
                 dataset_id=dataset_id,
                 metric_name=metric_name,
                 results=results,
-                metadata={"metric_level": "L1"}
+                metadata={"metric_level": "L1"},
+                param_set_id=param_set_id
             )
             
             logger.info(f"Successfully calculated L1 metric: {metric_name} ({len(results)} records)")
@@ -331,71 +320,56 @@ class MetricsService:
         dataset_id: UUID,
         metric_name: str,
         results: List[MetricResultItem],
-        metadata: Dict[str, Any]
+        metadata: Dict[str, Any],
+        param_set_id: Optional[UUID] = None
     ) -> None:
         """
         Insert calculated metric results into metrics_outputs table with custom metadata.
-        
+
         Args:
             dataset_id: UUID of the dataset
             metric_name: Name of the metric
             results: List of MetricResultItem objects
             metadata: Dict to store in metadata column (e.g., {"metric_level": "L1"})
+            param_set_id: UUID of the parameter set to associate with results
         """
-        
+
         if not results:
             return
-        
-        # Get the default parameter set (base_case)
-        param_set_query = text("""
-            SELECT param_set_id FROM cissa.parameter_sets 
-            WHERE param_set_name = 'base_case' LIMIT 1
-        """)
-        param_result = await self.session.execute(param_set_query)
-        param_row = param_result.fetchone()
-        
-        if not param_row:
-            logger.error("No base_case parameter set found in database")
+
+        if not param_set_id:
+            logger.error("No param_set_id provided to _insert_metric_results_with_metadata")
             return
-        
-        param_set_id = str(param_row[0])
-        
-        # Prepare batch insert statement
-        insert_query = text("""
-            INSERT INTO cissa.metrics_outputs 
-            (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
-            VALUES (:dataset_id, :param_set_id, :ticker, :fiscal_year, :output_metric_name, :output_metric_value, :metadata, now())
-            ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
-            DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
-        """)
-        
+
+        param_set_id_str = str(param_set_id)
+
         # Batch insert using PostgreSQL multi-row INSERT for performance
         batch_size = 1000
         for i in range(0, len(results), batch_size):
             batch = results[i:i + batch_size]
-            
+
             # Prepare values for batch
             metadata_str = json.dumps(metadata)
-            
+
             # Build multi-row VALUES clause for all records in batch
             # Handle NULL values properly - use NULL literal instead of None string
             rows_sql = ", ".join([
-                f"('{str(dataset_id)}', '{param_set_id}', '{item.ticker}', {item.fiscal_year}, '{metric_name}', {item.value if item.value is not None else 'NULL'}, '{metadata_str}', now())"
+                f"('{str(dataset_id)}', '{param_set_id_str}', '{item.ticker}', {item.fiscal_year}, '{metric_name}', {item.value}, '{metadata_str}', now())"
                 for item in batch
             ])
-            
+
             # Execute multi-row INSERT with ON CONFLICT UPSERT (single statement for entire batch)
             multi_row_insert = text(f"""
-                INSERT INTO cissa.metrics_outputs 
+                INSERT INTO cissa.metrics_outputs
                 (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name, output_metric_value, metadata, created_at)
                 VALUES {rows_sql}
-                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name) 
+                ON CONFLICT (dataset_id, param_set_id, ticker, fiscal_year, output_metric_name)
                 DO UPDATE SET output_metric_value = EXCLUDED.output_metric_value
             """)
-            
+
             await self.session.execute(multi_row_insert)
             logger.info(f"Inserted batch of {len(batch)} metric results (multi-row INSERT)")
-        
+
         # Commit the transaction
         await self.session.commit()
         logger.info(f"Committed {len(results)} metric results for {metric_name}")

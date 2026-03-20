@@ -10,8 +10,11 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell, ReferenceLine,
 } from "recharts";
-import { useActiveContext, useMultipleMetrics, useRatioMetric, groupByTicker, NormalizedRatioItem } from "../hooks/useMetrics";
+import { useActiveContext, useMultipleMetrics, useRatioMetric, groupByTicker, NormalizedRatioItem, ratioToFlat } from "../hooks/useMetrics";
 import { useDrillDown, DrillDownBanner, applyDrillFilter } from "../context/DrillDown";
+import { RollingTimeSeries } from "../components/RollingTimeSeries";
+import { MetricHistogram } from "../components/MetricHistogram";
+import { computeRollingAverages } from "../lib/rollingAverage";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const NAV = "#0E2D5C";
@@ -135,7 +138,7 @@ export default function PrincipleFourPage() {
   const ctx = useActiveContext();
 
   // Fetch Calc EP and EP for heatmap
-  const epData = useMultipleMetrics(ctx.datasetId, ctx.paramSetId, ["Calc EP", "EP"]);
+  const epData = useMultipleMetrics(ctx.datasetId, ctx.paramSetId, ["Calc EP"]);
 
   // Ratio metrics
   const epGrowth1Y = useRatioMetric(ctx.datasetId, ctx.paramSetId, "ep_growth", "1Y");
@@ -173,19 +176,13 @@ export default function PrincipleFourPage() {
 
   // ── Process EP delivered vs required ────────────────────────────────────────
   const epDelReq = useMemo(() => {
-    if (!live || !epData.data["Calc EP"] || !epData.data["EP"]) return STATIC_EP_DEL_REQ;
+    if (!live || !epData.data["Calc EP"]?.length) return STATIC_EP_DEL_REQ;
     const calcEp = epData.data["Calc EP"];
-    const ep = epData.data["EP"];
     const yearMap: Record<string, { delivered: number[]; required: number[] }> = {};
     calcEp.forEach(r => {
       const y = r.fiscal_year ? String(r.fiscal_year).slice(0, 4) : "?";
       if (!yearMap[y]) yearMap[y] = { delivered: [], required: [] };
       if (r.value !== null) yearMap[y].delivered.push(r.value);
-    });
-    ep.forEach(r => {
-      const y = r.fiscal_year ? String(r.fiscal_year).slice(0, 4) : "?";
-      if (!yearMap[y]) yearMap[y] = { delivered: [], required: [] };
-      if (r.value !== null) yearMap[y].required.push(r.value);
     });
     return Object.entries(yearMap)
       .filter(([y]) => y !== "?")
@@ -223,6 +220,18 @@ export default function PrincipleFourPage() {
     const vals = epGrowth1Y.data.map((r: any) => r.value).filter((v: any) => v !== null && !isNaN(v));
     return vals.length ? ((vals.reduce((a: number, b: number) => a + b, 0) / vals.length) * 100).toFixed(1) : null;
   }, [epGrowth1Y.data]);
+
+  // ── Rolling averages: EP Growth ──────────────────────────────────────────
+  const epGrowthRollingRows = computeRollingAverages(
+    (epGrowth1Y.data ?? []).flatMap((item: NormalizedRatioItem) =>
+      (item.time_series ?? []).map(ts => ({
+        ticker: item.ticker,
+        year: ts.year,
+        value: ts.value !== null ? ts.value * 100 : null,
+      }))
+    )
+  );
+  const epGrowthHistData = ratioToFlat(epGrowth1Y.data ?? []).map(r => ({ name: r.ticker, value: r.value * 100 }));
 
   return (
     <div style={{ padding: "28px 32px", background: LIGHT_BG, minHeight: "100vh" }}>
@@ -436,6 +445,29 @@ export default function PrincipleFourPage() {
                 </BarChart>
               </ResponsiveContainer>
             )}
+          </Card>
+
+          <Card title="EP Growth Rolling Averages" badge={epGrowthRollingRows.length > 0} help={HELP["4.4"]}>
+            <RollingTimeSeries
+              title=""
+              subtitle="Cross-sectional 1Y/3Y/5Y/10Y/LT rolling average (%)"
+              rows={epGrowthRollingRows}
+              valueFormat="pct"
+              bare
+            />
+          </Card>
+
+          <Card title="EP Growth Distribution (most recent 1Y)" badge={epGrowthHistData.length > 0} help={HELP["4.4"]}>
+            <MetricHistogram
+              title=""
+              data={epGrowthHistData}
+              xAxisLabel="EP Growth (%)"
+              valueFormat="pct"
+              minBucket={-50}
+              maxBucket={50}
+              bucketWidth={5}
+              bare
+            />
           </Card>
         </>
       )}

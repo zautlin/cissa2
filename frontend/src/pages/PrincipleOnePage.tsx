@@ -12,9 +12,12 @@ import {
 } from "recharts";
 import {
   useActiveContext, useMultipleMetrics, useRatioMetric,
-  aggregateByYear, NormalizedRatioItem,
+  aggregateByYear, NormalizedRatioItem, ratioToFlat,
 } from "../hooks/useMetrics";
 import { useDrillDown, DrillDownBanner, applyDrillFilter } from "../context/DrillDown";
+import { RollingTimeSeries } from "../components/RollingTimeSeries";
+import { MetricHistogram } from "../components/MetricHistogram";
+import { computeRollingAverages } from "../lib/rollingAverage";
 
 const NAVY = "hsl(213 75% 22%)";
 const GOLD = "hsl(38 60% 52%)";
@@ -111,7 +114,7 @@ export default function PrincipleOnePage() {
   const ctx = useActiveContext();
   const multiMetrics = useMultipleMetrics(
     ctx.datasetId, ctx.paramSetId,
-    ["Calc Beta", "Calc KE", "Calc Rf", "Calc ECF", "Calc FY TSR"]
+    ["Calc Beta", "Calc Ke", "Calc Rf", "Calc ECF", "Calc FY TSR"]
   );
   const mbRatio   = useRatioMetric(ctx.datasetId, ctx.paramSetId, "mb_ratio",      "1Y");
   const roee      = useRatioMetric(ctx.datasetId, ctx.paramSetId, "roee",          "1Y");
@@ -122,7 +125,7 @@ export default function PrincipleOnePage() {
 
   const loading = ctx.loading || multiMetrics.loading;
 
-  const keAgg   = aggregateByYear(multiMetrics.data["Calc KE"]    || []);
+  const keAgg   = aggregateByYear(multiMetrics.data["Calc Ke"]    || []);
   const rfAgg   = aggregateByYear(multiMetrics.data["Calc Rf"]    || []);
   const betaAgg = aggregateByYear(multiMetrics.data["Calc Beta"]  || []);
   const tsrAgg  = aggregateByYear(multiMetrics.data["Calc FY TSR"]|| []);
@@ -167,6 +170,32 @@ export default function PrincipleOnePage() {
 
   // ETR data
   const etrFiltered: NormalizedRatioItem[] = applyDrillFilter(etr.data || [], drill);
+
+  // Rolling averages: ROEE (×100 = % — ratio already as fraction)
+  const roeeRollingRows = computeRollingAverages(
+    roeeFiltered.flatMap(item =>
+      (item.time_series || []).map(ts => ({
+        ticker: item.ticker,
+        year: ts.year,
+        value: ts.value !== null ? ts.value * 100 : null,
+      }))
+    )
+  );
+
+  // Rolling averages: M:B Ratio (stored as ratio, no scaling needed)
+  const mbRollingRows = computeRollingAverages(
+    mbRatioFiltered.flatMap(item =>
+      (item.time_series || []).map(ts => ({
+        ticker: item.ticker,
+        year: ts.year,
+        value: ts.value,
+      }))
+    )
+  );
+
+  // Histogram data: ROEE and M:B
+  const roeeHistData = ratioToFlat(roeeFiltered).map(r => ({ name: r.ticker, value: r.value * 100 }));
+  const mbHistData   = ratioToFlat(mbRatioFiltered).map(r => ({ name: r.ticker, value: r.value }));
 
   // Fallback static data
   const keDecompFallback = [
@@ -296,6 +325,20 @@ export default function PrincipleOnePage() {
               ))}
             </div>
           </ChartCard>
+
+          {/* ROEE Rolling Time Series */}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <ChartCard title="ROEE Rolling Averages" subtitle="Return on Economic Equity — 1Y/3Y/5Y/10Y/LT cross-sectional rolling average (%)" live={roeeRollingRows.length > 0}>
+              <RollingTimeSeries title="" rows={roeeRollingRows} valueFormat="pct" bare />
+            </ChartCard>
+          </div>
+
+          {/* ROEE Histogram */}
+          <ChartCard title="ROEE Distribution (most recent)" subtitle="Distribution of current-year ROEE across all companies (%)" live={roeeHistData.length > 0}>
+            <MetricHistogram title="" data={roeeHistData} xAxisLabel="ROEE (%)" valueFormat="pct" minBucket={-30} maxBucket={50} bucketWidth={5} bare />
+          </ChartCard>
+
+          <div />
         </div>
       )}
 
@@ -450,6 +493,20 @@ export default function PrincipleOnePage() {
               );
             })()}
           </ChartCard>
+
+          {/* M:B Rolling Time Series */}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <ChartCard title="M:B Ratio Rolling Averages" subtitle="Market-to-Book ratio — 1Y/3Y/5Y/10Y/LT cross-sectional rolling average (×)" live={mbRollingRows.length > 0}>
+              <RollingTimeSeries title="" rows={mbRollingRows} valueFormat="ratio" bare />
+            </ChartCard>
+          </div>
+
+          {/* M:B Histogram */}
+          <ChartCard title="M:B Ratio Distribution (most recent)" subtitle="Distribution of current-year M:B ratio across all companies (×)" live={mbHistData.length > 0}>
+            <MetricHistogram title="" data={mbHistData} xAxisLabel="M:B Ratio (×)" valueFormat="ratio" minBucket={0} maxBucket={10} bucketWidth={0.5} zeroCrossing={false} bare />
+          </ChartCard>
+
+          <div />
         </div>
       )}
 
