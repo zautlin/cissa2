@@ -20,6 +20,7 @@ import {
   Tooltip as ReTooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { Link } from "wouter";
+import ExecutiveDashboard from "./ExecutiveDashboard";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type StageStatus = "pending" | "running" | "done" | "error";
@@ -1122,41 +1123,7 @@ export default function PipelinePage() {
           Stage 5 — Results & Dashboard
       ══════════════════════════════════════════════════════════════════════ */}
       <StagePanel num={5} title="Results & Dashboard" status={stageResults[4].status} onRun={checkResults} active={activeStage === 4}>
-        {stageResults[4].status === "done" ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-            <div style={{ padding: "1rem", background: "hsl(152 60% 40% / 0.07)", borderRadius: 10, border: "1px solid hsl(152 60% 40% / 0.2)", textAlign: "center" }}>
-              <div style={{ fontSize: "1rem", fontWeight: 800, color: "hsl(152 50% 28%)" }}>Pipeline Complete ✓</div>
-              <div style={{ fontSize: "0.6875rem", color: SLATE, marginTop: "0.25rem" }}>All metrics computed and verified in database</div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
-              {[
-                { label: "Dashboard",   path: "/" },
-                { label: "Principle 1", path: "/principles/1" },
-                { label: "Principle 2", path: "/principles/2" },
-                { label: "Principle 3", path: "/principles/3" },
-                { label: "Principle 4", path: "/principles/4" },
-                { label: "Download",    path: "/download" },
-              ].map(l => (
-                <Link key={l.path} href={l.path}>
-                  <a style={{
-                    display: "block", textAlign: "center",
-                    padding: "0.5rem 0.625rem",
-                    background: "hsl(213 40% 97%)", borderRadius: 8,
-                    border: "1px solid hsl(213 30% 88%)",
-                    fontSize: "0.6875rem", fontWeight: 600, color: NAVY,
-                    textDecoration: "none", transition: "background 0.15s",
-                  }}>
-                    {l.label} →
-                  </a>
-                </Link>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div style={{ color: SLATE, fontSize: "0.75rem", textAlign: "center", padding: "1.25rem" }}>
-            Complete all pipeline stages to view results
-          </div>
-        )}
+        <ExecutiveDashboard />
       </StagePanel>
 
       {/* ── Log console ───────────────────────────────────────────────────── */}
