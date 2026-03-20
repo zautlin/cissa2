@@ -542,31 +542,16 @@ export default function PipelinePage() {
   const bowWavePct  = Math.round((bowWaveDone / 4) * 100);
 
   return (
-    <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 900 }}>
+    <div>
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "1.125rem", fontWeight: 800, color: "hsl(220 35% 12%)", margin: 0, letterSpacing: "-0.02em" }}>
-            ETL Pipeline — Data Processing Workflow
-          </h1>
-          <p style={{ fontSize: "0.75rem", color: SLATE, margin: "0.25rem 0 0" }}>
-            Bloomberg Excel → PostgreSQL → Runtime Metrics → Bow Wave → Dashboard
-          </p>
-        </div>
-        <button onClick={runAll} style={{
-          display: "flex", alignItems: "center", gap: "0.375rem",
-          padding: "0.5rem 1.125rem", background: NAVY, color: "#fff",
-          border: "none", borderRadius: 8, fontSize: "0.8125rem", fontWeight: 700,
-          cursor: "pointer", boxShadow: "0 2px 8px hsl(213 75% 22% / 0.3)",
-        }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Run Full Pipeline
-        </button>
-      </div>
-
-      {/* ── Stage stepper ─────────────────────────────────────────────────── */}
-      <div style={{ background: "#fff", borderRadius: 12, border: "1px solid hsl(210 16% 90%)", padding: "1.5rem", boxShadow: "0 1px 4px hsl(213 40% 50% / 0.06)" }}>
+      {/* ── Sticky stage stepper ──────────────────────────────────────────── */}
+      <div style={{
+        position: "sticky", top: 0, zIndex: 20,
+        background: "hsl(var(--background))",
+        borderBottom: "1px solid hsl(210 16% 90%)",
+        boxShadow: "0 2px 8px hsl(213 40% 50% / 0.07)",
+        padding: "0.875rem 1.5rem",
+      }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           {stageConfigs.map((stage, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center" }}>
@@ -620,6 +605,30 @@ export default function PipelinePage() {
             )}
           </div>
         )}
+      </div>
+
+      {/* ── Content ───────────────────────────────────────────────────────── */}
+      <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 1200 }}>
+
+      {/* ── Header ────────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <div>
+          <h1 style={{ fontSize: "1.125rem", fontWeight: 800, color: "hsl(220 35% 12%)", margin: 0, letterSpacing: "-0.02em" }}>
+            ETL Pipeline — Data Processing Workflow
+          </h1>
+          <p style={{ fontSize: "0.75rem", color: SLATE, margin: "0.25rem 0 0" }}>
+            Bloomberg Excel → PostgreSQL → Runtime Metrics → Bow Wave → Dashboard
+          </p>
+        </div>
+        <button onClick={runAll} style={{
+          display: "flex", alignItems: "center", gap: "0.375rem",
+          padding: "0.5rem 1.125rem", background: NAVY, color: "#fff",
+          border: "none", borderRadius: 8, fontSize: "0.8125rem", fontWeight: 700,
+          cursor: "pointer", boxShadow: "0 2px 8px hsl(213 75% 22% / 0.3)",
+        }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Run Full Pipeline
+        </button>
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -1026,6 +1035,8 @@ export default function PipelinePage() {
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
+
+      </div>{/* end content wrapper */}
     </div>
   );
 }
