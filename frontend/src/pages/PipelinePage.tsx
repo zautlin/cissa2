@@ -13,6 +13,7 @@ import {
   getEconomicProfitability, updateParameterSet, metricsExist,
   getMetrics,
   DatasetStatistics, ParameterSetResponse, MetricResultItem,
+  EconomicProfitabilityResult,
 } from "../lib/api";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -266,6 +267,10 @@ export default function PipelinePage() {
   const [s3Metric, setS3Metric] = useState("cost_of_equity");
   const [s3Ticker, setS3Ticker] = useState("BHP AU Equity");
   const [s3Data,   setS3Data]   = useState<MetricResultItem[]>([]);
+  // Stage 4 chart state
+  const [s4Window, setS4Window] = useState<"1Y" | "3Y" | "5Y" | "10Y">("1Y");
+  const [s4Ticker, setS4Ticker] = useState("BHP AU Equity");
+  const [s4Data,   setS4Data]   = useState<EconomicProfitabilityResult[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // ── Auto-init on mount ────────────────────────────────────────────────────
@@ -306,6 +311,19 @@ export default function PipelinePage() {
     };
     autoInit();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Stage 4 chart auto-fetch ──────────────────────────────────────────────
+  useEffect(() => {
+    if (stageResults[3].status !== "done" || !dataset || !params) return;
+    getEconomicProfitability({
+      dataset_id: dataset.dataset_id,
+      parameter_set_id: params.param_set_id,
+      temporal_window: s4Window,
+      ticker: s4Ticker,
+    })
+      .then(r => setS4Data(r.results ?? []))
+      .catch(() => setS4Data([]));
+  }, [stageResults[3].status, s4Window, s4Ticker, dataset, params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Stage 3 chart auto-fetch ──────────────────────────────────────────────
   useEffect(() => {
@@ -1041,6 +1059,62 @@ export default function PipelinePage() {
               </div>
             ))}
           </div>
+
+          {/* ── EP time-series chart (shown after stage completes) ────────── */}
+          {stageResults[3].status === "done" && (
+            <div style={{ marginTop: "1.25rem", padding: "1rem", background: "hsl(210 20% 98%)", borderRadius: 10, border: "1px solid hsl(210 16% 90%)" }}>
+              {/* Controls row */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+                {/* Window tabs */}
+                <div style={{ display: "flex", gap: "0.25rem" }}>
+                  {(["1Y", "3Y", "5Y", "10Y"] as const).map(w => (
+                    <button key={w} onClick={() => setS4Window(w)} style={{
+                      padding: "0.2rem 0.5rem", borderRadius: 4, fontSize: "0.6875rem",
+                      border: "1px solid hsl(210 16% 85%)",
+                      background: s4Window === w ? NAVY : "#fff",
+                      color: s4Window === w ? "#fff" : SLATE,
+                      cursor: "pointer", fontWeight: s4Window === w ? 700 : 400,
+                    }}>{w}</button>
+                  ))}
+                </div>
+                <span style={{ fontSize: "0.6875rem", color: SLATE }}>Ticker:</span>
+                <input
+                  value={s4Ticker}
+                  onChange={e => setS4Ticker(e.target.value)}
+                  placeholder="e.g. BHP AU Equity"
+                  style={{ fontSize: "0.75rem", padding: "0.3rem 0.5rem", borderRadius: 6, border: "1px solid hsl(210 16% 85%)", background: "#fff", color: "hsl(220 25% 15%)", width: 160 }}
+                />
+                <span style={{ fontSize: "0.5625rem", color: SLATE, marginLeft: "auto" }}>
+                  {s4Data.length > 0 ? `${s4Data.length} years` : "no data"}
+                </span>
+              </div>
+              {/* Chart */}
+              {s4Data.length > 0 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart
+                    data={s4Data.map(d => ({ year: d.fiscal_year, value: (d as any)[`ep_${s4Window.toLowerCase()}`] ?? null }))}
+                    margin={{ top: 4, right: 16, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(210 16% 92%)" />
+                    <XAxis dataKey="year" tick={{ fill: "#94a3b8", fontSize: 9 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: "#94a3b8", fontSize: 9 }} axisLine={false} tickLine={false} width={48}
+                      tickFormatter={(v: number) => v == null ? "—" : `${v.toFixed(0)}%`} />
+                    <ReTooltip
+                      contentStyle={{ fontSize: "0.75rem", borderRadius: 6, border: "1px solid hsl(210 16% 88%)" }}
+                      formatter={(v: number) => [v == null ? "—" : `${v.toFixed(2)}%`, `EP ${s4Window}`]}
+                      labelFormatter={(l: number) => `FY ${l}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "0.65rem" }} formatter={() => `EP ${s4Window}`} />
+                    <Line type="monotone" dataKey="value" stroke={GREEN} strokeWidth={2} dot={{ r: 3, fill: GREEN }} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: SLATE, fontSize: "0.8125rem" }}>
+                  No data — run Bow Wave first or try a different ticker
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </StagePanel>
 
