@@ -3,6 +3,7 @@
 # ============================================================================
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 from uuid import UUID
 from typing import Optional, Union
 from datetime import datetime
@@ -1415,7 +1416,7 @@ async def get_economic_profitability(
         
         params = {
             "dataset_id": str(dataset_id),
-            "param_set_id": str(parameter_set_id),
+            "parameter_set_id": str(parameter_set_id),
         }
         
         # Add optional filters
