@@ -412,6 +412,7 @@ export default function PipelinePage() {
     addLog("Stage 4: Bow Wave Generation — EP 1Y / 3Y / 5Y / 10Y…");
     const t0 = Date.now();
     let allOk = true;
+    let totalCount = 0;
     for (let i = 0; i < windows.length; i++) {
       const w = windows[i];
       setBowWaveStatus(prev => prev.map(e => e.window === w ? { ...e, status: "running" } : e));
@@ -423,10 +424,10 @@ export default function PipelinePage() {
           temporal_window: w,
         });
         const count = r.results_count ?? r.results?.length ?? 0;
+        totalCount += count;
         const wElapsed = ((Date.now() - wt0) / 1000);
         setBowWaveStatus(prev => prev.map(e => e.window === w ? { ...e, status: "done", count, seconds: wElapsed } : e));
-        addLog(`  EP ${w}: ${count} results · ${wElapsed.toFixed(1)}s`, count > 0 ? "success" : "warn");
-        if (count === 0) allOk = false;
+        addLog(`  EP ${w}: ${count} results · ${wElapsed.toFixed(1)}s`, "success");
       } catch (err: any) {
         const wElapsed = ((Date.now() - wt0) / 1000);
         setBowWaveStatus(prev => prev.map(e => e.window === w ? { ...e, status: "error", seconds: wElapsed } : e));
@@ -437,7 +438,11 @@ export default function PipelinePage() {
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
     setStage(3, {
       status: allOk ? "done" : "error",
-      message: allOk ? "Bow wave data generated — all 4 windows" : "Some windows failed",
+      message: allOk
+        ? totalCount > 0
+          ? `Bow wave complete — ${totalCount.toLocaleString()} EP records`
+          : "Bow wave complete — no EP data (run Runtime Metrics first)"
+        : "Some windows failed",
       detail: `${elapsed}s`,
       seconds: Number(elapsed),
     });
